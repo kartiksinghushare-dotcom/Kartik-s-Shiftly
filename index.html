@@ -844,14 +844,43 @@ App.saveUser=async(id)=>{
   closeModal();render();
 };
 App.resetPw=(id)=>{const u=uById(id);openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Reset password</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">New password for <strong>${esc(fullName(u))}</strong></p>${fld('New password','rp-pw','','password','')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="(async()=>{const pw=$('#rp-pw')?.value?.trim();if(!pw){toast('Enter a password','err');return;}const {error}=await sb.functions.invoke('reset-password',{body:{user_id:'${id}',password:pw}});if(error){toast(error.message,'err');return;}log(fullName(me()),'Reset password','${fullName(u)}');toast('Password reset ✓');closeModal();})()" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Reset</button></div></div>`,'max-w-sm');};
-App.togUser=(id)=>{const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';toast(fullName(u)+' → '+u.status,u.status==='Active'?'ok':'warn');render();};
-App.delUser=(id)=>{if(!confirm('Delete this user?'))return;const u=uById(id);DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);DB.users=DB.users.filter(x=>x.id!==id);DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));DB.submissions=DB.submissions.filter(s=>s.userId!==id);DB.notifications=DB.notifications.filter(n=>n.userId!==id);DB.approvals=DB.approvals.filter(a=>a.requesterId!==id);log(fullName(me()),'Deleted user',fullName(u));toast('Deleted','warn');render();};
+App.togUser=async(id)=>{
+  const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';
+  await sb.from('profiles').update({status:u.status}).eq('id',id);
+  toast(fullName(u)+' → '+u.status,u.status==='Active'?'ok':'warn');saveDB();render();
+};
+App.delUser=async(id)=>{
+  if(!confirm('Delete this user?'))return;
+  const u=uById(id);
+  // Delete from Supabase Auth via edge function (or just deactivate)
+  const {error}=await sb.from('profiles').update({status:'Inactive'}).eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
+  DB.users=DB.users.filter(x=>x.id!==id);
+  DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));
+  log(fullName(me()),'Deactivated user',fullName(u));
+  toast('User deactivated','warn');saveDB();render();
+};
 
 /* ===== DEPARTMENTS ===== */
 function deptsPage(){return`<div class="fade">${hdr('Departments','',isAdmin()?btnP('Add','App.editDept()','plus'):'')}<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">${DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name);const cls=DB.checklists.filter(c=>c.department===d.name);return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4 group"><div class="flex justify-between mb-3"><div class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 grid place-items-center">${ic('dept','w-4 h-4')}</div>${isAdmin()?`<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onclick="App.editDept('${d.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.delDept('${d.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button></div>`:''}</div><h3 class="fd font-bold">${esc(d.name)}</h3><div class="flex gap-4 mt-1 text-sm text-ink-400"><span><b class="text-ink-800">${us.length}</b> users</span><span><b class="text-ink-800">${cls.length}</b> checklists</span></div><div class="flex -space-x-1.5 mt-3">${us.slice(0,5).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div>`;}).join('')}</div></div>`;}
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}if(id)DB.departments.find(x=>x.id===id).name=n;else DB.departments.push({id:uid('d'),name:n});log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
-App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!confirm('Delete '+d.name+'?'))return;DB.departments=DB.departments.filter(x=>x.id!==id);log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
+App.saveDept=async(id)=>{
+  const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}
+  const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};
+  if(id)obj.name=n; else DB.departments.push(obj);
+  const {error}=await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});
+  if(error){toast(error.message,'err');return;}
+  log(fullName(me()),id?'Edited dept':'Created dept',n);
+  toast(id?'Updated':'Created');saveDB();closeModal();render();
+};
+App.delDept=async(id)=>{
+  const d=DB.departments.find(x=>x.id===id);if(!confirm('Delete '+d.name+'?'))return;
+  const {error}=await sb.from('departments').delete().eq('id',id);
+  if(error){toast(error.message,'err');return;}
+  DB.departments=DB.departments.filter(x=>x.id!==id);
+  log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();
+};
 
 /* ===== LOCATIONS ===== */
 function locsPage(){
@@ -862,8 +891,21 @@ function locsPage(){
   </div></div>`;
 }
 App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};if(id)Object.assign(locById(id),data);else DB.locations.push({id:uid('loc'),...data});log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
-App.togLoc=(id)=>{const l=locById(id);l.status=l.status==='Active'?'Inactive':'Active';toast(l.name+' → '+l.status,l.status==='Active'?'ok':'warn');saveDB();render();};
+App.saveLoc=async(id)=>{
+  const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}
+  const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};
+  const obj=id?locById(id):{id:uid('loc'),...data};
+  if(id)Object.assign(obj,data); else DB.locations.push(obj);
+  const {error}=await sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'});
+  if(error){toast(error.message,'err');return;}
+  log(fullName(me()),id?'Edited location':'Created location',n);
+  toast(id?'Updated':'Created');saveDB();closeModal();render();
+};
+App.togLoc=async(id)=>{
+  const l=locById(id);l.status=l.status==='Active'?'Inactive':'Active';
+  await sb.from('locations').update({status:l.status}).eq('id',id);
+  toast(l.name+' → '+l.status,l.status==='Active'?'ok':'warn');saveDB();render();
+};
 
 /* ===== CHECKLIST ADMIN PAGE ===== */
 function clsPage(){
@@ -1141,18 +1183,38 @@ function _taskEditRow(t,i){
 
 App._addTask=()=>{if(!CLD.tasks)CLD.tasks=[];CLD.tasks.push({id:uid('t'),name:'',description:'',time:'09:00',criticality:'Low',responseType:'tick',dropdownOptions:[],issueFlagging:true,photo:false,comment:false,approval:false});App._refreshTasks();};
 App._refreshTasks=()=>{const el=$('#cn-tasks');if(el)el.innerHTML=CLD.tasks.map((t,i)=>_taskEditRow(t,i)).join('')||'<p class="text-sm text-ink-300 py-2">No tasks yet.</p>';};
-App._saveCl=(editing)=>{
+App._saveCl=async(editing)=>{
   CLD.name=$('#cn-name')?.value.trim();CLD.description=$('#cn-desc')?.value.trim();
   CLD.department=$('#cn-dep')?.value;CLD.frequency=$('#cn-freq')?.value;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
   if(!CLD.tasks.length||CLD.tasks.some(t=>!t.name.trim())){toast('Add at least one named task','err');return;}
+  // Write to Supabase first
+  const clRow={
+    id:CLD.id,name:CLD.name,description:CLD.description||'',
+    department:CLD.department||'',frequency:CLD.frequency||'Daily',
+    schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],
+    selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],
+    start_date:CLD.startDate||null,end_date:CLD.endDate||null,
+    location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[]
+  };
+  const {error}=await sb.from('checklists').upsert(clRow,{onConflict:'id'});
+  if(error){toast('Save error: '+error.message,'err');return;}
   if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);DB.checklists[idx]=CLD;}
   else DB.checklists.push(CLD);
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   toast(editing?'Saved':'Checklist created');closeModal();render();saveDB();
 };
-App.delCl=(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
+App.delCl=async(id)=>{
+  const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;
+  await Promise.all([
+    sb.from('checklists').delete().eq('id',id),
+    sb.from('submissions').delete().eq('checklist_id',id),
+  ]);
+  DB.checklists=DB.checklists.filter(x=>x.id!==id);
+  DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);
+  log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();
+};
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
 let RUN={};
@@ -1387,8 +1449,35 @@ App._togIssue=(clId,i)=>{
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].issueComment=v;};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
-App._addPh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);};
-App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
+App._addPh=async(clId,i,el)=>{
+  const f=el.files[0];if(!f)return;
+  const path=`photos/${S.uid}/${todayISO()}/${clId}/task_${i}_${Date.now()}`;
+  const {data,error}=await sb.storage.from('shiftly-photos').upload(path,f,{upsert:true});
+  if(error){
+    // Fallback: store as base64 if storage fails
+    const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);
+    return;
+  }
+  const {data:{publicUrl}}=sb.storage.from('shiftly-photos').getPublicUrl(path);
+  // Use signed URL for private bucket
+  const {data:signed}=await sb.storage.from('shiftly-photos').createSignedUrl(path,60*60*24*365);
+  RUN[clId].tasks[i].photo=signed?.signedUrl||publicUrl;
+  RUN[clId].tasks[i].photoPath=path;
+  rr();
+};
+App._issuePh=async(clId,i,el)=>{
+  const f=el.files[0];if(!f)return;
+  const path=`photos/${S.uid}/${todayISO()}/${clId}/issue_${i}_${Date.now()}`;
+  const {data,error}=await sb.storage.from('shiftly-photos').upload(path,f,{upsert:true});
+  if(error){
+    const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);
+    return;
+  }
+  const {data:signed}=await sb.storage.from('shiftly-photos').createSignedUrl(path,60*60*24*365);
+  RUN[clId].tasks[i].issuePhoto=signed?.signedUrl||path;
+  RUN[clId].tasks[i].issuePhotoPath=path;
+  rr();
+};
 App._resubmit=(clId,date)=>{
   // Clear the existing submission so user can resubmit
   const idx=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);
@@ -1439,6 +1528,14 @@ App._submitRun=(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues':needsAppr?'Pending approval':late?'Submitted (late)':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
+  // Direct upsert to Supabase immediately on submit
+  const subRow={
+    id:run.id,checklist_id:clId,user_id:S.uid,date,
+    status:run.status,submitted_at:run.submittedAt,tasks:run.tasks
+  };
+  sb.from('submissions').upsert(subRow,{onConflict:'id'}).then(({error})=>{
+    if(error)console.warn('Submission sync error:',error.message);
+  });
   delete RUN[clId];saveDB();rr();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
