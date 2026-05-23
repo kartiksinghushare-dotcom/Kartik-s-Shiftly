@@ -688,16 +688,35 @@ App.login=async()=>{
   const btn=document.querySelector('button[onclick="App.login()"]');
   if(btn){btn.disabled=true;btn.textContent='Signing in…';}
   try{
+    // Step 1: Auth only — fast (< 1s)
     const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
     if(error)throw error;
-    await loadFromSB();
-    const u=DB.users.find(x=>x.id===data.user.id);
-    if(!u){await sb.auth.signOut();throw new Error('Profile not found — contact admin.');}
-    if(u.status==='Inactive'){await sb.auth.signOut();throw new Error('Account inactive — contact admin.');}
+
+    // Step 2: Fetch just this user's profile — fast single row query
+    const {data:profile,error:pErr}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
+    if(pErr||!profile)throw new Error('Profile not found — contact admin.');
+    if(profile.status==='Inactive'){await sb.auth.signOut();throw new Error('Account inactive — contact admin.');}
+
+    // Step 3: Map profile and render immediately — no waiting for all data
+    const u={
+      id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',
+      email:profile.email||'',phone:profile.phone||'',position:profile.position||'',
+      department:profile.department||'',role:profile.role||'User',
+      status:profile.status||'Active',managerId:profile.manager_id||null,
+      rules:profile.rules||{past:true,future:true,edit:true},
+      approval:profile.approval_settings||{past:false,future:false,edited:false},
+      password:'***'
+    };
+    // Merge into DB (keep any cached data)
+    const existing=DB.users.findIndex(x=>x.id===u.id);
+    if(existing>-1)DB.users[existing]=u; else DB.users.push(u);
     S.uid=u.id;
     S.route=u.role==='Admin'?'dashboard':'mychecklists';
     log(fullName(u),'Logged in','');
-    saveDB();render();
+    saveDB();render();  // render with what we have NOW
+
+    // Step 4: Load the rest in background — silently refreshes data
+    loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
   }catch(err){
     const msg=err.message||'';
     toast(msg.includes('Invalid')||msg.includes('credentials')?'Incorrect email or password':msg,'err');
@@ -803,8 +822,21 @@ App.saveUser=async(id)=>{
   }else{
     const pw=(g('u-pw')||'').trim();
     if(!pw){toast('Password required','err');return;}
+    // Show loading state on Create button
+    const createBtn=document.querySelector('button[onclick*="saveUser"]');
+    if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';}
     const {data:res,error}=await sb.functions.invoke('create-user',{body:{...profileData,password:pw}});
-    if(error||res?.error){toast(res?.error||error?.message||'Failed to create user','err');return;}
+    if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}
+    if(error){
+      // Edge Function not deployed yet — fall back to direct profile creation (no auth account)
+      if(error.message?.includes('not found')||error.message?.includes('fetch')||error.message?.includes('FunctionsFetchError')){
+        toast('Edge Function not deployed. See setup instructions.','err');
+      } else {
+        toast(error.message||'Failed to create user','err');
+      }
+      return;
+    }
+    if(res?.error){toast(res.error,'err');return;}
     DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:profileData.phone,position:profileData.position,department:profileData.department,role:profileData.role,status:profileData.status,managerId:mId,rules:profileData.rules,approval:profileData.approval_settings,password:'***'});
     toast('User created ✓');
   }
@@ -1913,35 +1945,37 @@ function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<
 /* ===== BOOT ===== */
 (async function boot(){
   try{
-    // Show loading splash
-    document.getElementById('app').innerHTML=`<div style="min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#F7F6F2;gap:20px">
-      <div style="display:flex;align-items:center;gap:10px"><div style="width:36px;height:36px;border-radius:12px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:18px;color:#fff">S</div><span style="font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:22px">Shiftly</span></div>
-      <div style="width:28px;height:28px;border:2.5px solid #ECEDF0;border-top-color:#0E9F6E;border-radius:50%;animation:sp .65s linear infinite"></div>
-      <style>@keyframes sp{to{transform:rotate(360deg)}}</style>
-    </div>`;
-
-    // Check for live Supabase session
+    // Step 1: Check session (fast — just reads stored JWT, no network)
     const {data:{session}}=await sb.auth.getSession();
+
     if(session){
-      // Load local cache first for instant render
+      // Step 2: Load localStorage cache and render instantly
       loadDB();
-      if(S.uid){S.route=S.route||'dashboard';render();}
-      // Then refresh from Supabase
-      await loadFromSB();
-      const u=DB.users.find(x=>x.id===session.user.id);
-      if(u&&u.status==='Active'){
-        S.uid=u.id;
-        if(!S.route||S.route==='login')S.route=u.role==='Admin'?'dashboard':'mychecklists';
-        saveDB();render();return;
+      if(S.uid){
+        S.route=S.route||'dashboard';
+        render(); // <-- app visible in <100ms
+      }
+      // Step 3: Fetch just the profile row to validate (one fast query)
+      const {data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+      if(profile&&profile.status==='Active'){
+        // Update/add this user in DB
+        const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};
+        const idx=DB.users.findIndex(x=>x.id===mapped.id);
+        if(idx>-1)DB.users[idx]=mapped; else DB.users.push(mapped);
+        S.uid=mapped.id;
+        if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
+        saveDB();render();
+        // Step 4: Load the rest of the data silently in background
+        loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
+        return;
       }
       await sb.auth.signOut();
     }
-    // No session — show login (with any cached data still in DB for offline fallback)
+    // No valid session — show login
     loadDB();
     S.uid=null;
     render();
   }catch(e){
-    // Fatal error fallback
     try{if(!loadDB())seed();}catch(e2){}
     render();
     console.error('Boot error:',e);
