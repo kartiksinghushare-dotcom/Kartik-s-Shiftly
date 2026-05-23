@@ -822,18 +822,20 @@ App.saveUser=async(id)=>{
   }else{
     const pw=(g('u-pw')||'').trim();
     if(!pw){toast('Password required','err');return;}
-    // Show loading state on Create button
     const createBtn=document.querySelector('button[onclick*="saveUser"]');
     if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';}
     const {data:res,error}=await sb.functions.invoke('create-user',{body:{...profileData,password:pw}});
     if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}
     if(error){
-      // Edge Function not deployed yet — fall back to direct profile creation (no auth account)
-      if(error.message?.includes('not found')||error.message?.includes('fetch')||error.message?.includes('FunctionsFetchError')){
-        toast('Edge Function not deployed. See setup instructions.','err');
-      } else {
-        toast(error.message||'Failed to create user','err');
-      }
+      // Extract actual error message from the edge function response body
+      let msg=error.message||'Edge Function failed';
+      try{
+        if(error.context){
+          const body=await error.context.json();
+          msg=body.error||body.message||msg;
+        }
+      }catch(e){}
+      toast('Create user error: '+msg,'err');
       return;
     }
     if(res?.error){toast(res.error,'err');return;}
