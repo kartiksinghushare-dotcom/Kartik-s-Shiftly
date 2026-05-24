@@ -508,8 +508,11 @@ const navFor=()=>{
   if(isMgr())return NAV_MGR;
   return NAV_USR;
 };
-App.go=(r)=>{S.route=r;S.search='';S.filters={};S.expandedCl=null;S.afOpen=null;if(r!=='teamview')S.tvUser=null;render();window.scrollTo(0,0);};
-// Note: S.filters={} on every go() already resets fbView/ntab/atab
+App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
+  // Preserve analytics filters when navigating to/from analytics; reset everything else
+  if(r!=='analytics')S.filters={};
+  if(r!=='teamview')S.tvUser=null;
+  render();window.scrollTo(0,0);};
 
 /* ===== RENDER ===== */
 function render(){if(!S.uid){$('#app').innerHTML=loginView();return;}$('#app').innerHTML=shell(pageContent());}
@@ -1677,6 +1680,9 @@ App._decide=(id,status)=>{
       :'❌ Submission rejected — '+c?.name+'. '+( a.date?fmtD(a.date):''));
   DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false});
   log(fullName(me()),status+' '+a.type,fullName(u));
+  // Direct write to Supabase for instant consistency
+  sb.from('approvals').update({status:a.status}).eq('id',a.id).catch(e=>console.warn('approval sync:',e));
+  if(s)sb.from('submissions').update({status:s.status}).eq('id',s.id).catch(e=>console.warn('sub sync:',e));
   _invalidateNotifCache();saveDB();toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
   rr();
 };
@@ -1886,7 +1892,7 @@ function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
   // Mark all as read
-  notifs.forEach(n=>n.read=true);_invalidateNotifCache();
+  notifs.forEach(n=>n.read=true);saveDB();_invalidateNotifCache();
   // Feedback for this user
   const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const unackFb=myFb.filter(fb=>!fb.acknowledged);
@@ -2125,7 +2131,7 @@ App._saveSendFeedback=(userId)=>{
   });
   DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false});
   log(fullName(me()),'Sent feedback',fullName(uById(userId)));
-  toast('Feedback sent ✓');closeModal();saveDB();rr();
+  toast('Feedback sent ✓');closeModal();saveDB();_invalidateNotifCache();rr();
 };
 /* ===== HIERARCHY ===== */
 let COLL={};
@@ -4717,11 +4723,55 @@ App._togF=(key,val)=>{
 
 /* ===== AUDIT / NOTIF / PROFILE / SETTINGS ===== */
 function auditPage(){return`<div class="fade">${hdr('Audit Logs','')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden"><div class="divide-y divide-ink-50 max-h-[70vh] overflow-y-auto">${DB.audit.map(l=>`<div class="px-4 py-3 flex items-center gap-2.5 text-sm"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0"></span><div class="flex-1 min-w-0"><span class="font-semibold">${esc(l.actor)}</span> <span class="text-ink-500">${esc(l.action.toLowerCase())}</span>${l.target?` <span class="font-medium">${esc(l.target)}</span>`:''}</div><span class="text-[11px] text-ink-300 shrink-0">${new Date(l.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')||empty('audit','No logs yet','')}</div></div></div>`;}
-function profilePage(){const u=me();return`<div class="fade max-w-xl">${hdr('Profile','')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><div class="flex items-center gap-4 mb-5">${avatar(u,'w-14 h-14','text-xl')}<div><h2 class="fd text-xl font-bold">${esc(fullName(u))}</h2><p class="text-ink-400 text-sm">${esc(u.position)}</p><div class="mt-1.5">${chip(u.status)}</div></div></div><div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-ink-100 pt-4">${[['Email',u.email],['Phone',u.phone||'—'],['Department',u.department],['Role',u.role],['Reports to',u.managerId?fullName(uById(u.managerId)):'—'],['Direct reports',subTree(u.id).length]].map(([k,v])=>`<div><div class="text-[10px] font-bold text-ink-400 uppercase tracking-wide">${k}</div><div class="font-medium text-sm mt-0.5">${esc(v)}</div></div>`).join('')}</div><div class="mt-4 border-t border-ink-100 pt-4"><h3 class="fd font-semibold text-sm mb-3">Change password</h3><div class="space-y-2">${fld('Current password','pw-cur','','password','')}${fld('New password','pw-new','','password','min 6 characters')}<button onclick="App.changePw()" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button></div></div><button onclick="App.logout()" style="margin-top:16px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#262A33;background:none;border:none;cursor:pointer;padding:0">${ic('logout','w-4 h-4')}Sign out</button></div></div>`;}
+function profilePage(){
+  const u=me();
+  return`<div class="fade max-w-xl">
+  ${hdr('Profile','')}
+  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">
+    <div class="flex items-center gap-4 mb-5">
+      ${avatar(u,'w-14 h-14','text-xl')}
+      <div>
+        <h2 class="fd text-xl font-bold">${esc(fullName(u))}</h2>
+        <p class="text-ink-400 text-sm">${esc(u.position||'')}</p>
+        <div class="mt-1.5">${chip(u.status)}</div>
+      </div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-ink-100 pt-4 mb-4">
+      ${[['Email',u.email],['Phone',u.phone||'—'],['Department',u.department||'—'],['Role',u.role],
+         ['Reports to',u.managerId?fullName(uById(u.managerId)):'—'],
+         ['Direct reports',subTree(u.id).length]].map(([k,v])=>`
+        <div><div class="text-[10px] font-bold text-ink-400 uppercase tracking-wide">${k}</div>
+        <div class="font-medium text-sm mt-0.5">${esc(String(v))}</div></div>`).join('')}
+    </div>
+    <!-- Edit form -->
+    <div class="border-t border-ink-100 pt-4">
+      <h3 class="fd font-semibold text-sm mb-3">Edit profile</h3>
+      <div class="grid sm:grid-cols-2 gap-3 mb-3">
+        ${fld('First name','ep-fn',u.firstName||'')}
+        ${fld('Last name','ep-ln',u.lastName||'')}
+        ${fld('Phone','ep-ph',u.phone||'','tel')}
+        ${fld('Position','ep-pos',u.position||'')}
+      </div>
+      <button onclick="App.saveProfile()" style="padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
+    </div>
+  </div>
+  <!-- Change password -->
+  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">
+    <h3 class="fd font-semibold text-sm mb-3">Change password</h3>
+    <div class="space-y-2">
+      ${fld('Current password','pw-cur','','password','')}
+      ${fld('New password','pw-new','','password','min 6 characters')}
+      <button onclick="App.changePw()" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
+    </div>
+  </div>
+  <button onclick="App.logout()" style="display:flex;align-items:center;gap:8px;font-size:14px;font-weight:600;color:#6B7280;background:none;border:none;cursor:pointer;padding:0">${ic('logout','w-4 h-4')}Sign out</button>
+  </div>`;
+}
+
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
-(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{if(!loadDB())seed();}catch(e2){}render();console.error('Boot:',e);}})();
+(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 
 </script>
