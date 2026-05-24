@@ -2415,10 +2415,6 @@ function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<
 /* ===== BOOT ===== */
 (async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
-
-</script>
-</body>
-</html>
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
   const f=S.filters;const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
@@ -2432,8 +2428,11 @@ App._exportCSV=()=>{
   const taskRows=[['Sub #','User','Email','Checklist','Date','Status','Task #','Task Name','Criticality','Type','Response','Done','Issue','Issue Comment','Photo','Issue Photo','Comment']];
   subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return;(c.tasks||[]).forEach((t,ti)=>{const rt=(s.tasks||[])[ti]||{};taskRows.push([si+1,fullName(u),u.email||'',c.name,s.date,s.status,ti+1,t.name||'',t.criticality||'Low',t.responseType||'tick',rt.response!==null&&rt.response!==undefined?String(rt.response):'',rt.issue?'No':(rt.response!==null&&rt.response!==undefined?'Yes':'No'),rt.issue?'Yes':'No',rt.issueComment||'',rt.photo?'Yes':'No',rt.issuePhoto?'Yes':'No',rt.comment||'']);});});
   const all=[...summaryRows,[],['=== TASK DETAIL (one row per task) ==='],[],...taskRows];
-  const csv=all.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('
-');
+  const csv=all.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='shiftly_export_'+todayISO()+'.csv';a.click();
   toast('Exported '+subs.length+' submissions ('+(taskRows.length-1)+' task rows)');
 };
+
+</script>
+</body>
+</html>
