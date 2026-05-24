@@ -452,12 +452,26 @@ function openModal(html,size='max-w-lg'){
 const closeModal=()=>{const m=$('#modal');if(m&&m.remove)m.remove();};
 const App={};window.App=App;App.closeModal=closeModal;
 
+
+function _notifCount(){
+  const uid=S.uid;if(!uid)return 0;
+  // Pending approvals for manager/admin
+  let count=0;
+  if(isAdmin()||isMgr()){
+    const myTree=subTree(uid).map(u=>u.id);
+    count+=DB.approvals.filter(a=>a.status==='Pending'&&(isAdmin()||myTree.includes(a.requesterId))).length;
+    count+=(DB.issues||[]).filter(iss=>iss.status==='Open'&&(isAdmin()||myTree.includes(iss.userId))).length;
+  }
+  // Unread personal notifications
+  count+=DB.notifications.filter(n=>n.userId===uid&&!n.read).length;
+  return count;
+}
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['departments','dept','Departments'],['locations','pin','Locations'],['checklists','list','Checklists'],['approvals','approve','Notifications'],['hierarchy','tree','Hierarchy'],['analytics','chart','Analytics'],['audit','audit','Audit'],['settings','cog','Settings']];
-const NAV_USR=[['mychecklists','check','My Checklists'],['approvals','approve','Feedback'],['profile','user','Profile']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Notifications'],['analytics','chart','Analytics'],['profile','user','Profile']];
-const MOB_ADM=['dashboard','mychecklists','checklists','approvals','more'];
-const MOB_USR=['mychecklists','approvals','hierarchy','notifications','profile'];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
+const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications'],['profile','user','Profile']];
+const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['profile','user','Profile']];
+const MOB_ADM=['dashboard','users','approvals','notifications','more'];
+const MOB_USR=['mychecklists','notifications','profile','more','more'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
@@ -476,11 +490,12 @@ function shell(content){
   const mob=isAdmin()?MOB_ADM:isMgr()?MOB_MGR:MOB_USR;
   const unread=DB.notifications.filter(n=>n.userId===S.uid&&!n.read).length;
 
+  const notifBadge=_notifCount();
   const sideLinks=nav.map(([r,i,l])=>`<button onclick="App.go('${r}')"
     style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${S.route===r?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
     onmouseover="if('${S.route}'!=='${r}')this.style.background='rgba(255,255,255,.07)';this.style.color='#fff'"
     onmouseout="if('${S.route}'!=='${r}'){this.style.background='transparent';this.style.color='rgba(255,255,255,.55)'}"
-  ><span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic(i,'w-[17px] h-[17px]')}</span><span>${l}</span></button>`).join('');
+  ><span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic(i,'w-[17px] h-[17px]')}</span><span style="flex:1">${l}</span>${r==='notifications'&&notifBadge?`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`:''}</button>`).join('');
 
   return`<div style="min-height:100vh;display:flex">
   <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="background:#15171C;color:#fff">
@@ -514,10 +529,7 @@ function shell(content){
           <input id="gSch" placeholder="Search…" style="width:100%;background:#fff;border:1.5px solid #ECEDF0;border-radius:14px;padding:8px 12px 8px 36px;font-size:14px;outline:none" oninput="S.search=this.value;rr()" onfocus="this.style.borderColor='#0E9F6E'" onblur="this.style.borderColor='#ECEDF0'"/>
         </div>
         <div style="flex:1"></div>
-        <button onclick="App._showNotifs()" style="position:relative;width:36px;height:36px;display:grid;place-items:center;border-radius:12px;border:none;background:transparent;cursor:pointer;color:#6B7280" onmouseover="this.style.background='#ECEDF0'" onmouseout="this.style.background='transparent'">
-          ${ic('bell','w-5 h-5')}
-          ${unread?'<span style="position:absolute;top:6px;right:6px;width:8px;height:8px;background:#EF4444;border-radius:50%;border:2px solid #F7F6F2"></span>':''}
-        </button>
+
         <button onclick="App.go('profile')" class="md:hidden">${avatar(u,'w-8 h-8','text-[11px]')}</button>
       </div>
     </header>
@@ -529,7 +541,8 @@ function shell(content){
         if(r==='more')return`<button onclick="App.moreMenu()" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('grid','w-5 h-5')}<span style="font-size:10px;font-weight:600">More</span></button>`;
         const m=[...NAV_ADM,...NAV_USR,...(typeof NAV_MGR!=='undefined'?NAV_MGR:[])].find(n=>n[0]===r);if(!m)return'';
         const act=S.route===r;
-        return`<button onclick="App.go('${r}')" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:${act?'#0E9F6E':'#9CA3AF'}">${ic(m[1],'w-5 h-5')}<span style="font-size:10px;font-weight:600">${m[2].split(' ')[0]}</span></button>`;
+        const nb=r==='notifications'?_notifCount():0;
+        return`<button onclick="App.go('${r}')" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:${act?'#0E9F6E':'#9CA3AF'}">${ic(m[1],'w-5 h-5')}${nb?`<span style="position:absolute;top:4px;right:calc(50% - 18px);font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:16px;text-align:center">${nb}</span>`:''}<span style="font-size:10px;font-weight:600">${m[2].split(' ')[0]}</span></button>`;
       }).join('')}
     </div>
   </nav></div>`;
@@ -577,14 +590,14 @@ function pageContent(){
   if(r==='departments')return deptsPage();
   if(r==='locations')return locsPage();
   if(r==='checklists')return clsPage();
-  if(r==='approvals')return isAdmin()||isMgr()?approvalsPage():feedbackPage();
+  if(r==='approvals')return isAdmin()||isMgr()?approvalsPage():'';  
+  if(r==='notifications')return notificationsPage();
   if(r==='hierarchy')return hierarchyPage();
   if(r==='analytics')return analyticsPage();
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
-  if(r==='notifications'){App._showNotifs&&setTimeout(App._showNotifs,0);return myClsPage();}
   if(r==='profile')return profilePage();
   return empty('grid','Not found','');
 }
@@ -1271,7 +1284,7 @@ App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;}
 App._addPh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);};
 App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();rr();};
-App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();saveDB();}toast('Acknowledged');saveDB();rr();};
+App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');rr();};
 
 App._submitRun=(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
@@ -1364,7 +1377,10 @@ function teamViewPage(){
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center">
               ${[['assigned',asgn,'#15171C','#F6F7F8'],['late',late,late?'#BE123C':'#15171C',late?'#FFF1F2':'#F6F7F8'],['issues',issues,issues?'#C2410C':'#15171C',issues?'#FFF7ED':'#F6F7F8']].map(([l,v,c,bg])=>`<div style="background:${bg};border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:${c}">${v}</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">${l}</div></div>`).join('')}
             </div>
-            <div style="font-size:12px;font-weight:600;color:#0E9F6E;display:flex;align-items:center;gap:4px">${ic('chevR','w-3.5 h-3.5')}View submissions</div>
+            <div style="display:flex;align-items:center;justify-content:space-between">
+              <div style="font-size:12px;font-weight:600;color:#0E9F6E;display:flex;align-items:center;gap:4px">${ic('chevR','w-3.5 h-3.5')}View submissions</div>
+              <button onclick="event.stopPropagation();App._openSendFeedback('${u.id}')" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:#F6F7F8;color:#374151;border:1px solid #ECEDF0;cursor:pointer">Feedback</button>
+            </div>
           </button>`;
         }).join('')}
       </div>
@@ -1391,9 +1407,13 @@ function teamViewPage(){
       <button onclick="S.tvUser=null;rr()" style="width:34px;height:34px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">
         ${ic('back','w-4 h-4')}</button>
       ${avatar(tvU,'w-9 h-9','text-xs')}
-      <div>
+      <div style="flex:1">
         <div class="fd" style="font-size:16px;font-weight:800">${esc(fullName(tvU))}</div>
-        <div style="font-size:12px;color:#9CA3AF">${esc(tvU.position||tvU.department)} · Read-only view</div>
+        <div style="font-size:12px;color:#9CA3AF">${esc(tvU.position||tvU.department)}</div>
+      </div>
+      <div style="display:flex;gap:8px">
+        <button onclick="App._userDrill(this.dataset.id)" data-id="${S.tvUser}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">${ic('chart','w-4 h-4')}Stats</button>
+        <button onclick="App._openSendFeedback(this.dataset.id)" data-id="${S.tvUser}" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">${ic('msg','w-4 h-4')}Send feedback</button>
       </div>
     </div>
 
@@ -1782,6 +1802,195 @@ App._saveIssueFeedback=(id)=>{
 };
 
 
+
+function notificationsPage(){
+  const uid=S.uid;
+  const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
+  // Mark all as read
+  notifs.forEach(n=>n.read=true);
+  // Feedback for this user
+  const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const unackFb=myFb.filter(fb=>!fb.acknowledged);
+
+  const tab=S.filters.ntab||'All';
+  const TABS=['All','Approvals','Feedback','Issues'];
+
+  function notifType(text){
+    if(text.includes('pproval')||text.includes('Approved')||text.includes('Rejected')||text.includes('pprove'))return'approval';
+    if(text.includes('edit')||text.includes('Edit'))return'edit';
+    if(text.includes('issue')||text.includes('Issue')||text.includes('⚠'))return'issue';
+    if(text.includes('eedback')||text.includes('Feedback'))return'feedback';
+    if(text.includes('overdue')||text.includes('late')||text.includes('Late'))return'late';
+    return'general';
+  }
+  const TYPE_CLR={approval:'#8B5CF6',edit:'#0EA5E9',issue:'#F97316',feedback:'#3B82F6',late:'#EF4444',general:'#6B7280'};
+  const TYPE_BG={approval:'#EDE9FE',edit:'#E0F2FE',issue:'#FFF7ED',feedback:'#EFF6FF',late:'#FEF2F2',general:'#F6F7F8'};
+  const TYPE_ICON={approval:'approve',edit:'edit',issue:'flag',feedback:'msg',late:'clock',general:'bell'};
+
+  const filteredNotifs=tab==='All'?notifs
+    :tab==='Approvals'?notifs.filter(n=>['approval','edit'].includes(notifType(n.text)))
+    :tab==='Feedback'?notifs.filter(n=>notifType(n.text)==='feedback')
+    :tab==='Issues'?notifs.filter(n=>notifType(n.text)==='issue')
+    :notifs;
+
+  const counts={
+    All:notifs.length,
+    Approvals:notifs.filter(n=>['approval','edit'].includes(notifType(n.text))).length,
+    Feedback:myFb.length,
+    Issues:notifs.filter(n=>notifType(n.text)==='issue').length,
+  };
+
+  return '<div class="fade">'+hdr('Notifications','')
+    // Tabs
+    +'<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
+    +TABS.map(t=>{
+      const active=tab===t;
+      const badge=counts[t]?(' <span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;background:'+(active?'rgba(255,255,255,0.25)':'#F3F4F6')+';color:'+(active?'#fff':'#6B7280')+'">'+counts[t]+'</span>'):'';
+      return '<button onclick="App._setNTab(this.dataset.t)" data-t="'+t+'" style="padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:'+(active?'#15171C':'transparent')+';color:'+(active?'#fff':'#6B7280')+'">'+t+badge+'</button>';
+    }).join('')
+    +'</div>'
+    // Feedback section (when tab=Feedback)
+    +(tab==='Feedback'
+      ? (myFb.length
+        ? '<div style="display:flex;flex-direction:column;gap:10px">'
+          + myFb.map(fb=>{
+              const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
+              const stClr=fb.status==='Closed'?'#6B7280':fb.status==='Responded'?'#059669':fb.status==='Acknowledged'?'#0EA5E9':'#3B82F6';
+              const stBg=fb.status==='Closed'?'#F6F7F8':fb.status==='Responded'?'#DCFCE7':fb.status==='Acknowledged'?'#E0F2FE':'#EFF6FF';
+              return '<div style="background:#fff;border-radius:16px;border:1px solid '+(fb.acknowledged?'#E5E7EB':'#BFDBFE')+';overflow:hidden;border-left:4px solid '+stClr+'">'
+                +'<div style="padding:14px 16px">'
+                +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'
+                +'<div>'
+                +(fb.title?'<div style="font-size:14px;font-weight:800">'+esc(fb.title)+'</div>':'')
+                +'<div style="font-size:13px;font-weight:700;margin-top:2px">'+esc(cl?.name||'Checklist')+(fb.taskName?' → '+esc(fb.taskName):'')+'</div>'
+                +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))
+                +(fb.priority?' · <span style="font-weight:700;color:'+(fb.priority==='High'?'#DC2626':fb.priority==='Medium'?'#F97316':'#6B7280')+'">'+fb.priority+'</span>':'')
+                +'</div>'
+                +'</div>'
+                +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+stBg+';color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
+                +'</div>'
+                +'<p style="font-size:14px;color:#15171C;background:#F6F7F8;border-radius:10px;padding:12px;margin:0">'+esc(fb.text)+'</p>'
+                +(fb.reply?'<div style="margin-top:10px;padding:10px;background:#F0FDF4;border-radius:10px;font-size:13px;color:#166534"><strong>Your reply:</strong> '+esc(fb.reply)+'</div>':'')
+                +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
+                +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'')
+                +'<button onclick="App._replyFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">Reply</button>'
+                +'</div>'
+                +'</div></div>';
+            }).join('')
+          +'</div>'
+        : empty('msg','No feedback yet','Feedback from your manager will appear here.')
+      )
+      // Notification timeline for other tabs
+      : (filteredNotifs.length
+        ? '<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;overflow:hidden">'
+          +'<div style="display:flex;flex-direction:column">'
+          +filteredNotifs.map((n,idx)=>{
+              const type=notifType(n.text);
+              const clr=TYPE_CLR[type];const bg=TYPE_BG[type];const ico=TYPE_ICON[type];
+              const isNew=!n.read;
+              // Parse deep-link target from notification text
+              return '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid #F9F8F5;cursor:pointer;'+(isNew?'background:#FAFFFE':'background:#fff')+'" onclick="App._notifClick(this.dataset.id)" data-id="'+n.id+'">'
+                +'<div style="width:36px;height:36px;border-radius:10px;background:'+bg+';display:grid;place-items:center;flex-shrink:0;margin-top:1px">'+ic(ico,'w-4 h-4 text-['+clr+']')+'</div>'
+                +'<div style="flex:1;min-width:0">'
+                +'<p style="font-size:13px;color:#111110;margin:0;line-height:1.5;font-weight:'+(isNew?'600':'400')+'">'+esc(n.text)+'</p>'
+                +'<p style="font-size:11px;color:#B8B5AC;margin-top:3px">'+(n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+' · '+type.charAt(0).toUpperCase()+type.slice(1)+'</p>'
+                +'</div>'
+                +(isNew?'<div style="width:7px;height:7px;border-radius:50%;background:#0E9F6E;flex-shrink:0;margin-top:6px"></div>':'')
+                +'</div>';
+            }).join('')
+          +'</div></div>'
+        : empty('bell','All clear','No notifications yet.')
+      )
+    )
+    +'</div>';
+}
+App._setNTab=(t)=>{S.filters.ntab=t;rr();};
+App._notifClick=(id)=>{
+  const n=DB.notifications.find(x=>x.id===id);if(!n)return;
+  n.read=true;saveDB();
+  const text=n.text||'';
+  // Deep-link based on content
+  if(text.includes('Edit approved')||text.includes('Edit request')||text.includes('pproval')||text.includes('Approved')||text.includes('Rejected')){App.go('approvals');return;}
+  if(text.includes('issue')||text.includes('Issue')||text.includes('⚠')){S.filters.atab='Issues';App.go('approvals');return;}
+  if(text.includes('eedback')||text.includes('Feedback')){S.filters.ntab='Feedback';rr();return;}
+  if(text.includes('resubmit')||text.includes('Resubmit')){App.go('approvals');return;}
+  App.go('mychecklists');
+};
+App._replyFb=(id)=>{
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Reply to feedback</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +'<textarea id="rfb-t" rows="4" placeholder="Write your reply…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea>'
+    +'<div class="flex gap-2 mt-4">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._saveReplyFb(this.dataset.id)" data-id="'+id+'" style="flex:1;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Send reply</button>'
+    +'</div></div>',
+    'max-w-sm'
+  );
+};
+App._saveReplyFb=(id)=>{
+  const text=$('#rfb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}
+  const fb=DB.feedback.find(x=>x.id===id);if(!fb)return;
+  fb.reply=text;fb.status='Responded';fb.repliedAt=new Date().toISOString();
+  const mgr=uById(fb.managerId);
+  if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,text:fullName(me())+' replied to your feedback',time:new Date().toISOString(),read:false});
+  toast('Reply sent');closeModal();saveDB();rr();
+};
+
+App._openSendFeedback=(userId)=>{
+  const u=uById(userId);if(!u)return;
+  const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(userId));
+  const clOptions=cls.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Send Feedback</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +'<div style="display:flex;align-items:center;gap:10px;background:#F6F7F8;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
+    +avatar(u,'w-10 h-10','text-xs')
+    +'<div><div style="font-size:14px;font-weight:700">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#9CA3AF">'+esc(u.position||u.department)+'</div></div>'
+    +'</div>'
+    +fld('Feedback title','sfb-title','','text','e.g. Great work on opening checklist')
+    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Feedback type</label>'
+    +'<select id="sfb-type" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">'
+    +'<option value="General">General Feedback</option>'
+    +'<option value="Checklist">Checklist Feedback</option>'
+    +'<option value="Task">Task Feedback</option>'
+    +'<option value="Performance">Performance Feedback</option>'
+    +'</select></div>'
+    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><label class="block text-xs font-semibold text-ink-500 mb-1">Related checklist</label>'
+    +'<select id="sfb-cl" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">None</option>'+clOptions+'</select></div>'
+    +'<div><label class="block text-xs font-semibold text-ink-500 mb-1">Priority</label>'
+    +'<select id="sfb-pri" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>'
+    +'</div>'
+    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Related task (optional)</label>'
+    +'<input id="sfb-task" type="text" placeholder="e.g. Temperature Check" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>'
+    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Comment</label>'
+    +'<textarea id="sfb-text" rows="3" placeholder="Write your feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea></div>'
+    +'<button onclick="App._saveSendFeedback(this.dataset.uid)" data-uid="'+userId+'" style="width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send feedback</button>'
+    +'</div>',
+    'max-w-md'
+  );
+};
+App._saveSendFeedback=(userId)=>{
+  const title=$('#sfb-title')?.value?.trim();
+  const text=$('#sfb-text')?.value?.trim();
+  if(!text){toast('Write a comment','err');return;}
+  const clId=$('#sfb-cl')?.value||null;
+  const type=$('#sfb-type')?.value||'General';
+  const priority=$('#sfb-pri')?.value||'Low';
+  const taskName=$('#sfb-task')?.value?.trim()||null;
+  if(!DB.feedback)DB.feedback=[];
+  DB.feedback.push({
+    id:uid('fb'),title:title||type+' Feedback',type,
+    checklistId:clId||null,userId,managerId:S.uid,
+    date:todayISO(),text,priority,taskName:taskName||null,
+    level:'direct',acknowledged:false,status:'Sent',
+    createdAt:new Date().toISOString()
+  });
+  DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false});
+  log(fullName(me()),'Sent feedback',fullName(uById(userId)));
+  toast('Feedback sent ✓');closeModal();saveDB();rr();
+};
 /* ===== HIERARCHY ===== */
 let COLL={};
 function hierarchyPage(){const roots=isAdmin()?DB.users.filter(u=>!u.managerId):[me()].filter(Boolean);return`<div class="fade">${hdr(isAdmin()?'Organisation':'My Team','Reporting structure')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 overflow-x-auto"><div class="min-w-fit">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;}
