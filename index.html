@@ -304,56 +304,15 @@ const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="
 
 
 /* ===== SUPABASE CLIENT ===== */
-const SB_URL  = 'https://bxuhmyxfzoqvmukausjd.supabase.co';
-const SB_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
-const sb = supabase.createClient(SB_URL, SB_ANON, {
-  auth:{ persistSession:true, autoRefreshToken:true, detectSessionInUrl:false }
-});
-
-/* Map Supabase rows → in-memory DB shapes */
-function _mapUsers(rows){
-  return (rows||[]).map(p=>({
-    id:p.id, firstName:p.first_name||'', lastName:p.last_name||'',
-    email:p.email||'', phone:p.phone||'', position:p.position||'',
-    department:p.department||'', role:p.role||'User',
-    status:p.status||'Active', managerId:p.manager_id||null,
-    rules:p.rules||{past:true,future:true,edit:true},
-    approval:p.approval_settings||{past:false,future:false,edited:false},
-    password:'***' // managed by Supabase Auth
-  }));
-}
-function _mapChecklists(rows){
-  return (rows||[]).map(c=>({
-    id:c.id, name:c.name||'', description:c.description||'',
-    department:c.department||'', frequency:c.frequency||'Daily',
-    schedule:c.schedule||'', selectedDays:c.selected_days||[],
-    selectedDates:c.selected_dates||[], customDates:c.custom_dates||[],
-    startDate:c.start_date||'', endDate:c.end_date||'',
-    locationIds:c.location_ids||[], assignees:c.assignees||[], tasks:c.tasks||[]
-  }));
-}
-function _mapSubs(rows){
-  return (rows||[]).map(s=>({
-    id:s.id, checklistId:s.checklist_id, userId:s.user_id,
-    date:s.date, status:s.status||'Pending',
-    submittedAt:s.submitted_at||null, tasks:s.tasks||[]
-  }));
-}
-function _mapApprovals(rows){
-  return (rows||[]).map(a=>({
-    id:a.id, type:a.type||'Submission', requesterId:a.requester_id,
-    checklistId:a.checklist_id||null, submissionId:a.submission_id||null,
-    date:a.date||null, status:a.status||'Pending',
-    note:a.note||'', createdAt:a.created_at
-  }));
-}
-
-/* Load ALL data from Supabase into the in-memory DB */
+const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
+const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
+const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},password:'***'}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[]}));}
+function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
+function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
-  const [
-    {data:depts},{data:locs},{data:cls},{data:subs},
-    {data:appr},{data:audit},{data:notifs},{data:profiles}
-  ] = await Promise.all([
+  const[{data:depts},{data:locs},{data:cls},{data:subs},{data:appr},{data:audit},{data:notifs},{data:profiles}]=await Promise.all([
     sb.from('departments').select('*').order('name'),
     sb.from('locations').select('*').order('name'),
     sb.from('checklists').select('*').order('created_at',{ascending:false}),
@@ -363,17 +322,24 @@ async function loadFromSB(){
     sb.from('notifications').select('*').order('created_at',{ascending:false}),
     sb.from('profiles').select('*').order('first_name'),
   ]);
-  DB.departments  = (depts||[]).map(d=>({id:d.id,name:d.name}));
-  DB.locations    = (locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
-  DB.checklists   = _mapChecklists(cls);
-  DB.submissions  = _mapSubs(subs);
-  DB.approvals    = _mapApprovals(appr);
-  DB.audit        = (audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
-  DB.notifications= (notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
-  DB.users        = _mapUsers(profiles);
-  DB.feedback     = DB.feedback||[];
+  DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
+  DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
+  DB.checklists=_mC(cls);DB.submissions=_mS(subs);DB.approvals=_mA(appr);
+  DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
+  DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
+  DB.users=_mU(profiles);DB.feedback=DB.feedback||[];
 }
-
+async function _sync(){
+  await Promise.all([
+    sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
+    sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[]})),{onConflict:'id'}),
+    sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
+    sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
+    sb.from('audit_logs').upsert(DB.audit.slice(0,50).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
+    sb.from('notifications').upsert(DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false})),{onConflict:'id'}),
+  ]);
+}
 /* ===== STATUS CHIPS ===== */
 const CHIP_CLS={
   'On Time':   'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -415,54 +381,14 @@ function seed(){
 
 /* ===== LOCALSTORAGE ===== */
 const LS_KEY='shiftly_v3';
-function saveDB(){
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
-  _syncToDB().catch(e=>console.warn('Supabase sync:',e));
-}
-async function _syncToDB(){
-  await Promise.all([
-    sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
-    sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({
-      id:c.id,name:c.name,description:c.description||'',department:c.department||'',
-      frequency:c.frequency||'Daily',schedule:c.schedule||'',
-      selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],
-      custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,
-      location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[]
-    })),{onConflict:'id'}),
-    sb.from('submissions').upsert(DB.submissions.map(s=>({
-      id:s.id,checklist_id:s.checklistId,user_id:s.userId,
-      date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[]
-    })),{onConflict:'id'}),
-    sb.from('approvals').upsert(DB.approvals.map(a=>({
-      id:a.id,type:a.type||'Submission',requester_id:a.requesterId,
-      checklist_id:a.checklistId||null,submission_id:a.submissionId||null,
-      date:a.date||null,status:a.status,note:a.note||''
-    })),{onConflict:'id'}),
-    sb.from('audit_logs').upsert(DB.audit.slice(0,50).map(l=>({
-      id:l.id,actor:l.actor,action:l.action,target:l.target||''
-    })),{onConflict:'id'}),
-    sb.from('notifications').upsert(DB.notifications.map(n=>({
-      id:n.id,user_id:n.userId,text:n.text,read:n.read||false
-    })),{onConflict:'id'}),
-  ]);
-}
+function saveDB(){try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}_sync().catch(e=>console.warn('sync:',e));}
 function loadDB(){
-  // Fast local cache — used while Supabase loads in background
   try{
     const r=localStorage.getItem(LS_KEY);
-    if(!r)return false;
-    const p=JSON.parse(r);if(!p.DB)return false;
-    DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','audit','notifications']
-      .forEach(k=>{if(!DB[k])DB[k]=[];});
-    DB.users.forEach(u=>{
-      if(!u.rules)u.rules={past:true,future:true,edit:true};
-      if(!u.approval)u.approval={past:false,future:false,edited:false};
-      if(!u.phone)u.phone='';if(!u.position)u.position='';
-    });
-    S.uid=p.uid||null;
-    return true;
+    if(!r)return false;const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
+    ['users','departments','locations','checklists','submissions','approvals','feedback','audit','notifications'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';});
+    S.uid=p.uid||null;return true;
   }catch(e){return false;}
 }
 
@@ -600,21 +526,7 @@ App.saveProfile=()=>{
   u.position=($('#ep-pos')?.value||'').trim();
   saveDB();toast('Profile updated ✓');rr();
 };
-App.changePw=async()=>{
-  const cur=($('#pw-cur')?.value||'').trim();
-  const nw=($('#pw-new')?.value||'').trim();
-  if(!cur||!nw){toast('Fill both fields','err');return;}
-  if(nw.length<6){toast('Password too short (min 6)','err');return;}
-  // Re-auth with current password to verify, then update
-  const u=me();
-  const {error:signInErr}=await sb.auth.signInWithPassword({email:u.email,password:cur});
-  if(signInErr){toast('Current password incorrect','err');return;}
-  const {error}=await sb.auth.updateUser({password:nw});
-  if(error){toast(error.message,'err');return;}
-  toast('Password updated ✓');
-  const c=$('#pw-cur'),n=$('#pw-new');
-  if(c)c.value='';if(n)n.value='';
-};
+App.changePw=async()=>{const cur=($('#pw-cur')?.value||'').trim();const nw=($('#pw-new')?.value||'').trim();if(!cur||!nw){toast('Fill both fields','err');return;}if(nw.length<6){toast('Min 6 characters','err');return;}const u=me();const{error:se}=await sb.auth.signInWithPassword({email:u.email,password:cur});if(se){toast('Current password incorrect','err');return;}const{error}=await sb.auth.updateUser({password:nw});if(error){toast(error.message,'err');return;}toast('Password updated');const c=$('#pw-cur'),n=$('#pw-new');if(c)c.value='';if(n)n.value='';};
 App._showNotifs=()=>{
   const list=DB.notifications.filter(n=>n.userId===S.uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,30);
   list.forEach(n=>n.read=true);saveDB();
@@ -635,13 +547,7 @@ App._showNotifs=()=>{
   </div>`,'max-w-sm');
   rr(); // update badge
 };
-App.logout=async()=>{
-  try{log(fullName(me()),'Logged out','');saveDB();}catch(e){}
-  await sb.auth.signOut();
-  S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;
-  RUN={};if(typeof COLL!=='undefined')COLL={};
-  closeModal();render();
-};
+App.logout=async()=>{try{log(fullName(me()),'Logged out','');saveDB();}catch(e){}await sb.auth.signOut();S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;RUN={};if(typeof COLL!=='undefined')COLL={};closeModal();render();};
 
 /* ===== ROUTER ===== */
 function pageContent(){
@@ -681,48 +587,7 @@ function loginView(){return`<div class="min-h-screen flex"><div class="hidden lg
       onkeydown="if(event.key==='Enter')App.login()"/>
   </div>
 </div><button onclick="App.login()" style="margin-top:20px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)" onmouseover="this.style.background='#0E0F13'" onmouseout="this.style.background='#15171C'">Sign in</button></div></div></div>`;}
-App.login=async()=>{
-  const email=($('#li-e')?.value||'').trim().toLowerCase();
-  const pw=($('#li-p')?.value||'').trim();
-  if(!email||!pw){toast('Enter your email and password','err');return;}
-  const btn=document.querySelector('button[onclick="App.login()"]');
-  if(btn){btn.disabled=true;btn.textContent='Signing in…';}
-  try{
-    // Step 1: Auth only — fast (< 1s)
-    const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
-    if(error)throw error;
-
-    // Step 2: Fetch just this user's profile — fast single row query
-    const {data:profile,error:pErr}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
-    if(pErr||!profile)throw new Error('Profile not found — contact admin.');
-    if(profile.status==='Inactive'){await sb.auth.signOut();throw new Error('Account inactive — contact admin.');}
-
-    // Step 3: Map profile and render immediately — no waiting for all data
-    const u={
-      id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',
-      email:profile.email||'',phone:profile.phone||'',position:profile.position||'',
-      department:profile.department||'',role:profile.role||'User',
-      status:profile.status||'Active',managerId:profile.manager_id||null,
-      rules:profile.rules||{past:true,future:true,edit:true},
-      approval:profile.approval_settings||{past:false,future:false,edited:false},
-      password:'***'
-    };
-    // Merge into DB (keep any cached data)
-    const existing=DB.users.findIndex(x=>x.id===u.id);
-    if(existing>-1)DB.users[existing]=u; else DB.users.push(u);
-    S.uid=u.id;
-    S.route=u.role==='Admin'?'dashboard':'mychecklists';
-    log(fullName(u),'Logged in','');
-    saveDB();render();  // render with what we have NOW
-
-    // Step 4: Load the rest in background — silently refreshes data
-    loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
-  }catch(err){
-    const msg=err.message||'';
-    toast(msg.includes('Invalid')||msg.includes('credentials')?'Incorrect email or password':msg,'err');
-    if(btn){btn.disabled=false;btn.textContent='Sign in';}
-  }
-};
+App.login=async()=>{const email=($('#li-e')?.value||'').trim().toLowerCase();const pw=($('#li-p')?.value||'').trim();if(!email||!pw){toast('Enter your email and password','err');return;}const btn=document.querySelector('button[onclick="App.login()"]');if(btn){btn.disabled=true;btn.textContent='Signing in...';}try{const{data,error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw error;const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();if(!profile){await sb.auth.signOut();throw new Error('Profile not found');}if(profile.status==='Inactive'){await sb.auth.signOut();throw new Error('Account inactive');}const u={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===u.id);if(idx>-1)DB.users[idx]=u;else DB.users.push(u);S.uid=u.id;S.route=u.role==='Admin'?'dashboard':'mychecklists';log(fullName(u),'Logged in','');saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});}catch(err){toast(err.message.includes('Invalid')||err.message.includes('credentials')?'Incorrect email or password':err.message,'err');if(btn){btn.disabled=false;btn.textContent='Sign in';}}};
 
 /* ===== ADMIN DASHBOARD ===== */
 function adminDash(){
@@ -800,89 +665,40 @@ App.editUser=(id=null)=>{
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveUser('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
 };
-App.saveUser=async(id)=>{
-  const g=i=>$(`#${i}`)?.value?.trim()||'';
-  const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');
-  if(!fn||!ln||!email){toast('Name & email required','err');return;}
-  const mId=$('#u-mgr')?.value||null;
-  if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}
-  const profileData={
-    first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),
-    department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,
-    manager_id:mId||null,
-    rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},
-    approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}
-  };
-  if(id){
-    const {error}=await sb.from('profiles').update(profileData).eq('id',id);
-    if(error){toast(error.message,'err');return;}
-    const u=uById(id);
-    if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:profileData.phone,position:profileData.position,department:profileData.department,role:profileData.role,status:profileData.status,managerId:mId,rules:profileData.rules,approval:profileData.approval_settings});
-    toast('Updated');
-  }else{
-    const pw=(g('u-pw')||'').trim();
-    if(!pw){toast('Password required','err');return;}
-    const createBtn=document.querySelector('button[onclick*="saveUser"]');
-    if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';}
-    const {data:res,error}=await sb.functions.invoke('create-user',{body:{...profileData,password:pw}});
-    if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}
-    if(error){
-      // Extract actual error message from the edge function response body
-      let msg=error.message||'Edge Function failed';
-      try{
-        if(error.context){
-          const body=await error.context.json();
-          msg=body.error||body.message||msg;
-        }
-      }catch(e){}
-      toast('Create user error: '+msg,'err');
-      return;
-    }
-    if(res?.error){toast(res.error,'err');return;}
-    DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:profileData.phone,position:profileData.position,department:profileData.department,role:profileData.role,status:profileData.status,managerId:mId,rules:profileData.rules,approval:profileData.approval_settings,password:'***'});
-    toast('User created ✓');
-  }
-  log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);
-  closeModal();render();
-};
-App.resetPw=(id)=>{const u=uById(id);openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Reset password</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">New password for <strong>${esc(fullName(u))}</strong></p>${fld('New password','rp-pw','','password','')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="(async()=>{const pw=$('#rp-pw')?.value?.trim();if(!pw){toast('Enter a password','err');return;}const {error}=await sb.functions.invoke('reset-password',{body:{user_id:'${id}',password:pw}});if(error){toast(error.message,'err');return;}log(fullName(me()),'Reset password','${fullName(u)}');toast('Password reset ✓');closeModal();})()" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Reset</button></div></div>`,'max-w-sm');};
-App.togUser=async(id)=>{
-  const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';
-  await sb.from('profiles').update({status:u.status}).eq('id',id);
-  toast(fullName(u)+' → '+u.status,u.status==='Active'?'ok':'warn');saveDB();render();
-};
-App.delUser=async(id)=>{
-  if(!confirm('Delete this user?'))return;
+App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');if(!fn||!ln||!email){toast('Name & email required','err');return;}const mId=$('#u-mgr')?.value||null;if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}const pd={first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,manager_id:mId||null,rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}};if(id){const{error}=await sb.from('profiles').update(pd).eq('id',id);if(error){toast(error.message,'err');return;}const u=uById(id);if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings});toast('Updated');}else{const pw=(g('u-pw')||'').trim();if(!pw){toast('Password required','err');return;}const{data:res,error}=await sb.functions.invoke('create-user',{body:{...pd,password:pw}});if(error||res?.error){let msg=error?.message||res?.error||'Failed';try{if(error?.context){const b=await error.context.json();msg=b.error||msg;}}catch(e){}toast(msg,'err');return;}DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings,password:'***'});toast('User created');}log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);closeModal();render();};
+App.resetPw=(id)=>{
   const u=uById(id);
-  // Delete from Supabase Auth via edge function (or just deactivate)
-  const {error}=await sb.from('profiles').update({status:'Inactive'}).eq('id',id);
-  if(error){toast(error.message,'err');return;}
-  DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
-  DB.users=DB.users.filter(x=>x.id!==id);
-  DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));
-  log(fullName(me()),'Deactivated user',fullName(u));
-  toast('User deactivated','warn');saveDB();render();
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4">'
+    +'<h2 class="fd text-xl font-bold">Reset password</h2>'
+    +'<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button>'
+    +'</div>'
+    +'<p class="text-sm text-ink-400 mb-4">New password for <strong>'+esc(fullName(u))+'</strong></p>'
+    +fld('New password','rp-pw','','password','')
+    +'<div class="flex gap-2 mt-4">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._doResetPw(this.dataset.uid)" data-uid="'+id+'" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Reset</button>'
+    +'</div></div>',
+    'max-w-sm'
+  );
 };
+App._doResetPw=async(uid)=>{
+  const pw=$('#rp-pw')?.value?.trim();
+  if(!pw){toast('Enter a password','err');return;}
+  const{error}=await sb.functions.invoke('reset-password',{body:{user_id:uid,password:pw}});
+  if(error){toast(error.message,'err');return;}
+  log(fullName(me()),'Reset password',fullName(uById(uid)));
+  toast('Password reset');closeModal();
+};
+App.togUser=async(id)=>{const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';await sb.from('profiles').update({status:u.status}).eq('id',id);toast(fullName(u)+' '+u.status,u.status==='Active'?'ok':'warn');saveDB();render();};
+App.delUser=(id)=>{if(!confirm('Delete this user?'))return;const u=uById(id);DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);DB.users=DB.users.filter(x=>x.id!==id);DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));DB.submissions=DB.submissions.filter(s=>s.userId!==id);DB.notifications=DB.notifications.filter(n=>n.userId!==id);DB.approvals=DB.approvals.filter(a=>a.requesterId!==id);log(fullName(me()),'Deleted user',fullName(u));toast('Deleted','warn');render();};
 
 /* ===== DEPARTMENTS ===== */
 function deptsPage(){return`<div class="fade">${hdr('Departments','',isAdmin()?btnP('Add','App.editDept()','plus'):'')}<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">${DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name);const cls=DB.checklists.filter(c=>c.department===d.name);return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4 group"><div class="flex justify-between mb-3"><div class="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 grid place-items-center">${ic('dept','w-4 h-4')}</div>${isAdmin()?`<div class="flex gap-1 opacity-0 group-hover:opacity-100 transition"><button onclick="App.editDept('${d.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.delDept('${d.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button></div>`:''}</div><h3 class="fd font-bold">${esc(d.name)}</h3><div class="flex gap-4 mt-1 text-sm text-ink-400"><span><b class="text-ink-800">${us.length}</b> users</span><span><b class="text-ink-800">${cls.length}</b> checklists</span></div><div class="flex -space-x-1.5 mt-3">${us.slice(0,5).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div>`;}).join('')}</div></div>`;}
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveDept=async(id)=>{
-  const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}
-  const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};
-  if(id)obj.name=n; else DB.departments.push(obj);
-  const {error}=await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});
-  if(error){toast(error.message,'err');return;}
-  log(fullName(me()),id?'Edited dept':'Created dept',n);
-  toast(id?'Updated':'Created');saveDB();closeModal();render();
-};
-App.delDept=async(id)=>{
-  const d=DB.departments.find(x=>x.id===id);if(!confirm('Delete '+d.name+'?'))return;
-  const {error}=await sb.from('departments').delete().eq('id',id);
-  if(error){toast(error.message,'err');return;}
-  DB.departments=DB.departments.filter(x=>x.id!==id);
-  log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();
-};
+App.saveDept=async(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
+App.delDept=async(id)=>{const d=DB.departments.find(x=>x.id===id);if(!confirm('Delete '+d.name+'?'))return;await sb.from('departments').delete().eq('id',id);DB.departments=DB.departments.filter(x=>x.id!==id);log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
 function locsPage(){
@@ -893,21 +709,8 @@ function locsPage(){
   </div></div>`;
 }
 App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveLoc=async(id)=>{
-  const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}
-  const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};
-  const obj=id?locById(id):{id:uid('loc'),...data};
-  if(id)Object.assign(obj,data); else DB.locations.push(obj);
-  const {error}=await sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'});
-  if(error){toast(error.message,'err');return;}
-  log(fullName(me()),id?'Edited location':'Created location',n);
-  toast(id?'Updated':'Created');saveDB();closeModal();render();
-};
-App.togLoc=async(id)=>{
-  const l=locById(id);l.status=l.status==='Active'?'Inactive':'Active';
-  await sb.from('locations').update({status:l.status}).eq('id',id);
-  toast(l.name+' → '+l.status,l.status==='Active'?'ok':'warn');saveDB();render();
-};
+App.saveLoc=async(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);await sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'});log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
+App.togLoc=async(id)=>{const l=locById(id);l.status=l.status==='Active'?'Inactive':'Active';await sb.from('locations').update({status:l.status}).eq('id',id);toast(l.name+' '+l.status,l.status==='Active'?'ok':'warn');saveDB();render();};
 
 /* ===== CHECKLIST ADMIN PAGE ===== */
 function clsPage(){
@@ -1191,32 +994,12 @@ App._saveCl=async(editing)=>{
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
   if(!CLD.tasks.length||CLD.tasks.some(t=>!t.name.trim())){toast('Add at least one named task','err');return;}
-  // Write to Supabase first
-  const clRow={
-    id:CLD.id,name:CLD.name,description:CLD.description||'',
-    department:CLD.department||'',frequency:CLD.frequency||'Daily',
-    schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],
-    selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],
-    start_date:CLD.startDate||null,end_date:CLD.endDate||null,
-    location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[]
-  };
-  const {error}=await sb.from('checklists').upsert(clRow,{onConflict:'id'});
-  if(error){toast('Save error: '+error.message,'err');return;}
   if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);DB.checklists[idx]=CLD;}
   else DB.checklists.push(CLD);
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   toast(editing?'Saved':'Checklist created');closeModal();render();saveDB();
 };
-App.delCl=async(id)=>{
-  const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;
-  await Promise.all([
-    sb.from('checklists').delete().eq('id',id),
-    sb.from('submissions').delete().eq('checklist_id',id),
-  ]);
-  DB.checklists=DB.checklists.filter(x=>x.id!==id);
-  DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);
-  log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();
-};
+App.delCl=(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
 let RUN={};
@@ -1293,6 +1076,29 @@ function myClsPage(){
 }
 
 
+function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved){
+  const cid=c.id;
+  if(!sub){
+    if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
+    if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#3B82F6;font-weight:600">Future date</span><span></span>';
+    const prog=total>0?((doneN+issN)+' of '+total+' complete'):'';
+    const btnCls='submit-pill '+(allDone?'go':'no');
+    const btnLbl=allDone?'\u2713 Submit':'Submit ('+(doneN+issN)+'/'+total+')';
+    const btn='<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="'+btnCls+'"'+(allDone?'':' disabled')+'>'+btnLbl+'</button>';
+    return '<span style="font-size:12px;color:#B8B5AC">'+prog+'</span>'+btn;
+  }
+  if(editApproved){
+    return '<span style="font-size:12px;font-weight:700;color:#0D7A4E">Edit approved</span>'+'<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
+  }
+  const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+  const eb=(sub.editCount||0)>0?'<span style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edit #'+sub.editCount+'</span>':'';
+  const stxt=sub.status==='Editing'?'Editing...':'Submitted '+st;
+  const left='<span style="font-size:12px;color:#B8B5AC">'+stxt+eb+'</span>';
+  let right='';
+  if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
+  else if(u?.rules?.edit)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
+  return left+right;
+}
 function _clCard(c,date){
   const sub=subFor(c.id,S.uid,date);
   const today=todayISO();
@@ -1333,16 +1139,7 @@ function _clCard(c,date){
     ${exp?`<div>
       ${tasks.map((t,i)=>_taskRow(c,t,i,run,!!sub,date)).join('')}
       <!-- Footer -->
-      <div class="clc-ft">
-        ${!sub?(
-          isPast&&!u?.rules?.past?`<span style="font-size:12px;color:#B36A00;font-weight:600">🔒 No permission for past dates</span><span></span>`:
-          isFuture&&!u?.rules?.future?`<span style="font-size:12px;color:#3B82F6;font-weight:600">📅 Future date</span><span></span>`:
-          `<span style="font-size:12px;color:#B8B5AC">${total>0?`${doneN+issN} of ${total} complete`:''}</span>
-           <button onclick="App._submitRun('${c.id}','${date}')" class="submit-pill ${allDone?'go':'no'}">${allDone?'✓ Submit':'Submit'}</button>`
-        ):editApproved?`<span style="font-size:12px;font-weight:700;color:#0D7A4E">✓ Edit approved</span><button onclick="App._resubmit('${c.id}','${date}')" class="submit-pill go">Resubmit</button>`:
-        `<span style="font-size:12px;color:#B8B5AC">Submitted ${sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</span>
-         ${editApproved?'':(hasEditReq?`<span style="font-size:12px;font-weight:600;color:#F97316">⏳ Edit pending</span>`:(u?.rules?.edit?`<button onclick="App._reqEdit('${c.id}','${date}')" style="font-size:12px;font-weight:600;color:#0D7A4E;background:none;border:none;cursor:pointer;padding:0">Request edit</button>`:''))}`}
-      </div>
+      <div class="clc-ft">${_clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved)}</div>
       ${sub?DB.feedback.filter(fb=>fb.checklistId===c.id&&fb.userId===S.uid&&fb.date===date).map(fb=>{
         const mgr=uById(fb.managerId);
         return`<div style="background:#EFF6FF;border-top:1px solid #BFDBFE;padding:12px 18px">
@@ -1451,47 +1248,9 @@ App._togIssue=(clId,i)=>{
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].issueComment=v;};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
-App._addPh=async(clId,i,el)=>{
-  const f=el.files[0];if(!f)return;
-  const path=`photos/${S.uid}/${todayISO()}/${clId}/task_${i}_${Date.now()}`;
-  const {data,error}=await sb.storage.from('shiftly-photos').upload(path,f,{upsert:true});
-  if(error){
-    // Fallback: store as base64 if storage fails
-    const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);
-    return;
-  }
-  const {data:{publicUrl}}=sb.storage.from('shiftly-photos').getPublicUrl(path);
-  // Use signed URL for private bucket
-  const {data:signed}=await sb.storage.from('shiftly-photos').createSignedUrl(path,60*60*24*365);
-  RUN[clId].tasks[i].photo=signed?.signedUrl||publicUrl;
-  RUN[clId].tasks[i].photoPath=path;
-  rr();
-};
-App._issuePh=async(clId,i,el)=>{
-  const f=el.files[0];if(!f)return;
-  const path=`photos/${S.uid}/${todayISO()}/${clId}/issue_${i}_${Date.now()}`;
-  const {data,error}=await sb.storage.from('shiftly-photos').upload(path,f,{upsert:true});
-  if(error){
-    const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);
-    return;
-  }
-  const {data:signed}=await sb.storage.from('shiftly-photos').createSignedUrl(path,60*60*24*365);
-  RUN[clId].tasks[i].issuePhoto=signed?.signedUrl||path;
-  RUN[clId].tasks[i].issuePhotoPath=path;
-  rr();
-};
-App._resubmit=(clId,date)=>{
-  // Clear the existing submission so user can resubmit
-  const idx=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);
-  if(idx>-1)DB.submissions.splice(idx,1);
-  // Clear the approved edit request
-  DB.approvals.forEach(a=>{if(a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date)a.status='Used';});
-  // Reset RUN so user can fill it fresh
-  delete RUN[clId];
-  log(fullName(me()),'Resubmit started',clById(clId)?.name||'');
-  toast('You can now resubmit this checklist');
-  rr();
-};
+App._addPh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);};
+App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
+App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();rr();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();saveDB();}toast('Acknowledged');saveDB();rr();};
 
 App._submitRun=(clId,date)=>{
@@ -1510,11 +1269,7 @@ App._submitRun=(clId,date)=>{
   const late=(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))||date<today;
   const needsAppr=(c.tasks||[]).some(t=>t.approval);
   const hasIssues=(run.tasks||[]).some(t=>t.issue);
-  run.status=needsAppr?'Pending Approval':late?'Late':'On Time';
-  run.submittedAt=new Date().toISOString();run.id=uid('s');
-  DB.submissions.push(JSON.parse(JSON.stringify(run)));
-  const u=me();const mgrId=u?.managerId;
-  if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});}
+  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false});}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});}}
   if(hasIssues){
     const names=(c.tasks||[]).filter((_,i)=>run.tasks[i]?.issue).map(t=>t.name).join(', ');
     const issText='⚠️ '+fullName(u)+' flagged issues in "'+c.name+'" ('+names+') on '+fmtS(date);
@@ -1530,15 +1285,7 @@ App._submitRun=(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues':needsAppr?'Pending approval':late?'Submitted (late)':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
-  // Direct upsert to Supabase immediately on submit
-  const subRow={
-    id:run.id,checklist_id:clId,user_id:S.uid,date,
-    status:run.status,submitted_at:run.submittedAt,tasks:run.tasks
-  };
-  sb.from('submissions').upsert(subRow,{onConflict:'id'}).then(({error})=>{
-    if(error)console.warn('Submission sync error:',error.message);
-  });
-  delete RUN[clId];saveDB();rr();
+  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];saveDB();rr();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -1741,11 +1488,11 @@ function feedbackPage(){
 function approvalsPage(){
   let list=isAdmin()?DB.approvals:DB.approvals.filter(a=>subTree(S.uid).some(u=>u.id===a.requesterId)||a.requesterId===S.uid);
   const tab=S.filters.atab||'Pending';
-  const cnt={Pending:list.filter(a=>a.status==='Pending').length,Approved:list.filter(a=>a.status==='Approved').length,Rejected:list.filter(a=>a.status==='Rejected').length};
+  const cnt={Pending:list.filter(a=>a.status==='Pending').length,Approved:list.filter(a=>a.status==='Approved'||a.status==='Used').length,Rejected:list.filter(a=>a.status==='Rejected').length};
   // Also collect feedback for this user
   const myFeedback=DB.feedback.filter(fb=>fb.userId===S.uid).sort((a,b)=>b.createdAt?.localeCompare(a.createdAt||'')||0);
   const tab2=tab==='Feedback'?'Feedback':tab;
-  const filtered=tab==='Feedback'?[]:list.filter(a=>a.status===tab);
+  const filtered=tab==='Feedback'?[]:tab==='Approved'?list.filter(a=>a.status==='Approved'||a.status==='Used'):list.filter(a=>a.status===tab);
   return`<div class="fade">${hdr('Approvals','')}
   <div class="flex gap-2 mb-4 bg-white border border-ink-100 rounded-2xl p-1 shadow-soft w-fit">
     ${['Pending','Approved','Rejected','Feedback'].map(t=>`<button onclick="S.filters.atab='${t}';rr()" style="padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:pointer;transition:all .15s;background:${tab===t?'#15171C':'transparent'};color:${tab===t?'#fff':'#6B7280'}">${t} <span style="opacity:${tab===t?.6:.5}">${cnt[t]}</span></button>`).join('')}
@@ -1762,7 +1509,7 @@ function approvalsPage(){
             <div class="text-xs text-ink-400 mt-0.5">${esc(c?.name||'—')} · ${fmtD(a.date)}</div>
             ${a.note?`<p class="text-sm text-ink-600 mt-2 bg-ink-50 rounded-xl px-3 py-2">${esc(a.note)}</p>`:''}
           </div>
-          ${a.status!=='Pending'?chip(a.status):''}
+          ${a.status==='Used'?'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FEF3C7;color:#92400E">Resubmitted</span>':a.status!=='Pending'?chip(a.status):''}
         </div>
         ${canDecide?`<div class="flex gap-2 mt-3"><button onclick="App._decide('${a.id}','Approved')" style="flex:1;padding:10px;border-radius:12px;background:#0E9F6E;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer" onmouseover="this.style.background='#0B7A55'" onmouseout="this.style.background='#0E9F6E'">Approve</button><button onclick="App._decide('${a.id}','Rejected')" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;color:#262A33;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.borderColor='#FECACA';this.style.color='#BE123C'" onmouseout="this.style.background='#fff';this.style.borderColor='#ECEDF0';this.style.color='#262A33'">Reject</button></div>`:''}
         ${canFeedback||isAdmin()?`<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -2042,44 +1789,7 @@ function profilePage(){const u=me();return`<div class="fade max-w-xl">${hdr('Pro
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
-(async function boot(){
-  try{
-    // Step 1: Check session (fast — just reads stored JWT, no network)
-    const {data:{session}}=await sb.auth.getSession();
-
-    if(session){
-      // Step 2: Load localStorage cache and render instantly
-      loadDB();
-      if(S.uid){
-        S.route=S.route||'dashboard';
-        render(); // <-- app visible in <100ms
-      }
-      // Step 3: Fetch just the profile row to validate (one fast query)
-      const {data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
-      if(profile&&profile.status==='Active'){
-        // Update/add this user in DB
-        const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};
-        const idx=DB.users.findIndex(x=>x.id===mapped.id);
-        if(idx>-1)DB.users[idx]=mapped; else DB.users.push(mapped);
-        S.uid=mapped.id;
-        if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
-        saveDB();render();
-        // Step 4: Load the rest of the data silently in background
-        loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
-        return;
-      }
-      await sb.auth.signOut();
-    }
-    // No valid session — show login
-    loadDB();
-    S.uid=null;
-    render();
-  }catch(e){
-    try{if(!loadDB())seed();}catch(e2){}
-    render();
-    console.error('Boot error:',e);
-  }
-})();
+(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{if(!loadDB())seed();}catch(e2){}render();console.error('Boot:',e);}})();
 
 
 </script>
