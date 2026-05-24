@@ -507,10 +507,10 @@ function _recoverEditingSubmissions(){
 }
 /* ===== NAVIGATION ===== */
 const NAV_ADM=[['dashboard','grid','Dashboard'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
-const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications'],['profile','user','Profile']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['profile','user','Profile']];
+const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
+const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','users','approvals','notifications','more'];
-const MOB_USR=['mychecklists','notifications','profile'];
+const MOB_USR=['mychecklists','notifications'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
@@ -552,7 +552,7 @@ function shell(content){
         ${avatar(u,'w-8 h-8','text-[11px]')}
         <div style="min-width:0;text-align:left;flex:1">
           <div style="font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(fullName(u))}</div>
-          <div style="font-size:11px;color:#A9ADB8;margin-top:1px">${isAdmin()?'Admin':isMgr()?'Manager':'Member'}</div>
+          <div style="font-size:11px;color:#A9ADB8;margin-top:1px">${esc(u.position||u.department||'')}</div>
         </div>
         <span style="font-size:10px;color:rgba(255,255,255,.3)">${ic('chevR','w-3 h-3')}</span>
       </button>
