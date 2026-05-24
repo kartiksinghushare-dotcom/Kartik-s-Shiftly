@@ -215,6 +215,20 @@ input,select,textarea{outline:none}
 .iss-strip{padding:6px 18px 10px 50px;background:#FFF5F5}
 .iss-inp{width:100%;box-sizing:border-box;border:none;border-bottom:1.5px solid #FCA5A5;background:transparent;font-size:12px;padding:3px 0;outline:none;color:#991B1B;font-family:inherit}
 .iss-inp::placeholder{color:#FCA5A5}
+
+/* ── Skeleton loaders ── */
+.sk{background:linear-gradient(90deg,#F3F2EF 25%,#ECEAE6 50%,#F3F2EF 75%);background-size:200% 100%;animation:sk 1.4s ease infinite;border-radius:8px}
+@keyframes sk{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.sk-line{height:14px;margin-bottom:8px}
+.sk-line.sm{height:10px;width:60%}
+.sk-line.lg{height:20px;width:80%}
+.sk-card{background:#fff;border-radius:16px;border:1px solid #EEECE8;padding:16px;margin-bottom:10px}
+/* ── Page transitions ── */
+.fade{animation:fi .18s ease}
+@keyframes fi{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:translateY(0)}}
+/* ── Loading btn ── */
+.btn-loading{opacity:.7;cursor:not-allowed;pointer-events:none}
+.btn-loading::after{content:'';display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;margin-left:8px;vertical-align:-2px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -343,6 +357,9 @@ async function _sync(){
     sb.from('issues').upsert((DB.issues||[]).map(iss=>({id:iss.id,submission_id:iss.submissionId||null,checklist_id:iss.checklistId,user_id:iss.userId,date:iss.date,task_index:iss.taskIndex,task_name:iss.taskName,comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',manager_notes:iss.managerNotes||[],created_at:iss.createdAt,updated_at:iss.updatedAt||iss.createdAt})),{onConflict:'id'}),
   ]);
 }
+
+function skCards(n=3){return Array(n).fill(0).map(()=>'<div class="sk-card"><div class="sk sk-line lg"></div><div class="sk sk-line sm"></div><div style="display:flex;gap:8px;margin-top:12px"><div class="sk" style="height:28px;width:70px;border-radius:6px"></div><div class="sk" style="height:28px;width:70px;border-radius:6px"></div></div></div>').join('');}
+function skRows(n=4){return '<div style="background:#fff;border-radius:16px;border:1px solid #EEECE8;overflow:hidden;margin-bottom:10px">'+Array(n).fill(0).map((_,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F3F2EF"><div class="sk" style="width:40px;height:40px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="sk sk-line"></div><div class="sk sk-line sm"></div></div></div>').join('')+'</div>';}
 /* ===== STATUS CHIPS ===== */
 const CHIP_CLS={
   'On Time':   'bg-emerald-50 text-emerald-700 ring-emerald-200',
@@ -438,7 +455,7 @@ const App={};window.App=App;App.closeModal=closeModal;
 /* ===== NAVIGATION ===== */
 const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['departments','dept','Departments'],['locations','pin','Locations'],['checklists','list','Checklists'],['approvals','approve','Notifications'],['hierarchy','tree','Hierarchy'],['analytics','chart','Analytics'],['audit','audit','Audit'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['approvals','approve','Feedback'],['profile','user','Profile']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Notifications'],['profile','user','Profile']];
+const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Notifications'],['analytics','chart','Analytics'],['profile','user','Profile']];
 const MOB_ADM=['dashboard','mychecklists','checklists','approvals','more'];
 const MOB_USR=['mychecklists','approvals','hierarchy','notifications','profile'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
@@ -1232,7 +1249,7 @@ function _respBtns(rType,rt,i,clId,t){
   return'';
 }
 
-App._setR=(clId,i,val)=>{if(!RUN[clId]||!RUN[clId].tasks[i])return;RUN[clId].tasks[i].response=val;RUN[clId].tasks[i].done=!!val;rr();};
+App._setR=(clId,i,val)=>{if(!RUN[clId]||!RUN[clId].tasks[i])return;RUN[clId].tasks[i].response=val;RUN[clId].tasks[i].done=!!val;rr();clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);};
 App._getR=(clId,i)=>{return RUN[clId]?.tasks?.[i]?.response??null;};
 App._togIssue=(clId,i)=>{
   if(!RUN[clId])return;
@@ -1841,7 +1858,7 @@ function analyticsPage(){
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Analytics','')}
   <!-- Filter bar -->
-  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:14px 16px;margin-bottom:14px">
+  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       ${msDropdown('Status','stats',['On Time','Late','Pending Approval','Rejected'],s=>s,s=>s)}
       ${msDropdown('Department','deps',DB.departments,d=>d.name,d=>d.name)}
@@ -1881,7 +1898,7 @@ function analyticsPage(){
     </div>
     <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:18px">
       <div class="fd" style="font-size:14px;font-weight:700;margin-bottom:14px">Top contributors</div>
-      ${topU.slice(0,7).map(({u,n})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px">${avatar(u,'w-7 h-7','text-[10px]')}<div style="flex:1;font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(fullName(u))}</div><span class="fd" style="font-size:15px;font-weight:800">${n}</span></div>`).join('')||'<p style="font-size:13px;color:#9CA3AF">No data yet</p>'}
+      ${topU.slice(0,7).map(({u,n})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;cursor:pointer" onclick="App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<div style="flex:1;font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(fullName(u))}</div><span class="fd" style="font-size:15px;font-weight:800">${n}</span><span style="font-size:11px;color:#9CA3AF">&rsaquo;</span></div>`).join('')||'<p style="font-size:13px;color:#9CA3AF">No data yet</p>'}
     </div>
   </div>
 
@@ -1896,7 +1913,7 @@ function analyticsPage(){
         ${['User','Checklist','Dept','Date','Status','Issues','Photos'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
       </tr></thead>
       <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return'';const iss=(s.tasks||[]).filter(t=>t.issue).length;const imgs=(s.tasks||[]).filter(t=>t.photo||t.issuePhoto).length;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
-        <td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500">${esc(fullName(u))}</span></div></td>
+        <td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer" onclick="event.stopPropagation();App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;text-decoration:underline;text-decoration-color:#E5E7EB">${esc(fullName(u))}</span></div></td>
         <td style="padding:9px 16px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(c.name)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px">${esc(c.department)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px;white-space:nowrap">${fmtS(s.date)}</td>
@@ -1908,6 +1925,49 @@ function analyticsPage(){
   </div></div>`;
 }
 
+
+App._viewSubById=(id)=>App.viewSub(id);
+App._userDrill=(uid)=>{
+  const u=uById(uid);if(!u)return;
+  let subs=DB.submissions.filter(s=>s.userId===uid);
+  const today=todayISO();
+  const dr1=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  subs=subs.filter(s=>s.date>=dr1);
+  const tot=subs.length;
+  const onTime=subs.filter(s=>s.status==='On Time').length;
+  const late=subs.filter(s=>s.status==='Late').length;
+  const pending=subs.filter(s=>s.status==='Pending Approval').length;
+  const rejected=subs.filter(s=>s.status==='Rejected').length;
+  const issues=subs.reduce((n,s)=>n+(s.tasks||[]).filter(t=>t.issue).length,0);
+  const pct=tot?Math.round(onTime/tot*100):0;
+  const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,10);
+  openModal(
+    '<div class="p-5" style="max-height:80vh;overflow-y:auto">'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+    +avatar(u,'w-12 h-12','text-sm')
+    +'<div><div class="fd" style="font-size:18px;font-weight:800">'+esc(fullName(u))+'</div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">'+esc(u.position)+' · '+esc(u.department)+'</div></div>'
+    +'<button onclick="App.closeModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>'
+    +'</div>'
+    // Score
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Rejected',rejected,'#7C3AED'],['Issues',issues,'#EA580C']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
+    +'</div>'
+    // Completion rate bar
+    +'<div style="background:#F9FAFB;border-radius:12px;padding:12px;margin-bottom:16px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:6px"><span>On-time rate (last 30d)</span><span style="color:'+(pct>=80?'#059669':pct>=60?'#F97316':'#DC2626')+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=80?'#059669':pct>=60?'#F97316':'#DC2626')+';border-radius:3px;transition:width .5s"></div></div>'
+    +'</div>'
+    // Recent submissions
+    +'<div class="fd" style="font-size:13px;font-weight:700;margin-bottom:8px">Recent submissions</div>'
+    +(recent.length
+      ? recent.map(s=>{const c=clById(s.checklistId);const iss=(s.tasks||[]).filter(t=>t.issue).length;return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+chip(s.status)+(iss?'<span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 7px;border-radius:20px">⚑'+iss+'</span>':'')+'</div>';}).join('')
+      : '<p style="font-size:13px;color:#9CA3AF">No submissions in last 30 days</p>'
+    )
+    +'</div>',
+    'max-w-md'
+  );
+};
 App._togF=(key,val)=>{
   if(!S.filters)S.filters={};
   if(!S.filters[key])S.filters[key]=[];
