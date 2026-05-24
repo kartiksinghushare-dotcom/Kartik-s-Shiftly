@@ -86,7 +86,7 @@ input,select,textarea{outline:none}
 .iz2{display:none}.issue-open2 .iz2{display:block}
 /* Custom color overrides */
 .bg-ink-50{background:#F6F7F8!important}.bg-ink-100{background:#ECEDF0!important}.bg-ink-200{background:#D6D8DE!important}
-.bg-ink-800{background:#15171C!important}.bg-ink-900{background:#0E0F13!important}
+.bg-ink-800{background:#15171C!important}.bg-ink-900{background:#0E0F13!important}.shadow-pop{box-shadow:0 24px 64px rgba(0,0,0,.22),0 8px 24px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.06)!important}.shadow-soft{box-shadow:0 1px 4px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
 .text-ink-300{color:#A9ADB8!important}.text-ink-400{color:#6B7280!important}.text-ink-500{color:#3A3E48!important}
 .text-ink-600{color:#262A33!important}.text-ink-700{color:#1C1F26!important}.text-ink-800{color:#15171C!important}
 .border-ink-100{border-color:#ECEDF0!important}.border-ink-200{border-color:#D6D8DE!important}
@@ -326,7 +326,7 @@ function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.des
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
-  const[{data:depts},{data:locs},{data:cls},{data:subs},{data:appr},{data:audit},{data:notifs},{data:profiles},{data:issues}]=await Promise.all([
+  const[{data:depts},{data:locs},{data:cls},{data:subs},{data:appr},{data:audit},{data:notifs},{data:profiles},{data:issues},{data:feedbackRows}]=await Promise.all([
     sb.from('departments').select('*').order('name'),
     sb.from('locations').select('*').order('name'),
     sb.from('checklists').select('*').order('created_at',{ascending:false}),
@@ -336,6 +336,7 @@ async function loadFromSB(){
     sb.from('notifications').select('*').order('created_at',{ascending:false}),
     sb.from('profiles').select('*').order('first_name'),
     sb.from('issues').select('*').order('created_at',{ascending:false}),
+    sb.from('feedback').select('*').order('created_at',{ascending:false}),
   ]);
   DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
   DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
@@ -344,6 +345,7 @@ async function loadFromSB(){
   DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
   DB.users=_mU(profiles);DB.feedback=DB.feedback||[];
   if(issues)DB.issues=issues.map(iss=>({id:iss.id,submissionId:iss.submission_id||null,checklistId:iss.checklist_id,userId:iss.user_id,date:iss.date,taskIndex:iss.task_index,taskName:iss.task_name||'',comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',managerNotes:iss.manager_notes||[],createdAt:iss.created_at,updatedAt:iss.updated_at||iss.created_at}));
+  if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
 }
 async function _sync(){
   await Promise.all([
@@ -355,6 +357,7 @@ async function _sync(){
     sb.from('audit_logs').upsert(DB.audit.slice(0,50).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
     sb.from('notifications').upsert(DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false})),{onConflict:'id'}),
     sb.from('issues').upsert((DB.issues||[]).map(iss=>({id:iss.id,submission_id:iss.submissionId||null,checklist_id:iss.checklistId,user_id:iss.userId,date:iss.date,task_index:iss.taskIndex,task_name:iss.taskName,comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',manager_notes:iss.managerNotes||[],created_at:iss.createdAt,updated_at:iss.updatedAt||iss.createdAt})),{onConflict:'id'}),
+    sb.from('feedback').upsert((DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
   ]);
 }
 
@@ -387,7 +390,7 @@ let DB={
   departments:DEPTS.map(n=>({id:uid('d'),name:n})),
   users:[],checklists:[],submissions:[],approvals:[],feedback:[],issues:[],locations:[],audit:[],notifications:[]
 };
-function log(a,b,c){DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
+function log(a,b,c){if(!a||!b)return;DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
 function seed(){
   DB.users=[{id:uid('u'),firstName:'Kartiksingh',lastName:'Hushare',email:'kartiksinghushare@gmail.com',phone:'+971509660624',password:'Kartik@2001',position:'Business Process & System Analyst',department:'Operations',role:'Admin',status:'Active',managerId:null,rules:{past:true,future:true,edit:true},approval:{past:false,future:false,edited:false}}];
   DB.locations=[
@@ -401,7 +404,16 @@ function seed(){
 
 /* ===== LOCALSTORAGE ===== */
 const LS_KEY='shiftly_v3';
-function saveDB(){try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}_sync().catch(e=>console.warn('sync:',e));}
+function saveDB(){
+  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  _sync().catch(e=>{
+    console.warn('Supabase sync error:',e.message);
+    if(!saveDB._errTs||Date.now()-saveDB._errTs>30000){
+      saveDB._errTs=Date.now();
+      console.error('[Shiftly] Changes saved locally but not synced to server.');
+    }
+  });
+}
 function loadDB(){
   try{
     const r=localStorage.getItem(LS_KEY);
@@ -445,33 +457,51 @@ const empty=(i,t,s)=>`<div style="text-align:center;padding:48px 24px"><div styl
 /* ===== MODAL ===== */
 function openModal(html,size='max-w-lg'){
   let m=$('#modal');if(!m){m=document.createElement('div');m.id='modal';document.body.appendChild(m);}
-  m.className='fixed inset-0 z-[100] flex items-end md:items-center justify-center bg-ink-900/40 p-0 md:p-6';
-  m.innerHTML=`<div class="pop bg-white w-full ${size} md:rounded-3xl rounded-t-3xl shadow-pop max-h-[92vh] overflow-y-auto">${html}</div>`;
+  m.className='fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6';m.style.cssText='background:rgba(14,15,19,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
+  m.innerHTML=`<div class="pop w-full ${size} md:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto" style="background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.28),0 8px 32px rgba(0,0,0,.16),0 0 0 1px rgba(255,255,255,.08)">${html}</div>`;
   m.onclick=e=>{if(e.target===m)closeModal();};
 }
 const closeModal=()=>{const m=$('#modal');if(m&&m.remove)m.remove();};
 const App={};window.App=App;App.closeModal=closeModal;
 
 
+let _notifCache={uid:null,count:0,ts:0};
 function _notifCount(){
   const uid=S.uid;if(!uid)return 0;
-  // Pending approvals for manager/admin
+  const now=Date.now();
+  // Cache for 3 seconds to avoid recalculating on every rr()
+  if(_notifCache.uid===uid&&now-_notifCache.ts<3000)return _notifCache.count;
   let count=0;
   if(isAdmin()||isMgr()){
     const myTree=subTree(uid).map(u=>u.id);
     count+=DB.approvals.filter(a=>a.status==='Pending'&&(isAdmin()||myTree.includes(a.requesterId))).length;
     count+=(DB.issues||[]).filter(iss=>iss.status==='Open'&&(isAdmin()||myTree.includes(iss.userId))).length;
   }
-  // Unread personal notifications
   count+=DB.notifications.filter(n=>n.userId===uid&&!n.read).length;
+  _notifCache={uid,count,ts:now};
   return count;
+}
+function _invalidateNotifCache(){_notifCache.ts=0;}
+
+// B11 fix: recover submissions stuck in 'Editing' if RUN cache lost
+function _recoverEditingSubmissions(){
+  if(!DB.submissions)return;
+  DB.submissions.forEach(s=>{
+    if(s.status==='Editing'&&!RUN[s.checklistId]){
+      // Reset to a sensible status based on date
+      const today=todayISO();
+      const late=s.date<today;
+      s.status=s.editCount>0?(late?'Late':'On Time'):(late?'Late':'Pending');
+      console.info('Recovered stuck submission:',s.id,'→',s.status);
+    }
+  });
 }
 /* ===== NAVIGATION ===== */
 const NAV_ADM=[['dashboard','grid','Dashboard'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications'],['profile','user','Profile']];
 const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['profile','user','Profile']];
 const MOB_ADM=['dashboard','users','approvals','notifications','more'];
-const MOB_USR=['mychecklists','notifications','profile','more','more'];
+const MOB_USR=['mychecklists','notifications','profile'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
@@ -479,9 +509,10 @@ const navFor=()=>{
   return NAV_USR;
 };
 App.go=(r)=>{S.route=r;S.search='';S.filters={};S.expandedCl=null;S.afOpen=null;if(r!=='teamview')S.tvUser=null;render();window.scrollTo(0,0);};
+// Note: S.filters={} on every go() already resets fbView/ntab/atab
 
 /* ===== RENDER ===== */
-function render(){saveDB();if(!S.uid){$('#app').innerHTML=loginView();return;}$('#app').innerHTML=shell(pageContent());}
+function render(){if(!S.uid){$('#app').innerHTML=loginView();return;}$('#app').innerHTML=shell(pageContent());}
 function rr(){const c=$('#content');if(c)c.innerHTML=pageContent();}
 App.rr=rr;
 
@@ -560,26 +591,7 @@ App.saveProfile=()=>{
   saveDB();toast('Profile updated ✓');rr();
 };
 App.changePw=async()=>{const cur=($('#pw-cur')?.value||'').trim();const nw=($('#pw-new')?.value||'').trim();if(!cur||!nw){toast('Fill both fields','err');return;}if(nw.length<6){toast('Min 6 characters','err');return;}const u=me();const{error:se}=await sb.auth.signInWithPassword({email:u.email,password:cur});if(se){toast('Current password incorrect','err');return;}const{error}=await sb.auth.updateUser({password:nw});if(error){toast(error.message,'err');return;}toast('Password updated');const c=$('#pw-cur'),n=$('#pw-new');if(c)c.value='';if(n)n.value='';};
-App._showNotifs=()=>{
-  const list=DB.notifications.filter(n=>n.userId===S.uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,30);
-  list.forEach(n=>n.read=true);saveDB();
-  openModal(`<div style="padding:0">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #F5F4F0">
-      <h2 class="fd" style="font-size:16px;font-weight:800">Notifications</h2>
-      <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF">${ic('x','w-5 h-5')}</button>
-    </div>
-    <div style="max-height:70vh;overflow-y:auto">
-      ${list.length?list.map(n=>`<div style="padding:12px 20px;border-bottom:1px solid #F9F8F5;display:flex;align-items:flex-start;gap:10px">
-        <div style="width:8px;height:8px;border-radius:50%;background:${n.read?'#E5E3DC':'#0E9F6E'};flex-shrink:0;margin-top:6px"></div>
-        <div style="flex:1;min-width:0">
-          <p style="font-size:13px;color:#111110;margin:0;line-height:1.5">${esc(n.text)}</p>
-          <p style="font-size:11px;color:#B8B5AC;margin-top:3px">${n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</p>
-        </div>
-      </div>`).join(''):`<div style="padding:48px 20px;text-align:center;color:#B8B5AC"><p style="font-size:14px">No notifications</p></div>`}
-    </div>
-  </div>`,'max-w-sm');
-  rr(); // update badge
-};
+// _showNotifs removed — now using notificationsPage route
 App.logout=async()=>{try{log(fullName(me()),'Logged out','');saveDB();}catch(e){}await sb.auth.signOut();S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;RUN={};if(typeof COLL!=='undefined')COLL={};closeModal();render();};
 
 /* ===== ROUTER ===== */
@@ -590,7 +602,7 @@ function pageContent(){
   if(r==='departments')return deptsPage();
   if(r==='locations')return locsPage();
   if(r==='checklists')return clsPage();
-  if(r==='approvals')return isAdmin()||isMgr()?approvalsPage():'';  
+  if(r==='approvals'){if(isAdmin()||isMgr())return approvalsPage();S.route='notifications';return notificationsPage();}
   if(r==='notifications')return notificationsPage();
   if(r==='hierarchy')return hierarchyPage();
   if(r==='analytics')return analyticsPage();
@@ -1507,35 +1519,6 @@ function teamViewPage(){
 App._bigImg=(src)=>{openModal(`<div style="padding:10px;position:relative"><button onclick="App.closeModal()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:26px;height:26px;color:#fff;cursor:pointer;display:grid;place-items:center;z-index:1;font-size:14px">×</button><img src="${src}" style="width:100%;border-radius:10px;max-height:80vh;object-fit:contain;display:block"/></div>`,'max-w-xl');};
 
 
-function feedbackPage(){
-  // Regular user sees their own feedback
-  const myFb=DB.feedback.filter(fb=>fb.userId===S.uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  myFb.forEach(fb=>{if(!fb.acknowledged)return;});
-  return`<div class="fade">
-    ${hdr('Feedback','Messages from your manager')}
-    ${myFb.length?`<div style="display:flex;flex-direction:column;gap:10px">
-      ${myFb.map(fb=>{
-        const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
-        return`<div style="background:#fff;border-radius:16px;border:1px solid #F0EEE9;overflow:hidden;${fb.acknowledged?'':'border-left:4px solid #3B82F6'}">
-          <div style="padding:14px 16px">
-            <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">
-              <div>
-                <div style="font-size:14px;font-weight:700;color:#15171C">${esc(cl?.name||'Checklist')}</div>
-                <div style="font-size:12px;color:#B8B5AC;margin-top:2px">From ${mgr?esc(fullName(mgr)):'Manager'} · ${fmtD(fb.date)}</div>
-              </div>
-              ${fb.acknowledged
-                ?`<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#F0FDF4;color:#15803D;flex-shrink:0">✓ Acknowledged</span>`
-                :`<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#EFF6FF;color:#1D4ED8;flex-shrink:0">● New</span>`}
-            </div>
-            <div style="background:#F8FAFF;border:1px solid #DBEAFE;border-radius:10px;padding:12px;font-size:14px;color:#1E3A8A;line-height:1.5">${esc(fb.text)}</div>
-            ${!fb.acknowledged?`<button onclick="App._ackFb('${fb.id}')" style="margin-top:10px;padding:8px 16px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>`:''}
-          </div>
-        </div>`;
-      }).join('')}
-    </div>`:empty('msg','No feedback yet','Your manager hasn\'t sent any feedback')}
-  </div>`;
-}
-
 function approvalsPage(){
   // Approval list scoped to this user's visibility
   let list=isAdmin()?DB.approvals:DB.approvals.filter(a=>subTree(S.uid).some(u=>u.id===a.requesterId)||a.requesterId===S.uid);
@@ -1550,21 +1533,17 @@ function approvalsPage(){
       :DB.issues.filter(iss=>iss.userId===S.uid);
   const openIssues=myIssues.filter(iss=>iss.status!=='Resolved').length;
 
-  const myFeedback=DB.feedback.filter(fb=>fb.userId===S.uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  const unreadFb=myFeedback.filter(fb=>!fb.acknowledged).length;
-
   const cnt={
     Pending:list.filter(a=>a.status==='Pending').length,
     Approved:list.filter(a=>a.status==='Approved'||a.status==='Used').length,
     Rejected:list.filter(a=>a.status==='Rejected').length,
     Issues:openIssues,
-    Feedback:unreadFb,
   };
-  const filtered=tab==='Feedback'||tab==='Issues'?[]:tab==='Approved'?list.filter(a=>a.status==='Approved'||a.status==='Used'):list.filter(a=>a.status===tab);
-  const TABS=['Pending','Approved','Rejected','Issues','Feedback'];
-  const TAB_CLR={Issues:'#F97316',Feedback:'#3B82F6'};
+  const filtered=tab==='Issues'?[]:tab==='Approved'?list.filter(a=>a.status==='Approved'||a.status==='Used'):list.filter(a=>a.status===tab);
+  const TABS=['Pending','Approved','Rejected','Issues'];
+  const TAB_CLR={Issues:'#F97316'};
 
-  return '<div class="fade">'+hdr('Notifications','')
+  return '<div class="fade">'+hdr('Approvals','')
     +'<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
     +TABS.map(t=>{
       const active=tab===t;
@@ -1687,11 +1666,13 @@ App._decide=(id,status)=>{
   }
   const msg=a.type==='Edit Request'
     ?(status==='Approved'?'✅ Edit approved for "'+c?.name+'" — you can now resubmit':'❌ Edit request rejected for "'+c?.name+'"')
-    :a.type+' '+status.toLowerCase()+' — '+(c?.name||'');
+    :(status==='Approved'
+      ?'✅ Submission approved — '+c?.name+' on '+fmtD(a.date)
+      :'❌ Submission rejected — '+c?.name+'. '+( a.date?fmtD(a.date):''));
   DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false});
   log(fullName(me()),status+' '+a.type,fullName(u));
-  saveDB();toast(status==='Approved'?'Approved':'Rejected',status==='Approved'?'ok':'warn');
-  render();
+  saveDB();toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
+  rr();
 };
 
 App.viewSub=(subId)=>{
@@ -1803,6 +1784,98 @@ App._saveIssueFeedback=(id)=>{
 
 
 
+
+function _feedbackTabContent(uid){
+  const canSend=isAdmin()||isMgr();
+  // Feedback received by me (as user)
+  const received=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  // Feedback sent by me (as manager/admin)
+  const sent=canSend?DB.feedback.filter(fb=>fb.managerId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')):[];
+  const sentWithReplies=sent.filter(fb=>fb.status==='Responded'||fb.replies?.length);
+  const sentPending=sent.filter(fb=>fb.status!=='Responded'&&!fb.replies?.length);
+
+  const view=S.filters.fbView||'received';
+  let html='';
+
+  if(canSend){
+    // Tab switcher: Received | Sent
+    html+='<div style="display:flex;gap:4px;margin-bottom:14px;background:#F6F7F8;border-radius:10px;padding:4px">'
+      +'<button onclick="App._setFbView(this.dataset.v)" data-v="received" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(view==='received'?'#fff':'transparent')+';color:'+(view==='received'?'#15171C':'#6B7280')+'">Received</button>'
+      +'<button onclick="App._setFbView(this.dataset.v)" data-v="sent" style="flex:1;padding:7px;border-radius:8px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(view==='sent'?'#fff':'transparent')+';color:'+(view==='sent'?'#15171C':'#6B7280')+'">'
+      +'Sent'+(sentWithReplies.length?' <span style="font-size:11px;font-weight:800;background:#DCFCE7;color:#059669;padding:1px 6px;border-radius:10px">'+sentWithReplies.length+' replied</span>':'')
+      +'</button></div>';
+  }
+
+  if(view==='sent'&&canSend){
+    // Manager sees feedback they sent, grouped by user, with replies highlighted
+    if(!sent.length)return html+empty('msg','No feedback sent yet','Send feedback from the Team tab');
+    html+='<div style="display:flex;flex-direction:column;gap:10px">';
+    html+=sent.map(fb=>{
+      const recipient=uById(fb.userId);const cl=clById(fb.checklistId);
+      const hasReply=fb.status==='Responded'||fb.replies?.length;
+      const stClr=hasReply?'#059669':fb.status==='Acknowledged'?'#0EA5E9':'#6B7280';
+      const stBg=hasReply?'#DCFCE7':fb.status==='Acknowledged'?'#E0F2FE':'#F6F7F8';
+      return '<div style="background:#fff;border-radius:16px;border:1px solid '+(hasReply?'#A7F3D0':'#E5E7EB')+';overflow:hidden;border-left:4px solid '+stClr+'">'
+        +'<div style="padding:14px 16px">'
+        +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:8px">'
+        +'<div style="display:flex;align-items:center;gap:8px">'+avatar(recipient,'w-8 h-8','text-[10px]')
+        +'<div>'
+        +'<div style="font-size:14px;font-weight:700">'+(fb.title||fb.type+' Feedback')+'</div>'
+        +'<div style="font-size:11px;color:#9CA3AF">To '+esc(fullName(recipient))+(cl?' · '+esc(cl.name):'')+(fb.taskName?' → '+esc(fb.taskName):'')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))+'</div>'
+        +'</div></div>'
+        +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+stBg+';color:'+stClr+';flex-shrink:0">'+(hasReply?'✓ Replied':fb.status||'Sent')+'</span>'
+        +'</div>'
+        +'<p style="font-size:13px;color:#374151;background:#F6F7F8;border-radius:10px;padding:10px;margin:0">'+esc(fb.text)+'</p>'
+        // Show their reply
+        +(hasReply&&fb.reply?'<div style="margin-top:8px;padding:10px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:10px">'
+          +'<div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:4px">💬 Their reply</div>'
+          +'<div style="font-size:13px;color:#166534">'+esc(fb.reply)+'</div>'
+          +'</div>':'')
+        // Multiple replies if any
+        +(fb.replies?.length>1?'<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">'
+          +fb.replies.map(r=>'<div style="font-size:12px;background:#F0FDF4;border-radius:8px;padding:7px 10px;color:#166534">'+esc(r.text)+'<span style="color:#9CA3AF;font-size:10px;margin-left:6px">'+new Date(r.at).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+'</span></div>').join('')
+          +'</div>':'')
+        +'</div></div>';
+    }).join('');
+    html+='</div>';
+    return html;
+  }
+
+  // User view: feedback received
+  if(!received.length)return html+empty('msg','No feedback yet','Feedback from your manager will appear here.');
+  html+='<div style="display:flex;flex-direction:column;gap:10px">';
+  html+=received.map(fb=>{
+    const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
+    const stClr=fb.status==='Closed'?'#6B7280':fb.status==='Responded'?'#059669':fb.status==='Acknowledged'?'#0EA5E9':'#3B82F6';
+    const stBg=fb.status==='Closed'?'#F6F7F8':fb.status==='Responded'?'#DCFCE7':fb.status==='Acknowledged'?'#E0F2FE':'#EFF6FF';
+    return '<div style="background:#fff;border-radius:16px;border:1px solid '+(fb.acknowledged?'#E5E7EB':'#BFDBFE')+';overflow:hidden;border-left:4px solid '+stClr+'">'
+      +'<div style="padding:14px 16px">'
+      +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'
+      +'<div>'
+      +(fb.title?'<div style="font-size:14px;font-weight:800">'+esc(fb.title)+'</div>':'')
+      +(fb.type?'<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:'+(fb.type==='Performance'?'#7C3AED':fb.type==='Task'?'#F97316':fb.type==='Checklist'?'#0EA5E9':'#6B7280')+';margin-top:2px">'+fb.type+'</div>':'')
+      +'<div style="font-size:12px;color:#6B7280;margin-top:4px">'+(cl?esc(cl.name):'General')+(fb.taskName?' → '+esc(fb.taskName):'')+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')
+      +' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))
+      +(fb.priority?' · <span style="font-weight:700;color:'+(fb.priority==='High'?'#DC2626':fb.priority==='Medium'?'#F97316':'#6B7280')+'">'+fb.priority+'</span>':'')
+      +'</div>'
+      +'</div>'
+      +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+stBg+';color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
+      +'</div>'
+      +'<p style="font-size:14px;color:#15171C;background:#F8FAFF;border:1px solid #DBEAFE;border-radius:10px;padding:12px;margin:0;line-height:1.5">'+esc(fb.text)+'</p>'
+      // Show all replies
+      +(fb.replies?.length?'<div style="margin-top:8px;display:flex;flex-direction:column;gap:4px">'
+        +fb.replies.map(r=>'<div style="font-size:12px;background:#F0FDF4;border-radius:8px;padding:7px 10px;color:#166534"><strong>Your reply:</strong> '+esc(r.text)+'</div>').join('')
+        +'</div>':fb.reply?'<div style="margin-top:8px;padding:10px;background:#F0FDF4;border-radius:10px;font-size:13px;color:#166534"><strong>Your reply:</strong> '+esc(fb.reply)+'</div>':'')
+      +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
+      +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'')
+      +'<button onclick="App._replyFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">'+(fb.reply||fb.replies?.length?'Reply again':'Reply')+'</button>'
+      +'</div>'
+      +'</div></div>';
+  }).join('');
+  html+='</div>';
+  return html;
+}
 function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
@@ -1816,11 +1889,17 @@ function notificationsPage(){
   const TABS=['All','Approvals','Feedback','Issues'];
 
   function notifType(text){
-    if(text.includes('pproval')||text.includes('Approved')||text.includes('Rejected')||text.includes('pprove'))return'approval';
-    if(text.includes('edit')||text.includes('Edit'))return'edit';
-    if(text.includes('issue')||text.includes('Issue')||text.includes('⚠'))return'issue';
-    if(text.includes('eedback')||text.includes('Feedback'))return'feedback';
-    if(text.includes('overdue')||text.includes('late')||text.includes('Late'))return'late';
+    if(!text)return'general';
+    if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
+    if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
+    if(text.includes('⚠')||text.includes('issue')||text.includes('Issue')||text.includes('flagged'))return'issue';
+    if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
+    if(text.includes('Approved')||text.includes('approved'))return'approval';
+    if(text.includes('Rejected')||text.includes('rejected'))return'approval';
+    if(text.includes('pproval')||text.includes('pprove'))return'approval';
+    if(text.includes('Edit')||text.includes('edit request')||text.includes('resubmit'))return'edit';
+    if(text.includes('Re-submitted')||text.includes('Resubmit'))return'edit';
+    if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
     return'general';
   }
   const TYPE_CLR={approval:'#8B5CF6',edit:'#0EA5E9',issue:'#F97316',feedback:'#3B82F6',late:'#EF4444',general:'#6B7280'};
@@ -1851,35 +1930,7 @@ function notificationsPage(){
     +'</div>'
     // Feedback section (when tab=Feedback)
     +(tab==='Feedback'
-      ? (myFb.length
-        ? '<div style="display:flex;flex-direction:column;gap:10px">'
-          + myFb.map(fb=>{
-              const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
-              const stClr=fb.status==='Closed'?'#6B7280':fb.status==='Responded'?'#059669':fb.status==='Acknowledged'?'#0EA5E9':'#3B82F6';
-              const stBg=fb.status==='Closed'?'#F6F7F8':fb.status==='Responded'?'#DCFCE7':fb.status==='Acknowledged'?'#E0F2FE':'#EFF6FF';
-              return '<div style="background:#fff;border-radius:16px;border:1px solid '+(fb.acknowledged?'#E5E7EB':'#BFDBFE')+';overflow:hidden;border-left:4px solid '+stClr+'">'
-                +'<div style="padding:14px 16px">'
-                +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'
-                +'<div>'
-                +(fb.title?'<div style="font-size:14px;font-weight:800">'+esc(fb.title)+'</div>':'')
-                +'<div style="font-size:13px;font-weight:700;margin-top:2px">'+esc(cl?.name||'Checklist')+(fb.taskName?' → '+esc(fb.taskName):'')+'</div>'
-                +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))
-                +(fb.priority?' · <span style="font-weight:700;color:'+(fb.priority==='High'?'#DC2626':fb.priority==='Medium'?'#F97316':'#6B7280')+'">'+fb.priority+'</span>':'')
-                +'</div>'
-                +'</div>'
-                +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+stBg+';color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
-                +'</div>'
-                +'<p style="font-size:14px;color:#15171C;background:#F6F7F8;border-radius:10px;padding:12px;margin:0">'+esc(fb.text)+'</p>'
-                +(fb.reply?'<div style="margin-top:10px;padding:10px;background:#F0FDF4;border-radius:10px;font-size:13px;color:#166534"><strong>Your reply:</strong> '+esc(fb.reply)+'</div>':'')
-                +'<div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">'
-                +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'')
-                +'<button onclick="App._replyFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:7px 14px;border-radius:9px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">Reply</button>'
-                +'</div>'
-                +'</div></div>';
-            }).join('')
-          +'</div>'
-        : empty('msg','No feedback yet','Feedback from your manager will appear here.')
-      )
+      ? _feedbackTabContent(uid)
       // Notification timeline for other tabs
       : (filteredNotifs.length
         ? '<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;overflow:hidden">'
@@ -1905,17 +1956,48 @@ function notificationsPage(){
     +'</div>';
 }
 App._setNTab=(t)=>{S.filters.ntab=t;rr();};
+App._setFbView=(v)=>{S.filters.fbView=v;rr();};
 App._notifClick=(id)=>{
   const n=DB.notifications.find(x=>x.id===id);if(!n)return;
   n.read=true;saveDB();
-  const text=n.text||'';
-  // Deep-link based on content
-  if(text.includes('Edit approved')||text.includes('Edit request')||text.includes('pproval')||text.includes('Approved')||text.includes('Rejected')){App.go('approvals');return;}
-  if(text.includes('issue')||text.includes('Issue')||text.includes('⚠')){S.filters.atab='Issues';App.go('approvals');return;}
-  if(text.includes('eedback')||text.includes('Feedback')){S.filters.ntab='Feedback';rr();return;}
-  if(text.includes('resubmit')||text.includes('Resubmit')){App.go('approvals');return;}
-  App.go('mychecklists');
+  const t=n.text||'';
+  const type=_notifTypeGlobal(t);
+  // Feedback reply → manager goes to Notifications→Feedback
+  if(t.includes('💬')||t.includes('replied')||t.includes('reply')){
+    S.filters.ntab='Feedback';
+    // If manager, show feedback replies — we store fbId on notification
+    if(n.fbId){S.pendingFbId=n.fbId;}
+    App.go('notifications');return;
+  }
+  // Feedback → user goes to Notifications→Feedback
+  if(type==='feedback'){S.filters.ntab='Feedback';App.go('notifications');return;}
+  // Issue notifications → Approvals→Issues tab
+  if(type==='issue'){S.filters.atab='Issues';App.go('approvals');return;}
+  // Approval/edit notifications → Approvals→Pending or relevant tab
+  if(type==='approval'){
+    S.filters.atab=t.includes('Approved')||t.includes('approved')?'Approved':t.includes('Rejected')||t.includes('rejected')?'Rejected':'Pending';
+    App.go('approvals');return;
+  }
+  if(type==='edit'){S.filters.atab='Pending';App.go('approvals');return;}
+  // Late/overdue → go to my checklists
+  if(type==='late'){App.go('mychecklists');return;}
+  // General → notifications page
+  App.go('notifications');
 };
+function _notifTypeGlobal(text){
+  if(!text)return'general';
+  if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
+  if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
+  if(text.includes('⚠')||text.includes('issue')||text.includes('Issue')||text.includes('flagged'))return'issue';
+  if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
+  if(text.includes('Approved')||text.includes('approved'))return'approval';
+  if(text.includes('Rejected')||text.includes('rejected'))return'approval';
+  if(text.includes('pproval')||text.includes('pprove'))return'approval';
+  if(text.includes('Edit')||text.includes('edit request')||text.includes('resubmit'))return'edit';
+  if(text.includes('Re-submitted')||text.includes('Resubmit'))return'edit';
+  if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
+  return'general';
+}
 App._replyFb=(id)=>{
   openModal(
     '<div class="p-6">'
@@ -1932,53 +2014,101 @@ App._saveReplyFb=(id)=>{
   const text=$('#rfb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}
   const fb=DB.feedback.find(x=>x.id===id);if(!fb)return;
   fb.reply=text;fb.status='Responded';fb.repliedAt=new Date().toISOString();
+  fb.replies=fb.replies||[];
+  fb.replies.push({text,from:S.uid,at:new Date().toISOString()});
+  // Notify manager — text must contain 'Feedback reply' so notifType detects it
   const mgr=uById(fb.managerId);
-  if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,text:fullName(me())+' replied to your feedback',time:new Date().toISOString(),read:false});
-  toast('Reply sent');closeModal();saveDB();rr();
+  if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,
+    text:'💬 Feedback reply from '+fullName(me())+': "'+text.slice(0,60)+(text.length>60?'...':'')+'"',
+    time:new Date().toISOString(),read:false,fbId:id});
+  toast('Reply sent ✓');closeModal();saveDB();rr();
 };
 
 App._openSendFeedback=(userId)=>{
   const u=uById(userId);if(!u)return;
-  const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(userId));
-  const clOptions=cls.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  // Store userId on App object (not window) — cleared when modal closes
+  App._sfbUserId=userId;
+  App._sfbCls=DB.checklists.filter(c=>(c.assignees||[]).includes(userId));
+  const clOptions=App._sfbCls.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   openModal(
     '<div class="p-6">'
-    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Send Feedback</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-    +'<div style="display:flex;align-items:center;gap:10px;background:#F6F7F8;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    +'<h2 class="fd" style="font-size:18px;font-weight:800">Send Feedback</h2>'
+    +'<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    // User chip
+    +'<div style="display:flex;align-items:center;gap:10px;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
     +avatar(u,'w-10 h-10','text-xs')
-    +'<div><div style="font-size:14px;font-weight:700">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#9CA3AF">'+esc(u.position||u.department)+'</div></div>'
+    +'<div><div style="font-size:14px;font-weight:700">'+esc(fullName(u))+'</div>'
+    +'<div style="font-size:12px;color:#6B7280">'+esc(u.position||u.department)+'</div></div>'
     +'</div>'
-    +fld('Feedback title','sfb-title','','text','e.g. Great work on opening checklist')
-    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Feedback type</label>'
-    +'<select id="sfb-type" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">'
-    +'<option value="General">General Feedback</option>'
-    +'<option value="Checklist">Checklist Feedback</option>'
-    +'<option value="Task">Task Feedback</option>'
-    +'<option value="Performance">Performance Feedback</option>'
-    +'</select></div>'
-    +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px">'
-    +'<div><label class="block text-xs font-semibold text-ink-500 mb-1">Related checklist</label>'
-    +'<select id="sfb-cl" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">None</option>'+clOptions+'</select></div>'
-    +'<div><label class="block text-xs font-semibold text-ink-500 mb-1">Priority</label>'
-    +'<select id="sfb-pri" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="Low">Low</option><option value="Medium">Medium</option><option value="High">High</option></select></div>'
+    // Type selector
+    +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Feedback type</label>'
+    +'<input type="hidden" id="sfb-type-val" value="General">'+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+    +['General','Checklist','Task','Performance'].map((t,i)=>'<button type="button" onclick="App._sfbSelectType(this)" data-type="'+t+'" style="padding:8px;border-radius:9px;border:1.5px solid '+(i===0?'#15171C':'#E5E7EB')+';background:'+(i===0?'#15171C':'#fff')+';color:'+(i===0?'#fff':'#6B7280')+';font-size:13px;font-weight:600;cursor:pointer">'+t+'</button>').join('')
+    +'</div></div>'
+    // Checklist dropdown
+    +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Checklist <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
+    +'<select id="sfb-cl" onchange="App._sfbClChange(this.value)" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select checklist…</option>'+clOptions+'</select></div>'
+    // Task dropdown (updates dynamically)
+    +'<div id="sfb-task-wrap" style="margin-bottom:14px;display:none"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Task <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
+    +'<select id="sfb-task" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select task…</option></select></div>'
+    // Priority + title in one row
+    +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Title</label>'
+    +'<input id="sfb-title" type="text" placeholder="e.g. Great work on opening" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Priority</label>'
+    +'<select id="sfb-pri" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option>Low</option><option>Medium</option><option>High</option></select></div>'
     +'</div>'
-    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Related task (optional)</label>'
-    +'<input id="sfb-task" type="text" placeholder="e.g. Temperature Check" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>'
-    +'<div style="margin-bottom:14px"><label class="block text-xs font-semibold text-ink-500 mb-1">Comment</label>'
-    +'<textarea id="sfb-text" rows="3" placeholder="Write your feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea></div>'
-    +'<button onclick="App._saveSendFeedback(this.dataset.uid)" data-uid="'+userId+'" style="width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send feedback</button>'
+    // Comment
+    +'<div style="margin-bottom:16px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Comment</label>'
+    +'<textarea id="sfb-text" rows="4" placeholder="Write your feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea></div>'
+    +'<button onclick="App._saveSendFeedback(this.dataset.uid)" data-uid="'+userId+'" style="width:100%;background:#15171C;color:#fff;font-weight:700;padding:13px;border-radius:12px;border:none;cursor:pointer;font-size:15px">Send feedback</button>'
     +'</div>',
     'max-w-md'
   );
+};
+App._sfbSelectType=(btn)=>{
+  document.querySelectorAll('[data-type]').forEach(b=>{
+    const active=b===btn;
+    b.style.background=active?'#15171C':'#fff';
+    b.style.color=active?'#fff':'#6B7280';
+    b.style.borderColor=active?'#15171C':'#E5E7EB';
+  });
+  const type=btn.dataset.type;
+  // Store in hidden input for reliable reading
+  const hid=document.getElementById('sfb-type-val');if(hid)hid.value=type;
+  // Show/hide checklist+task based on type
+  const clRow=document.getElementById('sfb-cl')?.parentElement;
+  const taskWrap=document.getElementById('sfb-task-wrap');
+  if(type==='Performance'||type==='General'){
+    if(clRow)clRow.style.display='none';
+    if(taskWrap)taskWrap.style.display='none';
+  } else if(type==='Checklist'){
+    if(clRow)clRow.style.display='';
+    if(taskWrap)taskWrap.style.display='none';
+  } else {
+    if(clRow)clRow.style.display='';
+    if(taskWrap){const clId=document.getElementById('sfb-cl')?.value;if(clId)taskWrap.style.display='';}
+  }
+};
+App._sfbClChange=(clId)=>{
+  const taskWrap=document.getElementById('sfb-task-wrap');
+  const taskSel=document.getElementById('sfb-task');
+  if(!clId||!taskWrap||!taskSel){if(taskWrap)taskWrap.style.display='none';return;}
+  const cl=(App._sfbCls||[]).find(c=>c.id===clId);
+  if(!cl||!cl.tasks?.length){taskWrap.style.display='none';return;}
+  taskSel.innerHTML='<option value="">Select task…</option>'+cl.tasks.map(t=>'<option value="'+esc(t.name)+'">'+esc(t.name)+'</option>').join('');
+  taskWrap.style.display='';
 };
 App._saveSendFeedback=(userId)=>{
   const title=$('#sfb-title')?.value?.trim();
   const text=$('#sfb-text')?.value?.trim();
   if(!text){toast('Write a comment','err');return;}
   const clId=$('#sfb-cl')?.value||null;
-  const type=$('#sfb-type')?.value||'General';
+  const type=(document.getElementById('sfb-type-val')?.value)||'General';
   const priority=$('#sfb-pri')?.value||'Low';
   const taskName=$('#sfb-task')?.value?.trim()||null;
+  const fbType=document.querySelector('[data-type]'+(''/*find active*/))?.dataset?.type;
   if(!DB.feedback)DB.feedback=[];
   DB.feedback.push({
     id:uid('fb'),title:title||type+' Feedback',type,
