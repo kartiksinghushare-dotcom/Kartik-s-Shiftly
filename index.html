@@ -367,7 +367,9 @@ async function loadFromSB(){
   }
   DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
   DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
-  DB.checklists=_mC(cls);DB.submissions=_mS(subs);DB.approvals=_mA(appr);
+  if(cls&&cls.length>0)DB.checklists=_mC(cls);
+  if(subs&&subs.length>=0)DB.submissions=_mS(subs);
+  if(appr&&appr.length>=0)DB.approvals=_mA(appr);
   DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
   DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
   DB.users=_mU(profiles);DB.feedback=DB.feedback||[];
@@ -376,8 +378,8 @@ async function loadFromSB(){
   if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
   if(docRows)DB.documents=docRows.map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
 }
-async function _sync(){
-  await Promise.all([
+async function _sync(){try{
+  const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
     sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
@@ -390,7 +392,9 @@ async function _sync(){
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
   ]);
-}
+  const failed=results.filter(r=>r.status==='rejected');
+  if(failed.length)console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',failed.map(r=>r.reason?.message).join(', '));
+}catch(e){console.warn('[Shiftly sync error]',e.message);}}
 
 function skCards(n=3){return Array(n).fill(0).map(()=>'<div class="sk-card"><div class="sk sk-line lg"></div><div class="sk sk-line sm"></div><div style="display:flex;gap:8px;margin-top:12px"><div class="sk" style="height:28px;width:70px;border-radius:6px"></div><div class="sk" style="height:28px;width:70px;border-radius:6px"></div></div></div>').join('');}
 function skRows(n=4){return '<div style="background:#fff;border-radius:16px;border:1px solid #EEECE8;overflow:hidden;margin-bottom:10px">'+Array(n).fill(0).map((_,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F3F2EF"><div class="sk" style="width:40px;height:40px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="sk sk-line"></div><div class="sk sk-line sm"></div></div></div>').join('')+'</div>';}
@@ -542,11 +546,18 @@ const MOB_USR=['mychecklists','notifications'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
-  // For managers and users: inject Documents tab if they have view access
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
-  if(hasDocAccess()){
-    // Insert Documents before the last item
-    base.splice(base.length-1,0,['documents','folder','Documents']);
+  // Users/managers with doc access see Departments and/or Locations tab (filtered)
+  if(!isAdmin()&&hasDocAccess()){
+    const da=(me()?.docAccess)||{};
+    const hasDept=Object.values(da.departments||{}).some(p=>p.view);
+    const hasLoc=Object.values(da.locations||{}).some(p=>p.view);
+    // Insert before profile (last item in USR nav)
+    const insertAt=base.length-1;
+    if(hasDept&&!base.find(n=>n[0]==='departments'))
+      base.splice(insertAt,0,['departments','dept','Departments']);
+    if(hasLoc&&!base.find(n=>n[0]==='locations'))
+      base.splice(insertAt,0,['locations','pin','Locations']);
   }
   return base;
 };
@@ -1198,9 +1209,14 @@ function deptsPage(){
       +'</div>';
   }
   // ── List view ──
+  // Filter depts by user's access if not admin
+  const visibleDepts=isAdmin()?DB.departments:DB.departments.filter(d=>{
+    const da=(me()?.docAccess)||{};
+    return Object.keys(da.departments||{}).includes(d.name);
+  });
   return'<div class="fade">'+hdr('Departments','',isAdmin()?btnP('Add','App.editDept()','plus'):'')
     +'<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">'
-    +DB.departments.map(d=>{
+    +visibleDepts.map(d=>{
       const us=DB.users.filter(u=>u.department===d.name);
       const cls=DB.checklists.filter(c=>c.department===d.name);
       const docs=(DB.documents||[]).filter(x=>x.type==='dept'&&x.scope===d.name).length;
@@ -1266,9 +1282,14 @@ function locsPage(){
       +'</div>';
   }
   // ── List view ──
+  // Filter locations by user's access if not admin
+  const visibleLocs=isAdmin()?DB.locations:DB.locations.filter(l=>{
+    const da=(me()?.docAccess)||{};
+    return Object.keys(da.locations||{}).includes(l.id);
+  });
   return'<div class="fade">'+hdr('Locations','Physical sites & areas',isAdmin()?btnP('Add location','App.editLoc()','plus'):'')
     +'<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">'
-    +DB.locations.map(l=>{
+    +visibleLocs.map(l=>{
       const docs=(DB.documents||[]).filter(x=>x.type==='loc'&&x.scope===l.id).length;
       const folders=(DB.folders||[]).filter(x=>x.type==='loc'&&x.scope===l.id&&!x.parentId).length;
       return'<div onclick="App._openLoc(this.dataset.id)" data-id="'+l.id+'" class="text-left" style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;cursor:pointer;transition:all .15s;display:block;width:100%" class="loc-card">'
@@ -3216,15 +3237,22 @@ App._createFolder=()=>{
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
   if(!confirm('Delete folder "'+f?.name+'" and all its files?'))return;
-  // Delete recursively
-  function delFolderRec(fid){
-    const children=(DB.folders||[]).filter(x=>x.parentId===fid);
-    children.forEach(c=>delFolderRec(c.id));
-    DB.folders=(DB.folders||[]).filter(x=>x.id!==fid);
-    DB.documents=(DB.documents||[]).filter(x=>x.folderId!==fid);
+  // Collect all folder IDs to delete (recursive)
+  const toDelete=[];
+  function collectRec(fid){
+    toDelete.push(fid);
+    (DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));
   }
-  delFolderRec(id);
-  log(fullName(me()),'Deleted folder',f?.name||'');toast('Deleted','warn');saveDB();rr();
+  collectRec(id);
+  // Remove locally first — instant UI
+  DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
+  DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId));
+  log(fullName(me()),'Deleted folder',f?.name||'');
+  toast('Deleted','warn');saveDB();rr();
+  // Delete from Supabase in background
+  Promise.all(
+    toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid))
+  ).catch(e=>console.warn('delFolder sync:',e));
 };
 
 // ── Upload file ──
