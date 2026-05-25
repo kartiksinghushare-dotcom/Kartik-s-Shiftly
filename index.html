@@ -232,6 +232,12 @@ input,select,textarea{outline:none}
 /* ── Loading btn ── */
 .btn-loading{opacity:.7;cursor:not-allowed;pointer-events:none}
 .btn-loading::after{content:'';display:inline-block;width:12px;height:12px;border:2px solid rgba(255,255,255,.4);border-top-color:#fff;border-radius:50%;animation:sp .6s linear infinite;margin-left:8px;vertical-align:-2px}
+
+/* Button click feedback */
+button:active{opacity:.75;transform:scale(.97);transition:transform .08s,opacity .08s}
+.submit-pill{transition:all .15s}
+.submit-pill.go{cursor:pointer}
+.submit-pill.no{cursor:not-allowed;opacity:.6}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -332,7 +338,7 @@ function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.des
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
-  let depts,locs,cls,subs,appr,audit,notifs,profiles,issues,feedbackRows;
+  let depts,locs,cls,subs,appr,audit,notifs,profiles,issues,feedbackRows,docFolderRows,docRows;
   try{
     const res=await Promise.all([
       sb.from('departments').select('*').order('name'),
@@ -348,7 +354,6 @@ async function loadFromSB(){
       sb.from('doc_folders').select('*').order('created_at',{ascending:false}),
       sb.from('documents').select('*').order('uploaded_at',{ascending:false}),
     ]);
-    let docFolderRows,docRows;
   [depts,locs,cls,subs,appr,audit,notifs,profiles,issues,feedbackRows,docFolderRows,docRows]=res.map(r=>r.data||[]);
   }catch(e){
     console.error('loadFromSB failed:',e.message);
@@ -364,6 +369,8 @@ async function loadFromSB(){
   if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
   if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
   if(docRows)DB.documents=docRows.map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
+  if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
+  if(docRows)DB.documents=docRows.map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
 }
 async function _sync(){
   await Promise.all([
@@ -376,6 +383,8 @@ async function _sync(){
     sb.from('notifications').upsert(DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false})),{onConflict:'id'}),
     sb.from('issues').upsert((DB.issues||[]).map(iss=>({id:iss.id,submission_id:iss.submissionId||null,checklist_id:iss.checklistId,user_id:iss.userId,date:iss.date,task_index:iss.taskIndex,task_name:iss.taskName,comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',manager_notes:iss.managerNotes||[],created_at:iss.createdAt,updated_at:iss.updatedAt||iss.createdAt})),{onConflict:'id'}),
     sb.from('feedback').upsert((DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
+    sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
   ]);
 }
 
@@ -406,7 +415,7 @@ const critBadge=c=>`<span style="font-size:10px;font-weight:700;padding:1px 6px;
 const DEPTS=['Operations','Housekeeping','Front Office','Maintenance','Food & Beverage','Security'];
 let DB={
   departments:DEPTS.map(n=>({id:uid('d'),name:n})),
-  users:[],checklists:[],submissions:[],approvals:[],feedback:[],issues:[],locations:[],audit:[],notifications:[]
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],issues:[],folders:[],documents:[],locations:[],audit:[],notifications:[]
 };
 function log(a,b,c){if(!a||!b)return;if(DB.audit.length>200)DB.audit.length=200;DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
 function seed(){
@@ -663,7 +672,41 @@ function loginView(){return`<div class="min-h-screen flex"><div class="hidden lg
       onkeydown="if(event.key==='Enter')App.login()"/>
   </div>
 </div><button onclick="App.login()" style="margin-top:20px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.15)" onmouseover="this.style.background='#0E0F13'" onmouseout="this.style.background='#15171C'">Sign in</button></div></div></div>`;}
-App.login=async()=>{const email=($('#li-e')?.value||'').trim().toLowerCase();const pw=($('#li-p')?.value||'').trim();if(!email||!pw){toast('Enter your email and password','err');return;}const btn=document.querySelector('button[onclick="App.login()"]');if(btn){btn.disabled=true;btn.textContent='Signing in...';}try{const{data,error}=await sb.auth.signInWithPassword({email,password:pw});if(error)throw error;const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();if(!profile){await sb.auth.signOut();throw new Error('Profile not found');}if(profile.status==='Inactive'){await sb.auth.signOut();throw new Error('Account inactive');}const u={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===u.id);if(idx>-1)DB.users[idx]=u;else DB.users.push(u);S.uid=u.id;S.route=u.role==='Admin'?'dashboard':'mychecklists';log(fullName(u),'Logged in','');saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});}catch(err){toast(err.message.includes('Invalid')||err.message.includes('credentials')?'Incorrect email or password':err.message,'err');if(btn){btn.disabled=false;btn.textContent='Sign in';}}};
+App.login=async()=>{
+  const email=($('#li-e')?.value||'').trim().toLowerCase();
+  const pw=($('#li-p')?.value||'').trim();
+  if(!email||!pw){toast('Enter your email and password','err');return;}
+  const btn=document.querySelector('button[onclick="App.login()"]');
+  if(btn){btn.disabled=true;btn.textContent='Signing in…';}
+  try{
+    const{data,error}=await sb.auth.signInWithPassword({email,password:pw});
+    if(error)throw error;
+    // Render from cache immediately so UI appears fast
+    const cachedUser=DB.users.find(x=>(x.email||'').toLowerCase()===email);
+    if(cachedUser&&cachedUser.status==='Active'){
+      S.uid=cachedUser.id;
+      S.route=cachedUser.role==='Admin'?'dashboard':'mychecklists';
+      render(); // show page instantly
+    }
+    // Load fresh profile in background
+    const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
+    if(!profile){await sb.auth.signOut();S.uid=null;render();throw new Error('Profile not found');}
+    if(profile.status==='Inactive'){await sb.auth.signOut();S.uid=null;render();throw new Error('Account inactive — contact admin');}
+    const u={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},password:'***'};
+    const idx=DB.users.findIndex(x=>x.id===u.id);
+    if(idx>-1)DB.users[idx]=u;else DB.users.push(u);
+    S.uid=u.id;
+    if(!S.route||S.route==='login')S.route=u.role==='Admin'?'dashboard':'mychecklists';
+    saveDB();render();
+    // Load full data in background — don't block UI
+    loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
+  }catch(err){
+    const msg=err.message.includes('Invalid')||err.message.includes('credentials')||err.message.includes('invalid_grant')
+      ?'Incorrect email or password':err.message;
+    toast(msg,'err');
+    if(btn){btn.disabled=false;btn.textContent='Sign in';}
+  }
+};
 
 /* ===== ADMIN DASHBOARD ===== */
 function adminDash(){
@@ -921,11 +964,23 @@ App._newFolderIn=(t,s)=>{
     +'</div>',
     'max-w-sm'
   );
-  // Focus the input after modal renders
-  setTimeout(()=>document.getElementById('nf-name')?.focus(),100);
+  // Focus and add Enter key handler
+  setTimeout(()=>{
+    const inp=document.getElementById('nf-name');
+    if(inp){
+      inp.focus();
+      inp.addEventListener('keydown',function handler(e){
+        if(e.key==='Enter'){e.preventDefault();App._createFolderIn();}
+        if(e.key==='Escape'){App.closeModal();}
+      },{once:false});
+    }
+  },100);
 };
 
 App._createFolderIn=()=>{
+  // Guard: prevent double-tap / double-submit
+  if(App._folderCtx._creating)return;
+
   const name=(document.getElementById('nf-name')?.value||'').trim();
   if(!name){
     const inp=document.getElementById('nf-name');
@@ -935,6 +990,14 @@ App._createFolderIn=()=>{
   }
   const {type:t,scope:s}=App._folderCtx;
   if(!t||!s){toast('Scope error — please try again','err');closeModal();return;}
+
+  // Lock immediately
+  App._folderCtx._creating=true;
+
+  // Disable the button visually
+  const createBtn=document.querySelector('[onclick="App._createFolderIn()"]');
+  if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';createBtn.style.opacity='0.7';}
+
   if(!DB.folders)DB.folders=[];
   const parentId=S.filters.docFolder||null;
   const f={
@@ -945,17 +1008,21 @@ App._createFolderIn=()=>{
     createdAt:new Date().toISOString()
   };
   DB.folders.push(f);
+
+  // Close modal first so user sees the result immediately
+  closeModal();
+  toast('📁 "'+name+'" created');
+  App._folderCtx={type:null,scope:null,_creating:false};
+  saveDB();
+  rr();
+
+  // Sync to Supabase in background
   sb.from('doc_folders').insert({
     id:f.id,name:f.name,parent_id:f.parentId||null,
     type:f.type,scope:f.scope,
     created_by:f.createdBy,created_at:f.createdAt
   }).catch(e=>console.warn('folder sync:',e));
   log(fullName(me()),'Created folder',name);
-  toast('📁 "'+name+'" created');
-  App._folderCtx={type:null,scope:null};
-  closeModal();
-  saveDB();
-  rr();
 };
 
 // ── Scoped upload ──
@@ -1634,7 +1701,37 @@ App._togIssue=(clId,i)=>{
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].issueComment=v;};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
-App._addPh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].photo=e.target.result;rr();};r.readAsDataURL(f);};
+App._addPh=(clId,i,el)=>{
+  const f=el.files[0];if(!f)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    if(!RUN[clId])return;
+    RUN[clId].tasks[i].photo=e.target.result;
+    // Targeted update — just update the camera button state, no full re-render
+    const btn=el.previousElementSibling;
+    if(btn)btn.classList.add('ph-on');
+    // Recalculate allDone and update submit button only
+    _updateSubmitBtn(clId);
+    saveDB();
+  };
+  reader.readAsDataURL(f);
+};
+function _updateSubmitBtn(clId){
+  const run=RUN[clId];if(!run)return;
+  const c=clById(clId);if(!c)return;
+  const doneN=run.tasks.filter(t=>t.response!==null&&t.response!==undefined&&!t.issue).length;
+  const issN=run.tasks.filter(t=>t.issue).length;
+  const total=(c.tasks||[]).length;
+  const allDone=(doneN+issN)===total&&total>0&&!run.tasks.some(t=>t.issue&&!t.issueComment?.trim());
+  // Check all photos attached
+  const photoDone=!(c.tasks||[]).some((t,i)=>t.photo&&!run.tasks[i]?.photo&&!run.tasks[i]?.issue);
+  const canSubmit=allDone&&photoDone;
+  const btns=document.querySelectorAll('.submit-pill');
+  btns.forEach(btn=>{
+    if(canSubmit){btn.disabled=false;btn.className='submit-pill go';btn.textContent='✓ Submit';}
+    else{btn.disabled=true;btn.className='submit-pill no';btn.textContent='Submit ('+(doneN+issN)+'/'+total+')';}
+  });
+}
 App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();rr();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');rr();};
@@ -1647,8 +1744,12 @@ App._submitRun=(clId,date)=>{
     // Issue-flagged tasks need response='Issue' AND a comment
     if(rt.response===null||rt.response===undefined){toast('Complete "'+t.name+'" — tap Done/Pass/Yes or flag an issue','warn');return;}
     if(rt.issue&&!rt.issueComment?.trim()){toast('Issue comment required for "'+t.name+'"','warn');return;}
-    // Photo is encouraged but not blocking (user may not have ability)
-    // Comment is optional
+    if(t.photo&&!rt.photo&&!rt.issue){
+      // Scroll to task and highlight camera button
+      const camBtn=document.querySelector('.ph-on-'+clId+'-'+i)||document.getElementById('tph-'+clId+'-'+i);
+      if(camBtn)camBtn.scrollIntoView({behavior:'smooth',block:'center'});
+      toast('📷 Photo required for "'+t.name+'" — tap the camera icon','warn');return;
+    }
   }
   const today=todayISO();
   const late=(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))||date<today;
@@ -2078,18 +2179,29 @@ App._viewSubFor=async(btn)=>{
   if(s)App.viewSub(s.id);
   else toast('No submission found for this date','warn');
 };
-App._resolveIssue=(id)=>{
+App._resolveIssue=async(id)=>{
   const iss=DB.issues.find(x=>x.id===id);if(!iss)return;
+  // Optimistic UI update first
   iss.status='Resolved';iss.resolvedAt=new Date().toISOString();iss.resolvedBy=S.uid;iss.updatedAt=new Date().toISOString();
-  DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue resolved: "'+iss.taskName+'" in '+( clById(iss.checklistId)?.name||'checklist'),time:new Date().toISOString(),read:false});
-  sb.from('issues').update({status:'Resolved',updated_at:new Date().toISOString()}).eq('id',id).catch(()=>{});
-  _invalidateNotifCache();log(fullName(me()),'Resolved issue',iss.taskName);toast('Issue marked solved','ok');saveDB();rr();
+  _invalidateNotifCache();
+  toast('✓ Issue marked solved','ok');
+  // Update button state immediately without full re-render
+  const btn=document.querySelector('[data-id="'+id+'"].resolve-btn');
+  if(btn){btn.textContent='✓ Resolved';btn.disabled=true;btn.style.opacity='0.6';}
+  saveDB();rr();
+  // Then sync to Supabase
+  const{error}=await sb.from('issues').update({status:'Resolved',resolved_at:iss.resolvedAt,updated_at:iss.updatedAt}).eq('id',id);
+  if(error)console.warn('Issue resolve sync:',error.message);
+  else DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue resolved: "'+iss.taskName+'" in '+(clById(iss.checklistId)?.name||'checklist'),time:new Date().toISOString(),read:false});
+  log(fullName(me()),'Resolved issue',iss.taskName);
 };
-App._reopenIssue=(id)=>{
+App._reopenIssue=async(id)=>{
   const iss=DB.issues.find(x=>x.id===id);if(!iss)return;
   iss.status='Reopened';iss.updatedAt=new Date().toISOString();
-  DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue reopened: "'+iss.taskName+'" — please review',time:new Date().toISOString(),read:false});
-  log(fullName(me()),'Reopened issue',iss.taskName);toast('Issue reopened','warn');saveDB();rr();
+  toast('Issue reopened','warn');saveDB();rr();
+  const{error}=await sb.from('issues').update({status:'Reopened',updated_at:iss.updatedAt}).eq('id',id);
+  if(!error)DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue reopened: "'+iss.taskName+'" — please review',time:new Date().toISOString(),read:false});
+  log(fullName(me()),'Reopened issue',iss.taskName);
 };
 App._issueNote=(id)=>{
   openModal(
@@ -3054,3 +3166,33 @@ App._exportCSV=()=>{
 </script>
 </body>
 </html>
+
+  <!-- Issues analytics section -->
+  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">
+    <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px">⚑ Team Issues</div>
+    ${(()=>{
+      const allIssues=(DB.issues||[]).filter(iss=>isAdmin()?true:subTree(S.uid).some(u=>u.id===iss.userId)||iss.userId===S.uid);
+      const filtIssues=allIssues.filter(iss=>(f.dr1?iss.date>=f.dr1:true)&&(f.dr2?iss.date<=f.dr2:true)&&(!fArr('users').length||fArr('users').includes(iss.userId)));
+      const open=filtIssues.filter(i=>['Open','Reopened'].includes(i.status)).length;
+      const inProgress=filtIssues.filter(i=>['Under Review','Feedback Sent'].includes(i.status)).length;
+      const resolved=filtIssues.filter(i=>i.status==='Resolved').length;
+      const total=filtIssues.length;
+      if(!total)return '<p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No issues flagged in this period</p>';
+      const pct=total?Math.round(resolved/total*100):0;
+      const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
+      return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">'
+        +[['Open',open,'#DC2626','#FEE2E2'],['In Progress',inProgress,'#D97706','#FEF3C7'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
+          '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
+        ).join('')+'</div>'
+        +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
+        +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px"></div></div></div>'
+        +(open?'<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px"><div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:8px">Requires attention</div>'
+          +filtIssues.filter(i=>['Open','Reopened'].includes(i.status)).slice(0,4).map(iss=>{
+            const u2=uById(iss.userId);const c2=clById(iss.checklistId);
+            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'+(u2?avatar(u2,'w-6 h-6','text-[9px]'):'')
+              +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(iss.taskName||'')+'</div>'
+              +'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(u2)||'')+(c2?' · '+esc(c2.name):'')+'</div></div>'
+              +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+esc(iss.status)+'</span></div>';
+          }).join('')+'</div>':'');
+    })()}
+  </div>
