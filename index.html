@@ -1592,8 +1592,12 @@ App.dupCl=async(id)=>{
   // Give each task a fresh ID to avoid any ID collisions
   (copy.tasks||[]).forEach(t=>{t.id=uid('t');});
   DB.checklists.unshift(copy);  // show at top of list
-  // Sync to Supabase
-  await sb.from('checklists').insert({
+  // Render immediately — don't wait for Supabase
+  log(fullName(me()),'Duplicated checklist',src.name);
+  toast('✓ Duplicated as Draft — tap Edit to make changes');
+  saveDB();render();
+  // Sync to Supabase in background
+  sb.from('checklists').insert({
     id:copy.id,name:copy.name,description:copy.description||'',
     department:copy.department||'',frequency:copy.frequency||'Daily',
     schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
@@ -1602,9 +1606,6 @@ App.dupCl=async(id)=>{
     location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],
     status:'Draft',created_by:S.uid
   }).catch(e=>console.warn('dupCl sync:',e));
-  log(fullName(me()),'Duplicated checklist',src.name);
-  toast('✓ Duplicated as Draft — tap Edit to make changes');
-  saveDB();render();
 };
 
 App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('issues').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.issues=(DB.issues||[]).filter(x=>x.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
@@ -3065,7 +3066,8 @@ function documentsPage(){
     :Object.entries(da.locations||{}).filter(([,p])=>p.view).map(([k])=>k);
 
   // Current scope filter (which dept/loc is selected)
-  const scopeKey=S.filters.docScopeKey||(scopeTab==='dept'?visibleDepts[0]:visibleLocs[0])||null;
+  // Use separate state per tab to prevent cross-contamination
+  const scopeKey=(scopeTab==='dept'?S.filters.docDeptKey:S.filters.docLocKey)||(scopeTab==='dept'?visibleDepts[0]:visibleLocs[0])||null;
 
   // Permissions for current scope
   function perm(type,key){
@@ -3167,9 +3169,10 @@ function documentsPage(){
 function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return(b/1048576).toFixed(1)+'MB';}
 
 // ── Document navigation & scope helpers ──
-App._setDocScope=(s)=>{S.filters.docScope=s;S.filters.docFolder=null;S.filters.docScopeKey=null;rr();};
-App._setDocScopeKey=(k)=>{S.filters.docScopeKey=k;S.filters.docFolder=null;rr();};
+App._setDocScope=(s)=>{S.filters.docScope=s;S.filters.docFolder=null;rr();};
+App._setDocScopeKey=(k)=>{const t=S.filters.docScope||'dept';if(t==='dept')S.filters.docDeptKey=k;else S.filters.docLocKey=k;S.filters.docFolder=null;rr();};
 App._docNav=(id)=>{S.filters.docFolder=id;rr();};
+App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
 
 // ── New folder ──
 App._newFolder=()=>{
@@ -3191,17 +3194,23 @@ App._newFolder=()=>{
   );
 };
 App._createFolder=()=>{
+  if(App._folderCtx._creating)return;
+  App._folderCtx._creating=true;
+  const createBtn=document.querySelector('[onclick="App._createFolder()"]');
+  if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';}
   const name=document.getElementById('nf-name')?.value?.trim();
-  if(!name){toast('Enter a folder name','err');return;}
-  const scope=S.filters.docScopeKey;
-  if(!scope){toast('No scope selected','err');return;}
+  if(!name){App._folderCtx._creating=false;toast('Enter a folder name','err');if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}return;}
+  const t=S.filters.docScope||'dept';
+  const scope=t==='dept'?S.filters.docDeptKey:S.filters.docLocKey;
+  if(!scope){App._folderCtx._creating=false;toast('No scope selected','err');if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}return;}
   if(!DB.folders)DB.folders=[];
-  const f={id:uid('fld'),name,type:S.filters.docScope||'dept',scope,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
+  const f={id:uid('fld'),name,type:t,scope,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
   DB.folders.push(f);
   // Direct Supabase write
   sb.from('doc_folders').insert({id:f.id,name:f.name,parent_id:f.parentId,type:f.type,scope:f.scope,created_by:f.createdBy,created_at:f.createdAt}).catch(e=>console.warn('folder:',e));
   log(fullName(me()),'Created folder',name);
   toast('Folder "'+name+'" created');
+  App._folderCtx._creating=false;
   closeModal();saveDB();rr();
 };
 App._delFolder=(id)=>{
@@ -3337,7 +3346,7 @@ App._delDoc=(id)=>{
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
-(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
