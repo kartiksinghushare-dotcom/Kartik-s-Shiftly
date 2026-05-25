@@ -87,6 +87,7 @@ input,select,textarea{outline:none}
 /* Custom color overrides */
 .bg-ink-50{background:#F6F7F8!important}.bg-ink-100{background:#ECEDF0!important}.bg-ink-200{background:#D6D8DE!important}
 .bg-ink-800{background:#15171C!important}.bg-ink-900{background:#0E0F13!important}.fld-card:hover{border-color:#0E9F6E!important;box-shadow:0 2px 12px rgba(14,159,110,.1)}
+.team-card-hover:hover{border-color:#0E9F6E!important;box-shadow:0 4px 16px rgba(14,159,110,.12)!important}
 .dept-card:hover{border-color:#0E9F6E!important;box-shadow:0 4px 16px rgba(14,159,110,.1)}
 .loc-card:hover{border-color:#3B82F6!important;box-shadow:0 4px 16px rgba(59,130,246,.1)}
 .shadow-pop{box-shadow:0 24px 64px rgba(0,0,0,.22),0 8px 24px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.06)!important}.shadow-soft{box-shadow:0 1px 4px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
@@ -1470,7 +1471,7 @@ function myClsPage(){
   const sel=S.calDate;
   const dayCls=myCls(S.uid,sel);
   const doneN=dayCls.filter(c=>subFor(c.id,S.uid,sel)).length;
-  const lateN=dayCls.filter(c=>!subFor(c.id,S.uid,sel)&&(sel<today||(sel===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))))).length;
+  const lateN=sel>today?0:dayCls.filter(c=>!subFor(c.id,S.uid,sel)&&(sel<today||(sel===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))))).length;
   const pendN=dayCls.filter(c=>!subFor(c.id,S.uid,sel)).length-lateN;
 
   return`<div class="fade">
@@ -1556,7 +1557,7 @@ function _clCard(c,date){
   const sub=subFor(c.id,S.uid,date);
   const today=todayISO();
   const isPast=date<today;const isFuture=date>today;const u=me();
-  const st=sub?sub.status:isPast?'Late':date===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))?'Late':'Pending';
+  const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':date===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))?'Late':'Pending';
   const exp=S.expandedCl===c.id;
   if(!RUN[c.id]||RUN[c.id].date!==date){
     RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(c.tasks||[]).map(t=>({taskId:t.id,response:null,issue:false,issueComment:'',issuePhoto:null,done:false,photo:null,comment:''}))};
@@ -1752,7 +1753,7 @@ App._submitRun=(clId,date)=>{
     }
   }
   const today=todayISO();
-  const late=(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))||date<today;
+  const late=date<today||(date===todayISO()&&(c.tasks||[]).some(t=>t.time&&nowHM()>hm2m(t.time)));
   const needsAppr=(c.tasks||[]).some(t=>t.approval);
   const hasIssues=(run.tasks||[]).some(t=>t.issue);
   const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false});}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
@@ -1823,8 +1824,7 @@ function teamViewPage(){
           const issues=subs.reduce((n,s)=>n+(s.tasks||[]).filter(t=>t.issue).length,0);
           return`<button onclick="S.tvUser='${u.id}';S.tvCalDate=todayISO();S.tvCalWk=0;S.tvExpanded=null;rr()"
             style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:14px;transition:all .15s"
-            onmouseover="this.style.borderColor='#0E9F6E';this.style.boxShadow='0 4px 16px rgba(14,159,110,.12)'"
-            onmouseout="this.style.borderColor='#ECEDF0';this.style.boxShadow=''">
+            class="team-card-hover">
             <div style="display:flex;align-items:center;gap:10px">
               ${avatar(u,'w-12 h-12','text-sm')}
               <div><div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div><div style="font-size:12px;color:#9CA3AF;margin-top:1px">${esc(u.position||u.department)}</div></div>
@@ -2346,7 +2346,9 @@ function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
   // Mark all as read
-  notifs.forEach(n=>n.read=true);_invalidateNotifCache();
+  const hadUnread=notifs.some(n=>!n.read);
+  notifs.forEach(n=>n.read=true);
+  if(hadUnread){_invalidateNotifCache();setTimeout(()=>saveDB(),300);}
   // Feedback for this user
   const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const unackFb=myFb.filter(fb=>!fb.acknowledged);
@@ -2425,29 +2427,26 @@ App._setNTab=(t)=>{S.filters.ntab=t;rr();};
 App._setFbView=(v)=>{S.filters.fbView=v;rr();};
 App._notifClick=(id)=>{
   const n=DB.notifications.find(x=>x.id===id);if(!n)return;
-  n.read=true;saveDB();
+  n.read=true;_invalidateNotifCache();saveDB();
   const t=n.text||'';
-  const type=_notifTypeGlobal(t);
-  // Feedback reply → manager goes to Notifications→Feedback
-  if(t.includes('💬')||t.includes('replied')||t.includes('reply')){
-    S.filters.ntab='Feedback';
-    // If manager, show feedback replies — we store fbId on notification
-    App.go('notifications');return;
+  // Navigate first with clean filters, then set the tab
+  if(t.includes('💬')||t.includes('replied')||t.includes('Feedback')){
+    App._goNotifFeedback();return;
   }
-  // Feedback → user goes to Notifications→Feedback
-  if(type==='feedback'){S.filters.ntab='Feedback';App.go('notifications');return;}
-  // Issue notifications → Approvals→Issues tab
-  if(type==='issue'){S.filters.atab='Issues';App.go('approvals');return;}
-  // Approval/edit notifications → Approvals→Pending or relevant tab
-  if(type==='approval'){
-    S.filters.atab=t.includes('Approved')||t.includes('approved')?'Approved':t.includes('Rejected')||t.includes('rejected')?'Rejected':'Pending';
-    App.go('approvals');return;
+  if(t.includes('Issue')||t.includes('issue')||t.includes('⚑')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Issues'};render();window.scrollTo(0,0);return;
   }
-  if(type==='edit'){S.filters.atab='Pending';App.go('approvals');return;}
-  // Late/overdue → go to my checklists
-  if(type==='late'){App.go('mychecklists');return;}
-  // General → notifications page
-  App.go('notifications');
+  if(t.includes('approved')||t.includes('Approved')||t.includes('rejected')||t.includes('Rejected')||t.includes('approval')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('submitted')||t.includes('resubmit')||t.includes('Re-submitted')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
+  }
+  // Default: go to notifications
+  App._setNTab('All');App.go('notifications');
 };
 function _notifTypeGlobal(text){
   if(!text)return'general';
@@ -2649,7 +2648,7 @@ function analyticsPage(){
   // Count missed (assigned but no submission for past dates)
   const relevantUsers=isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean);
   const dateRange=[];
-  const dr1=f.dr1||(new Date(Date.now()-7*86400000).toISOString().slice(0,10));
+  const dr1=f.dr1||(new Date(Date.now()-30*86400000).toISOString().slice(0,10));
   const dr2=f.dr2||today;
   let d=new Date(dr1+'T00:00:00');const dEnd=new Date(dr2+'T00:00:00');
   while(d<=dEnd&&dateRange.length<60){dateRange.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}
@@ -2727,6 +2726,8 @@ function analyticsPage(){
   </div>
 
   ${_issuesAnalytics(f,fArr)}
+  ${_issuesAnalytics(f,fArr)}
+
   <!-- Charts -->
 
   
@@ -3181,7 +3182,7 @@ App._delDoc=(id)=>{
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
-(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
@@ -3203,6 +3204,4 @@ App._exportCSV=()=>{
 
 </script>
 </body>
-</html  ${_issuesAnalytics(f,fArr)}
-
->
+</html>
