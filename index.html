@@ -297,6 +297,9 @@ const I={
   plus:'<path d="M12 5v14M5 12h14"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
+  folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
+  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
   cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   chevR:'<path d="M9 18l6-6-6-6"/>',
@@ -321,7 +324,7 @@ const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="
 const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},password:'***'}));}
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[]}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
@@ -339,8 +342,11 @@ async function loadFromSB(){
       sb.from('profiles').select('*').order('first_name'),
       sb.from('issues').select('*').order('created_at',{ascending:false}),
       sb.from('feedback').select('*').order('created_at',{ascending:false}),
+      sb.from('doc_folders').select('*').order('created_at',{ascending:false}),
+      sb.from('documents').select('*').order('uploaded_at',{ascending:false}),
     ]);
-    [depts,locs,cls,subs,appr,audit,notifs,profiles,issues,feedbackRows]=res.map(r=>r.data||[]);
+    let docFolderRows,docRows;
+  [depts,locs,cls,subs,appr,audit,notifs,profiles,issues,feedbackRows,docFolderRows,docRows]=res.map(r=>r.data||[]);
   }catch(e){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
@@ -353,6 +359,8 @@ async function loadFromSB(){
   DB.users=_mU(profiles);DB.feedback=DB.feedback||[];
   if(issues)DB.issues=issues.map(iss=>({id:iss.id,submissionId:iss.submission_id||null,checklistId:iss.checklist_id,userId:iss.user_id,date:iss.date,taskIndex:iss.task_index,taskName:iss.task_name||'',comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',managerNotes:iss.manager_notes||[],createdAt:iss.created_at,updatedAt:iss.updated_at||iss.created_at}));
   if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
+  if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
+  if(docRows)DB.documents=docRows.map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
 }
 async function _sync(){
   await Promise.all([
@@ -427,8 +435,8 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','issues','audit','notifications'].forEach(k=>{if(!DB[k])DB[k]=[];});
-    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','issues','folders','documents','audit','notifications'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};});
     S.uid=p.uid||null;return true;
   }catch(e){return false;}
 }
@@ -437,6 +445,7 @@ function loadDB(){
 let S={uid:null,route:'dashboard',search:'',calDate:todayISO(),calWk:0,expandedCl:null,filters:{},filterOpen:false,tvUser:null,tvCalDate:null,tvCalWk:0,tvExpanded:null,afOpen:null};
 const me=()=>DB.users.find(u=>u.id===S.uid);
 const isAdmin=()=>me()?.role==='Admin';
+const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
 const isMgr=()=>DB.users.some(u=>u.managerId===S.uid&&u.id!==S.uid)&&!isAdmin();
 function visU(){if(isAdmin())return DB.users;return[me(),...subTree(S.uid)].filter(Boolean);}
@@ -506,7 +515,7 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['documents','folder','Documents'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
 const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','users','approvals','notifications','more'];
@@ -623,6 +632,7 @@ function pageContent(){
   if(r==='analytics')return analyticsPage();
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
+  if(r==='documents')return documentsPage();
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
   if(r==='profile')return profilePage();
@@ -1404,10 +1414,7 @@ function teamViewPage(){
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center">
               ${[['assigned',asgn,'#15171C','#F6F7F8'],['late',late,late?'#BE123C':'#15171C',late?'#FFF1F2':'#F6F7F8'],['issues',issues,issues?'#C2410C':'#15171C',issues?'#FFF7ED':'#F6F7F8']].map(([l,v,c,bg])=>`<div style="background:${bg};border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:${c}">${v}</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">${l}</div></div>`).join('')}
             </div>
-            <div style="display:flex;align-items:center;justify-content:space-between">
-              <div style="font-size:12px;font-weight:600;color:#0E9F6E;display:flex;align-items:center;gap:4px">${ic('chevR','w-3.5 h-3.5')}View submissions</div>
-              <button onclick="event.stopPropagation();App._openSendFeedback('${u.id}')" style="font-size:11px;font-weight:700;padding:4px 10px;border-radius:8px;background:#F6F7F8;color:#374151;border:1px solid #ECEDF0;cursor:pointer">Feedback</button>
-            </div>
+            <div style="font-size:12px;font-weight:600;color:#0E9F6E;display:flex;align-items:center;gap:4px">${ic('chevR','w-3.5 h-3.5')}View submissions</div>
           </button>`;
         }).join('')}
       </div>
@@ -2405,6 +2412,279 @@ function profilePage(){
   })()}
   </div>`;
 }
+
+/* ===== DOCUMENTS ===== */
+function documentsPage(){
+  const u=me();if(!u)return'';
+  const isAdm=isAdmin();
+  const da=u.docAccess||{departments:{},locations:{}};
+  const scopeTab=S.filters.docScope||'dept';
+  const folderId=S.filters.docFolder||null; // current folder (null=root)
+
+  // Which departments/locations can this user see?
+  const visibleDepts=isAdm
+    ?DB.departments.map(d=>d.name)
+    :Object.entries(da.departments||{}).filter(([,p])=>p.view).map(([k])=>k);
+  const visibleLocs=isAdm
+    ?DB.locations.map(l=>l.id)
+    :Object.entries(da.locations||{}).filter(([,p])=>p.view).map(([k])=>k);
+
+  // Current scope filter (which dept/loc is selected)
+  const scopeKey=S.filters.docScopeKey||(scopeTab==='dept'?visibleDepts[0]:visibleLocs[0])||null;
+
+  // Permissions for current scope
+  function perm(type,key){
+    if(isAdm)return{view:true,upload:true,download:true,edit:true};
+    const map=type==='dept'?da.departments:da.locations;
+    return map?.[key]||{};
+  }
+  const curPerm=perm(scopeTab,scopeKey);
+
+  // Folders and docs in current scope + folder
+  const scopeFolders=(DB.folders||[]).filter(f=>f.type===scopeTab&&f.scope===scopeKey&&(f.parentId||null)===(folderId||null));
+  const scopeDocs=(DB.documents||[]).filter(d=>d.type===scopeTab&&d.scope===scopeKey&&(d.folderId||null)===(folderId||null));
+
+  // Breadcrumb path
+  function buildPath(id){
+    if(!id)return[];
+    const f=(DB.folders||[]).find(x=>x.id===id);
+    if(!f)return[];
+    return[...buildPath(f.parentId||null),f];
+  }
+  const crumbs=buildPath(folderId);
+
+  const scopeLabel=scopeTab==='dept'?scopeKey:(DB.locations.find(l=>l.id===scopeKey)?.name||scopeKey||'');
+
+  return'<div class="fade">'
+    +hdr('Documents','')
+    // ── Scope tabs (Departments / Locations)
+    +'<div style="display:flex;gap:6px;margin-bottom:14px">'
+    +[['dept','Departments'],['loc','Locations']].map(([k,l])=>{
+      const active=scopeTab===k;
+      const cnt=k==='dept'?visibleDepts.length:visibleLocs.length;
+      if(!cnt)return'';
+      return'<button onclick="App._setDocScope(\''+k+'\')" style="padding:7px 16px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(active?'#15171C':'transparent')+';color:'+(active?'#fff':'#6B7280')+'">'+l+'</button>';
+    }).join('')
+    +'</div>'
+    // ── Sub-scope selector (which dept or location)
+    +(scopeTab==='dept'&&visibleDepts.length>1
+      ?'<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+        +visibleDepts.map(d=>'<button onclick="App._setDocScopeKey(\''+d+'\')" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1.5px solid '+(scopeKey===d?'#15171C':'#ECEDF0')+';background:'+(scopeKey===d?'#15171C':'#fff')+';color:'+(scopeKey===d?'#fff':'#6B7280')+';cursor:pointer">'+esc(d)+'</button>').join('')
+        +'</div>'
+      :scopeTab==='loc'&&visibleLocs.length>1
+        ?'<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+          +visibleLocs.map(id=>{const l=DB.locations.find(x=>x.id===id);return'<button onclick="App._setDocScopeKey(\''+id+'\')" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1.5px solid '+(scopeKey===id?'#15171C':'#ECEDF0')+';background:'+(scopeKey===id?'#15171C':'#fff')+';color:'+(scopeKey===id?'#fff':'#6B7280')+';cursor:pointer">'+esc(l?.name||id)+'</button>';}).join('')
+          +'</div>'
+        :''
+    )
+    // ── Breadcrumb
+    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
+    +'<button onclick="App._docNav(null)" style="font-size:13px;font-weight:700;color:'+(folderId?'#0E9F6E':'#15171C')+';background:none;border:none;cursor:pointer;padding:0">'+esc(scopeLabel||'Root')+'</button>'
+    +crumbs.map(f=>'<span style="color:#D1D5DB">›</span><button onclick="App._docNav(\''+f.id+'\')" style="font-size:13px;font-weight:700;color:'+(folderId===f.id?'#15171C':'#0E9F6E')+';background:none;border:none;cursor:pointer;padding:0">'+esc(f.name)+'</button>').join('')
+    +'</div>'
+    // ── Toolbar
+    +(scopeKey
+      ?'<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'
+        +(curPerm.edit||isAdm?'<button onclick="App._newFolder()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:13px;font-weight:600;cursor:pointer">'+ic('folder','w-4 h-4')+'New folder</button>':'')
+        +(curPerm.upload||isAdm?'<button onclick="App._uploadDoc()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">'+ic('upload','w-4 h-4')+'Upload file</button>':'')
+        +'</div>'
+      :''
+    )
+    // ── Empty state
+    +(scopeKey===null||scopeKey===undefined
+      ?empty('folder','No scope selected','Select a department or location to view documents')
+      :(!scopeFolders.length&&!scopeDocs.length
+        ?empty('folder','Empty folder','No files yet'+(curPerm.upload||isAdm?' — click Upload to add files':''))
+        // ── Folder grid
+        :'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px">'
+          +scopeFolders.map(f=>'<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:all .15s" onclick="App._docNav(\''+f.id+'\')" onmouseover="this.style.borderColor=\'#0E9F6E\';this.style.boxShadow=\'0 2px 12px rgba(14,159,110,.1)\'" onmouseout="this.style.borderColor=\'#ECEDF0\';this.style.boxShadow=\'\'">'
+            +'<div style="font-size:28px">📁</div>'
+            +'<div style="font-size:13px;font-weight:700;word-break:break-word">'+esc(f.name)+'</div>'
+            +'<div style="font-size:11px;color:#9CA3AF">'+((DB.documents||[]).filter(d=>d.folderId===f.id).length)+' files</div>'
+            +(isAdm||curPerm.edit?'<button onclick="event.stopPropagation();App._delFolder(\''+f.id+'\')" style="font-size:11px;color:#DC2626;background:none;border:none;cursor:pointer;padding:0;text-align:left">Delete</button>':'')
+            +'</div>'
+          ).join('')
+          +'</div>'
+          // ── Doc list
+          +'<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">'
+          +scopeDocs.map((d,i)=>{
+            const ext=(d.name.split('.').pop()||'').toLowerCase();
+            const icon=ext==='pdf'?'📄':ext.match(/xlsx?|csv/)?'📊':ext.match(/docx?/)?'📝':ext.match(/pptx?/)?'📊':ext.match(/jpe?g|png|gif|webp/)?'🖼':'📎';
+            return'<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:'+(i<scopeDocs.length-1?'1px solid #F3F4F6':'none')+'">'
+              +'<div style="font-size:24px;flex-shrink:0">'+icon+'</div>'
+              +'<div style="flex:1;min-width:0">'
+              +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.name)+'</div>'
+              +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+fmtS(d.uploadedAt?.slice(0,10))+(d.uploaderName?' · '+esc(d.uploaderName):'')+(d.fileSize?' · '+_fmtSize(d.fileSize):'')+'</div>'
+              +'</div>'
+              +'<div style="display:flex;gap:6px;flex-shrink:0">'
+              +(curPerm.download||isAdm?'<button onclick="App._downloadDoc(\''+d.id+'\')" style="padding:6px 12px;border-radius:8px;background:#ECFDF5;color:#0E9F6E;font-size:12px;font-weight:700;border:1px solid #A7F3D0;cursor:pointer">Download</button>':'')
+              +(curPerm.view||isAdm?'<button onclick="App._previewDoc(\''+d.id+'\')" style="padding:6px 12px;border-radius:8px;background:#F6F7F8;color:#374151;font-size:12px;font-weight:700;border:1px solid #ECEDF0;cursor:pointer">View</button>':'')
+              +(isAdm||curPerm.edit?'<button onclick="App._delDoc(\''+d.id+'\')" style="padding:6px 10px;border-radius:8px;background:#FEE2E2;color:#DC2626;font-size:12px;font-weight:700;border:1px solid #FECACA;cursor:pointer">✕</button>':'')
+              +'</div>'
+              +'</div>';
+          }).join('')
+          +'</div>'
+      )
+    )
+    +'</div>';
+}
+
+function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return(b/1048576).toFixed(1)+'MB';}
+
+// ── Document navigation & scope helpers ──
+App._setDocScope=(s)=>{S.filters.docScope=s;S.filters.docFolder=null;S.filters.docScopeKey=null;rr();};
+App._setDocScopeKey=(k)=>{S.filters.docScopeKey=k;S.filters.docFolder=null;rr();};
+App._docNav=(id)=>{S.filters.docFolder=id;rr();};
+
+// ── New folder ──
+App._newFolder=()=>{
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">New folder</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +fld('Folder name','nf-name','')
+    +'<div class="flex gap-2 mt-4">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._createFolder()" style="flex:1;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Create</button>'
+    +'</div></div>',
+    'max-w-sm'
+  );
+};
+App._createFolder=()=>{
+  const name=$('#nf-name')?.value?.trim();if(!name){toast('Enter a name','err');return;}
+  const f={id:uid('fld'),name,type:S.filters.docScope||'dept',scope:S.filters.docScopeKey,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
+  if(!DB.folders)DB.folders=[];
+  DB.folders.push(f);
+  log(fullName(me()),'Created folder',name);toast('Folder created');closeModal();saveDB();rr();
+};
+App._delFolder=(id)=>{
+  const f=(DB.folders||[]).find(x=>x.id===id);
+  if(!confirm('Delete folder "'+f?.name+'" and all its files?'))return;
+  // Delete recursively
+  function delFolderRec(fid){
+    const children=(DB.folders||[]).filter(x=>x.parentId===fid);
+    children.forEach(c=>delFolderRec(c.id));
+    DB.folders=(DB.folders||[]).filter(x=>x.id!==fid);
+    DB.documents=(DB.documents||[]).filter(x=>x.folderId!==fid);
+  }
+  delFolderRec(id);
+  log(fullName(me()),'Deleted folder',f?.name||'');toast('Deleted','warn');saveDB();rr();
+};
+
+// ── Upload file ──
+App._uploadDoc=()=>{
+  const scopeTab=S.filters.docScope||'dept';
+  const scopeKey=S.filters.docScopeKey;
+  const folderId=S.filters.docFolder||null;
+  if(!scopeKey){toast('Select a department or location first','warn');return;}
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Upload file</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +'<div id="ud-dropzone" style="border:2px dashed #D1D5DB;border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px" onclick="document.getElementById(\'ud-file\').click()" ondragover="event.preventDefault();this.style.borderColor=\'#0E9F6E\';this.style.background=\'#F0FDF4\'" ondragleave="this.style.borderColor=\'#D1D5DB\';this.style.background=\'transparent\'" ondrop="App._handleFileDrop(event)">'
+    +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
+    +'<div style="font-size:14px;font-weight:600;color:#374151">Click to browse or drag & drop</div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:4px">PDF, Word, Excel, PowerPoint, Images — max 50MB</div>'
+    +'<input type="file" id="ud-file" style="display:none" onchange="App._previewUpload(this)" multiple>'
+    +'</div>'
+    +'<div id="ud-preview" style="display:none;margin-bottom:14px"></div>'
+    +'<div id="ud-progress" style="display:none;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:6px">Uploading…</div>'
+    +'<div style="height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden"><div id="ud-bar" style="height:100%;background:#0E9F6E;border-radius:3px;width:0%;transition:width .3s"></div></div>'
+    +'</div>'
+    +'<button id="ud-btn" onclick="App._doUpload()" style="width:100%;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:700;font-size:15px;border:none;cursor:pointer;display:none">Upload</button>'
+    +'</div>',
+    'max-w-md'
+  );
+  App._pendingFiles=null;
+};
+
+App._handleFileDrop=(e)=>{
+  e.preventDefault();
+  document.getElementById('ud-dropzone').style.borderColor='#D1D5DB';
+  document.getElementById('ud-dropzone').style.background='transparent';
+  App._previewUpload({files:e.dataTransfer.files});
+};
+
+App._previewUpload=(input)=>{
+  const files=Array.from(input.files||[]);if(!files.length)return;
+  App._pendingFiles=files;
+  const preview=document.getElementById('ud-preview');
+  const btn=document.getElementById('ud-btn');
+  if(preview){
+    preview.style.display='block';
+    preview.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+files.map(f=>{
+      const ext=(f.name.split('.').pop()||'').toLowerCase();
+      const icon=ext==='pdf'?'📄':ext.match(/xlsx?|csv/)?'📊':ext.match(/docx?/)?'📝':'📎';
+      return'<div style="display:flex;align-items:center;gap:10px;background:#F6F7F8;border-radius:10px;padding:10px">'
+        +'<span style="font-size:20px">'+icon+'</span>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(f.name)+'</div>'
+        +'<div style="font-size:11px;color:#9CA3AF">'+_fmtSize(f.size)+'</div></div>'
+        +'</div>';
+    }).join('')+'</div>';
+  }
+  if(btn)btn.style.display='block';
+};
+
+App._doUpload=async()=>{
+  const files=App._pendingFiles;if(!files?.length){toast('Select a file','err');return;}
+  const btn=document.getElementById('ud-btn');
+  const prog=document.getElementById('ud-progress');
+  const bar=document.getElementById('ud-bar');
+  if(btn)btn.style.display='none';
+  if(prog)prog.style.display='block';
+  const scopeTab=S.filters.docScope||'dept';
+  const scopeKey=S.filters.docScopeKey;
+  const folderId=S.filters.docFolder||null;
+  let done=0;
+  for(const file of files){
+    const path=scopeTab+'/'+scopeKey+'/'+(folderId||'root')+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const{data,error}=await sb.storage.from('documents').upload(path,file,{cacheControl:'3600',upsert:false});
+    if(error){toast('Upload failed: '+error.message,'err');if(btn)btn.style.display='block';if(prog)prog.style.display='none';return;}
+    const{data:urlData}=sb.storage.from('documents').getPublicUrl(path);
+    if(!DB.documents)DB.documents=[];
+    DB.documents.push({id:uid('doc'),name:file.name,folderId,type:scopeTab,scope:scopeKey,url:urlData?.publicUrl||path,storagePath:path,fileType:file.type,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()});
+    done++;
+    if(bar)bar.style.width=Math.round(done/files.length*100)+'%';
+  }
+  log(fullName(me()),'Uploaded '+done+' file(s)',scopeKey);
+  toast('Uploaded '+done+' file'+(done>1?'s':''));
+  saveDB();closeModal();rr();
+};
+
+App._downloadDoc=async(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
+  if(doc.url&&doc.url.startsWith('http')){
+    const a=document.createElement('a');a.href=doc.url;a.download=doc.name;a.target='_blank';a.click();return;
+  }
+  // Signed URL
+  const{data,error}=await sb.storage.from('documents').createSignedUrl(doc.storagePath||doc.url,300);
+  if(error){toast('Download failed','err');return;}
+  const a=document.createElement('a');a.href=data.signedUrl;a.download=doc.name;a.click();
+};
+
+App._previewDoc=async(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
+  let url=doc.url;
+  if(!url?.startsWith('http')){
+    const{data,error}=await sb.storage.from('documents').createSignedUrl(doc.storagePath||doc.url,300);
+    if(error){toast('Preview failed','err');return;}
+    url=data.signedUrl;
+  }
+  const ext=(doc.name.split('.').pop()||'').toLowerCase();
+  if(ext.match(/jpe?g|png|gif|webp/)){
+    openModal('<div class="p-4"><div class="flex justify-between mb-3"><h3 class="fd font-bold">'+esc(doc.name)+'</h3><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div><img src="'+url+'" style="width:100%;border-radius:12px;max-height:70vh;object-fit:contain"/></div>','max-w-2xl');
+  } else if(ext==='pdf'){
+    window.open(url,'_blank');
+  } else {
+    window.open(url,'_blank');
+  }
+};
+
+App._delDoc=(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc||!confirm('Delete "'+doc.name+'"?'))return;
+  sb.storage.from('documents').remove([doc.storagePath||doc.url]).catch(()=>{});
+  DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
+  log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();rr();
+};
 
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
