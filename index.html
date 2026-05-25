@@ -632,7 +632,14 @@ App.saveProfile=async()=>{
 };
 App.changePw=async()=>{const cur=($('#pw-cur')?.value||'').trim();const nw=($('#pw-new')?.value||'').trim();if(!cur||!nw){toast('Fill both fields','err');return;}if(nw.length<6){toast('Min 6 characters','err');return;}const u=me();const{error:se}=await sb.auth.signInWithPassword({email:u.email,password:cur});if(se){toast('Current password incorrect','err');return;}const{error}=await sb.auth.updateUser({password:nw});if(error){toast(error.message,'err');return;}toast('Password updated');const c=$('#pw-cur'),n=$('#pw-new');if(c)c.value='';if(n)n.value='';};
 // _showNotifs removed — now using notificationsPage route
-App.logout=async()=>{try{log(fullName(me()),'Logged out','');saveDB();}catch(e){}await sb.auth.signOut();S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;RUN={};if(typeof COLL!=='undefined')COLL={};closeModal();render();};
+App.logout=()=>{
+  try{log(fullName(me()),'Logged out','');saveDB();}catch(e){}
+  // Clear state and render immediately — don't wait for Supabase
+  S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;RUN={};
+  closeModal();render();
+  // Sign out Supabase in background
+  sb.auth.signOut().catch(()=>{});
+};
 
 /* ===== ROUTER ===== */
 function pageContent(){
@@ -824,7 +831,34 @@ App.editUser=(id=null)=>{
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveUser('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
 };
-App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');if(!fn||!ln||!email){toast('Name & email required','err');return;}const mId=$('#u-mgr')?.value||null;if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}const pd={first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,manager_id:mId||null,rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}};if(id){const{error}=await sb.from('profiles').update(pd).eq('id',id);if(error){toast(error.message,'err');return;}const u=uById(id);if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings});toast('Updated');}else{const pw=(g('u-pw')||'').trim();if(!pw){toast('Password required','err');return;}const{data:res,error}=await sb.functions.invoke('create-user',{body:{...pd,password:pw}});if(error||res?.error){let msg=error?.message||res?.error||'Failed';try{if(error?.context){const b=await error.context.json();msg=b.error||msg;}}catch(e){}toast(msg,'err');return;}DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings,password:'***'});toast('User created');}// Read doc permissions from modal checkboxes
+App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');if(!fn||!ln||!email){toast('Name & email required','err');return;}const mId=$('#u-mgr')?.value||null;if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}const pd={first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,manager_id:mId||null,rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}};if(id){
+    // Update local state immediately — instant feedback
+    const u=uById(id);
+    if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings});
+    toast('Saved ✓');closeModal();saveDB();render();
+    // Sync to Supabase in background
+    sb.from('profiles').update(pd).eq('id',id).then(({error})=>{
+      if(error)toast('Sync warning: '+error.message,'warn');
+    });
+  }else{
+    const pw=(g('u-pw')||'').trim();if(!pw){toast('Password required','err');return;}
+    // Show loading state immediately
+    const saveBtn=document.querySelector('[onclick*="saveUser"]');
+    if(saveBtn){saveBtn.disabled=true;saveBtn.textContent='Creating…';}
+    toast('Creating user…','ok');
+    const{data:res,error}=await sb.functions.invoke('create-user',{body:{...pd,password:pw}});
+    if(error||res?.error){
+      let msg=error?.message||res?.error||'Failed to create user';
+      try{if(error?.context){const b=await error.context.json();msg=b.error||msg;}}catch(e){}
+      toast(msg,'err');
+      if(saveBtn){saveBtn.disabled=false;saveBtn.textContent='Create';}
+      return;
+    }
+    const newId=res?.id||res?.user?.id;
+    if(!newId){toast('User created — reload to see them','ok');closeModal();render();return;}
+    DB.users.push({id:newId,firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings,docAccess:{departments:{},locations:{}},password:'***'});
+    toast('✓ '+fn+' '+ln+' created');
+  }// Read doc permissions from modal checkboxes
   const docAccess={departments:{},locations:{}};
   document.querySelectorAll('.doc-perm-dept').forEach(cb=>{
     const dept=cb.dataset.dept,p=cb.dataset.perm;
@@ -838,7 +872,8 @@ App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn
   });
   if(id){await sb.from('profiles').update({doc_access:docAccess}).eq('id',id);const uu=uById(id);if(uu)uu.docAccess=docAccess;}
   else{const newU=DB.users[DB.users.length-1];if(newU){newU.docAccess=docAccess;await sb.from('profiles').update({doc_access:docAccess}).eq('id',newU.id);}}
-  log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);closeModal();render();};
+  log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);
+  if(!id){closeModal();saveDB();render();}};
 App.resetPw=(id)=>{
   const u=uById(id);
   openModal(
@@ -865,7 +900,20 @@ App._doResetPw=async(uid)=>{
   toast('Password reset');closeModal();
 };
 App.togUser=async(id)=>{const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';await sb.from('profiles').update({status:u.status}).eq('id',id);toast(fullName(u)+' '+u.status,u.status==='Active'?'ok':'warn');saveDB();render();};
-App.delUser=(id)=>{if(!confirm('Delete this user?'))return;const u=uById(id);DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);DB.users=DB.users.filter(x=>x.id!==id);DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));DB.submissions=DB.submissions.filter(s=>s.userId!==id);DB.notifications=DB.notifications.filter(n=>n.userId!==id);DB.approvals=DB.approvals.filter(a=>a.requesterId!==id);log(fullName(me()),'Deleted user',fullName(u));toast('Deleted','warn');render();};
+App.delUser=(id)=>{
+  const u=uById(id);if(!u)return;
+  if(!confirm('Remove '+fullName(u)+'? This will deactivate their account.'))return;
+  const name=fullName(u);
+  // Optimistic local update — instant UI response
+  DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
+  DB.users=DB.users.filter(x=>x.id!==id);
+  DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));
+  log(fullName(me()),'Removed user',name);
+  toast(name+' removed','warn');
+  saveDB();render();
+  // Background Supabase deactivation
+  sb.from('profiles').update({status:'Inactive'}).eq('id',id).catch(e=>console.warn('delUser:',e));
+};
 
 /* ===== DEPARTMENTS ===== */
 function _scopeDocsTab(type, scopeKey){
