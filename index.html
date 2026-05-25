@@ -533,7 +533,7 @@ function _recoverEditingSubmissions(){
 /* ===== NAVIGATION ===== */
 const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
+const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','approvals','notifications','more'];
 const MOB_USR=['mychecklists','notifications'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
@@ -1215,7 +1215,8 @@ App.togLoc=async(id)=>{const l=locById(id);l.status=l.status==='Active'?'Inactiv
 
 /* ===== CHECKLIST ADMIN PAGE ===== */
 function clsPage(){
-  let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(a=>subTree(S.uid).map(u=>u.id).includes(a)));
+  const myTeamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
+let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(a=>myTeamIds.has(a))||c.department===me()?.department);
   if(S.search)list=list.filter(c=>c.name.toLowerCase().includes(S.search.toLowerCase())||c.department.toLowerCase().includes(S.search.toLowerCase()));
   return`<div class="fade">${hdr('Checklists',list.length+' configured',(isAdmin()||isMgr())?btnP('New checklist','App.editCl()','plus'):'')}
   <div class="space-y-2.5">
