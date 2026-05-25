@@ -309,6 +309,10 @@ const I={
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
   copy:'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  unlock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
+  unlock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
   upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
   flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
   cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
@@ -540,8 +544,13 @@ const MOB_USR=['mychecklists','notifications'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
-  if(isMgr())return NAV_MGR;
-  return NAV_USR;
+  // For managers and users: inject Documents tab if they have view access
+  const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
+  if(hasDocAccess()){
+    // Insert Documents before the last item
+    base.splice(base.length-1,0,['documents','folder','Documents']);
+  }
+  return base;
 };
 App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
   // Preserve analytics filters when navigating to/from analytics; reset everything else
@@ -756,6 +765,14 @@ function mgrDash(){
   </div></div>`;}
 
 /* ===== USERS ===== */
+function _disableBtn(u){
+  const isActive=u.status==='Active';
+  const bg=isActive?'transparent':'#FEF3C7';
+  const col=isActive?'#9CA3AF':'#D97706';
+  const tip=isActive?'Disable user':'Enable user';
+  return '<button onclick="App.togUser(\''+u.id+'\')" title="'+tip+'" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:'+col+';background:'+bg+';border:none;cursor:pointer">'+ic(isActive?'lock':'unlock','w-4 h-4')+'</button>';
+}
+
 function usersPage(){
   let list=visU();const q=S.search.toLowerCase();
   if(q)list=list.filter(u=>fullName(u).toLowerCase().includes(q)||u.email.toLowerCase().includes(q));
@@ -769,7 +786,7 @@ function usersPage(){
   </div>
   <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
     <table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-5 py-3 font-semibold">Name</th><th class="px-5 py-3 font-semibold">Department</th><th class="px-5 py-3 font-semibold">Role</th><th class="px-5 py-3 font-semibold">Reports to</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3"></th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${u.role==='Admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Admin</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">User</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${isAdmin()?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button><button onclick="App.togUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('cog','w-4 h-4')}</button>${u.role!=='Admin'?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
+    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${u.role==='Admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Admin</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">User</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${isAdmin()?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>${_disableBtn(u)}${u.role!=='Admin'?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
     ${list.length?'':empty('users','No users','')}
   </div>
   <div class="md:hidden space-y-2">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4" ${isAdmin()?`onclick="App.editUser('${u.id}')" style="cursor:pointer"`:''}>
@@ -900,20 +917,53 @@ App._doResetPw=async(uid)=>{
   log(fullName(me()),'Reset password',fullName(uById(uid)));
   toast('Password reset');closeModal();
 };
-App.togUser=async(id)=>{const u=uById(id);u.status=u.status==='Active'?'Inactive':'Active';await sb.from('profiles').update({status:u.status}).eq('id',id);toast(fullName(u)+' '+u.status,u.status==='Active'?'ok':'warn');saveDB();render();};
-App.delUser=(id)=>{
+App.togUser=async(id)=>{
   const u=uById(id);if(!u)return;
-  if(!confirm('Remove '+fullName(u)+'? This will deactivate their account.'))return;
+  const enabling=u.status!=='Active';
+  u.status=enabling?'Active':'Inactive';
+  // Optimistic render
+  render();
+  toast(fullName(u)+' '+(enabling?'enabled ✓':'disabled'),enabling?'ok':'warn');
+  await sb.from('profiles').update({status:u.status}).eq('id',id).catch(()=>{});
+  saveDB();
+};
+App.delUser=async(id)=>{
+  const u=uById(id);if(!u)return;
   const name=fullName(u);
-  // Optimistic local update — instant UI response
+  if(!confirm('Permanently delete '+name+'?\n\nThis will delete ALL their submissions, issues, and approvals. This cannot be undone.\n\nTo keep their data, use Disable instead.'))return;
+  // Optimistic local cleanup first
   DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
   DB.users=DB.users.filter(x=>x.id!==id);
   DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));
-  log(fullName(me()),'Removed user',name);
-  toast(name+' removed','warn');
-  saveDB();render();
-  // Background Supabase deactivation
-  sb.from('profiles').update({status:'Inactive'}).eq('id',id).catch(e=>console.warn('delUser:',e));
+  DB.submissions=DB.submissions.filter(s=>s.userId!==id);
+  DB.approvals=DB.approvals.filter(a=>a.requesterId!==id);
+  DB.notifications=DB.notifications.filter(n=>n.userId!==id);
+  DB.issues=(DB.issues||[]).filter(x=>x.userId!==id);
+  DB.feedback=(DB.feedback||[]).filter(f=>f.userId!==id&&f.managerId!==id);
+  // FIX3: If ex-manager now has 0 direct reports, downgrade to User
+  if(u.managerId){
+    const exMgr=uById(u.managerId);
+    if(exMgr&&exMgr.role==='Manager'){
+      const stillHasTeam=DB.users.some(x=>x.managerId===exMgr.id);
+      if(!stillHasTeam){
+        exMgr.role='User';
+        sb.from('profiles').update({role:'User'}).eq('id',exMgr.id).catch(()=>{});
+        toast(fullName(exMgr)+' has no team — role changed to User','warn');
+      }
+    }
+  }
+  log(fullName(me()),'Deleted user',name);
+  toast(name+' deleted','warn');
+  render();saveDB();
+  // Background Supabase deletion of all related data
+  Promise.all([
+    sb.from('submissions').delete().eq('user_id',id),
+    sb.from('approvals').delete().eq('requester_id',id),
+    sb.from('notifications').delete().eq('user_id',id),
+    sb.from('issues').delete().eq('user_id',id),
+    sb.from('feedback').delete().eq('user_id',id),
+    sb.from('profiles').delete().eq('id',id),
+  ]).catch(e=>console.warn('delUser cleanup:',e));
 };
 
 /* ===== DEPARTMENTS ===== */
@@ -1528,10 +1578,8 @@ App.dupCl=async(id)=>{
     status:'Draft'
   }).catch(e=>console.warn('dupCl sync:',e));
   log(fullName(me()),'Duplicated checklist',src.name);
-  toast('✓ Duplicated — edit and activate when ready');
-  saveDB();rr();
-  // Auto-open the editor so they can review immediately
-  setTimeout(()=>App.editCl(newId),400);
+  toast('✓ Duplicated as Draft — tap Edit to make changes');
+  saveDB();render();
 };
 
 App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('issues').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.issues=(DB.issues||[]).filter(x=>x.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
