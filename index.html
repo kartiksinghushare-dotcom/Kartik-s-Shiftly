@@ -2593,6 +2593,40 @@ function hierarchyPage(){const roots=isAdmin()?DB.users.filter(u=>!u.managerId):
 function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col=COLL[u.id];return`<div class="${d>0?'ml-5 pl-1 relative before:absolute before:left-[-14px] before:top-0 before:bottom-0 before:w-px before:bg-ink-100 after:absolute after:left-[-14px] after:top-6 after:w-3 after:h-px after:bg-ink-100':''}"><div class="flex items-center gap-2 py-1.5"><span class="w-5">${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" class="w-5 h-5 grid place-items-center rounded text-ink-400 hover:bg-ink-100">${ic(col?'chevR':'chevD','w-3.5 h-3.5')}</button>`:''}</span><div class="flex items-center gap-2.5 bg-paper border border-ink-100 rounded-xl pl-1.5 pr-3 py-1.5 hover:border-brand-200 transition">${avatar(u,'w-8 h-8','text-[11px]')}<div><div class="text-sm font-semibold">${esc(fullName(u))}${u.role==='Admin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#15171C;color:#fff;margin-left:4px">ADMIN</span>`:''}</div><div class="text-[11px] text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${kids.length?`<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700">${kids.length}</span>`:''}</div></div>${kids.length&&!col?`<div>${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}</div>`;}
 
 /* ===== ANALYTICS ===== */
+function _issuesAnalytics(f,fArr){
+  const allIssues=(DB.issues||[]).filter(iss=>isAdmin()?true:subTree(S.uid).some(u=>u.id===iss.userId)||iss.userId===S.uid);
+  const filtIssues=allIssues.filter(iss=>(f.dr1?iss.date>=f.dr1:true)&&(f.dr2?iss.date<=f.dr2:true)&&(!fArr('users').length||fArr('users').includes(iss.userId)));
+  const open=filtIssues.filter(i=>i.status==='Open'||i.status==='Reopened').length;
+  const inProg=filtIssues.filter(i=>i.status==='Under Review'||i.status==='Feedback Sent').length;
+  const resolved=filtIssues.filter(i=>i.status==='Resolved').length;
+  const total=filtIssues.length;
+  if(!total)return '<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px">⚑ Team Issues</div><p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No issues flagged in this period</p></div>';
+  const pct=Math.round(resolved/total*100);
+  const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
+  let html='<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px">⚑ Team Issues</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">'
+    +[['Open',open,'#DC2626','#FEE2E2'],['In Progress',inProg,'#D97706','#FEF3C7'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
+      '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
+    ).join('')+'</div>'
+    +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px;transition:width .5s"></div></div></div>';
+  const openIssues=filtIssues.filter(i=>i.status==='Open'||i.status==='Reopened');
+  if(openIssues.length){
+    html+='<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px">'
+      +'<div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:8px">Requires attention</div>'
+      +openIssues.slice(0,4).map(iss=>{
+        const u2=uById(iss.userId);const c2=clById(iss.checklistId);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'+(u2?avatar(u2,'w-6 h-6','text-[9px]'):'')
+          +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(iss.taskName||'')+'</div>'
+          +'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(u2)||'')+(c2?' · '+esc(c2.name):'')+'</div></div>'
+          +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+esc(iss.status)+'</span></div>';
+      }).join('')+'</div>';
+  }
+  html+='</div>';
+  return html;
+}
+
 function analyticsPage(){
   const today=todayISO();
   // Collect all relevant submissions
@@ -2659,6 +2693,7 @@ function analyticsPage(){
       </div>`:''}
     </div>`;
   }
+  
 
   return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
   ${hdr('Analytics','')}
@@ -2691,7 +2726,10 @@ function analyticsPage(){
     ${statCard('Issues',flagged,'orange')}
   </div>
 
+  ${_issuesAnalytics(f,fArr)}
   <!-- Charts -->
+
+  
   <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
     <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:18px">
       <div class="fd" style="font-size:14px;font-weight:700;margin-bottom:14px">Status breakdown</div>
@@ -3165,34 +3203,6 @@ App._exportCSV=()=>{
 
 </script>
 </body>
-</html>
+</html  ${_issuesAnalytics(f,fArr)}
 
-  <!-- Issues analytics section -->
-  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">
-    <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px">⚑ Team Issues</div>
-    ${(()=>{
-      const allIssues=(DB.issues||[]).filter(iss=>isAdmin()?true:subTree(S.uid).some(u=>u.id===iss.userId)||iss.userId===S.uid);
-      const filtIssues=allIssues.filter(iss=>(f.dr1?iss.date>=f.dr1:true)&&(f.dr2?iss.date<=f.dr2:true)&&(!fArr('users').length||fArr('users').includes(iss.userId)));
-      const open=filtIssues.filter(i=>['Open','Reopened'].includes(i.status)).length;
-      const inProgress=filtIssues.filter(i=>['Under Review','Feedback Sent'].includes(i.status)).length;
-      const resolved=filtIssues.filter(i=>i.status==='Resolved').length;
-      const total=filtIssues.length;
-      if(!total)return '<p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No issues flagged in this period</p>';
-      const pct=total?Math.round(resolved/total*100):0;
-      const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
-      return '<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">'
-        +[['Open',open,'#DC2626','#FEE2E2'],['In Progress',inProgress,'#D97706','#FEF3C7'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
-          '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
-        ).join('')+'</div>'
-        +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
-        +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px"></div></div></div>'
-        +(open?'<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px"><div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:8px">Requires attention</div>'
-          +filtIssues.filter(i=>['Open','Reopened'].includes(i.status)).slice(0,4).map(iss=>{
-            const u2=uById(iss.userId);const c2=clById(iss.checklistId);
-            return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'+(u2?avatar(u2,'w-6 h-6','text-[9px]'):'')
-              +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(iss.taskName||'')+'</div>'
-              +'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(u2)||'')+(c2?' · '+esc(c2.name):'')+'</div></div>'
-              +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+esc(iss.status)+'</span></div>';
-          }).join('')+'</div>':'');
-    })()}
-  </div>
+>
