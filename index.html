@@ -718,6 +718,44 @@ function usersPage(){
     <div class="flex items-center gap-3">${avatar(u,'w-10 h-10','text-sm')}<div class="min-w-0 flex-1"><div class="font-semibold truncate">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${chip(u.status)}</div>
     ${mgr?`<div class="text-xs text-ink-400 mt-2.5 pt-2.5 border-t border-ink-50">Reports to <strong>${esc(fullName(mgr))}</strong></div>`:''}</div>`;}).join('')}</div>
 </div>`;}
+function _docAccessSection(u){
+  if(!DB.departments.length&&!DB.locations.length)return'<div style="background:#F9FAFB;border-radius:16px;padding:14px;margin-top:8px"><p style="font-size:12px;color:#9CA3AF;text-align:center">Add departments and locations first to assign document access.</p></div>';
+  const da=u?.docAccess||{departments:{},locations:{}};
+  const PERMS=['view','upload','download','edit'];
+  let html='<div style="border-top:1px solid #ECEDF0;margin-top:14px;padding-top:14px">'
+    +'<p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Document Access</p>';
+  if(DB.departments.length){
+    html+='<p style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">Departments</p>';
+    html+=DB.departments.map(d=>{
+      const dp=da.departments?.[d.name]||{};
+      return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 12px;background:#F9FAFB;border-radius:10px">'
+        +'<span style="font-size:12px;font-weight:600;min-width:100px;flex-shrink:0">'+esc(d.name)+'</span>'
+        +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+        +PERMS.map(p=>'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
+          +'<input type="checkbox" class="doc-perm-dept" data-dept="'+esc(d.name)+'" data-perm="'+p+'"'+(dp[p]?' checked':'')+'> '
+          +p.charAt(0).toUpperCase()+p.slice(1)
+          +'</label>').join('')
+        +'</div></div>';
+    }).join('');
+  }
+  if(DB.locations.length){
+    html+='<p style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;margin-top:10px">Locations</p>';
+    html+=DB.locations.map(l=>{
+      const lp=da.locations?.[l.id]||{};
+      return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 12px;background:#F9FAFB;border-radius:10px">'
+        +'<span style="font-size:12px;font-weight:600;min-width:100px;flex-shrink:0">'+esc(l.name)+'</span>'
+        +'<div style="display:flex;gap:12px;flex-wrap:wrap">'
+        +PERMS.map(p=>'<label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer">'
+          +'<input type="checkbox" class="doc-perm-loc" data-loc="'+l.id+'" data-perm="'+p+'"'+(lp[p]?' checked':'')+'> '
+          +p.charAt(0).toUpperCase()+p.slice(1)
+          +'</label>').join('')
+        +'</div></div>';
+    }).join('');
+  }
+  html+='</div>';
+  return html;
+}
+
 App.editUser=(id=null)=>{
   const u=id?uById(id):null;
   const mgrOpts=DB.users.filter(x=>!u||x.id!==u.id&&!isDesc(x.id,u.id));
@@ -731,11 +769,26 @@ App.editUser=(id=null)=>{
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??false,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??false,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??true,'Past entries')}${mkTog('u-af',u?.approval?.future??true,'Future entries')}${mkTog('u-ae',u?.approval?.edited??true,'Edited entries')}</div>
+    ${_docAccessSection(u)}
   </div>
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveUser('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
 };
-App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');if(!fn||!ln||!email){toast('Name & email required','err');return;}const mId=$('#u-mgr')?.value||null;if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}const pd={first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,manager_id:mId||null,rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}};if(id){const{error}=await sb.from('profiles').update(pd).eq('id',id);if(error){toast(error.message,'err');return;}const u=uById(id);if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings});toast('Updated');}else{const pw=(g('u-pw')||'').trim();if(!pw){toast('Password required','err');return;}const{data:res,error}=await sb.functions.invoke('create-user',{body:{...pd,password:pw}});if(error||res?.error){let msg=error?.message||res?.error||'Failed';try{if(error?.context){const b=await error.context.json();msg=b.error||msg;}}catch(e){}toast(msg,'err');return;}DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings,password:'***'});toast('User created');}log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);closeModal();render();};
+App.saveUser=async(id)=>{const g=i=>$('#'+i)?.value?.trim()||'';const fn=g('u-fn'),ln=g('u-ln'),email=g('u-email');if(!fn||!ln||!email){toast('Name & email required','err');return;}const mId=$('#u-mgr')?.value||null;if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}const pd={first_name:fn,last_name:ln,email,phone:g('u-phone'),position:g('u-pos'),department:$('#u-dep')?.value,role:$('#u-role')?.value,status:$('#u-status')?.value,manager_id:mId||null,rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')}};if(id){const{error}=await sb.from('profiles').update(pd).eq('id',id);if(error){toast(error.message,'err');return;}const u=uById(id);if(u)Object.assign(u,{firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings});toast('Updated');}else{const pw=(g('u-pw')||'').trim();if(!pw){toast('Password required','err');return;}const{data:res,error}=await sb.functions.invoke('create-user',{body:{...pd,password:pw}});if(error||res?.error){let msg=error?.message||res?.error||'Failed';try{if(error?.context){const b=await error.context.json();msg=b.error||msg;}}catch(e){}toast(msg,'err');return;}DB.users.push({id:res.id,firstName:fn,lastName:ln,email,phone:pd.phone,position:pd.position,department:pd.department,role:pd.role,status:pd.status,managerId:mId,rules:pd.rules,approval:pd.approval_settings,password:'***'});toast('User created');}// Read doc permissions from modal checkboxes
+  const docAccess={departments:{},locations:{}};
+  document.querySelectorAll('.doc-perm-dept').forEach(cb=>{
+    const dept=cb.dataset.dept,p=cb.dataset.perm;
+    if(!docAccess.departments[dept])docAccess.departments[dept]={view:false,upload:false,download:false,edit:false};
+    docAccess.departments[dept][p]=cb.checked;
+  });
+  document.querySelectorAll('.doc-perm-loc').forEach(cb=>{
+    const loc=cb.dataset.loc,p=cb.dataset.perm;
+    if(!docAccess.locations[loc])docAccess.locations[loc]={view:false,upload:false,download:false,edit:false};
+    docAccess.locations[loc][p]=cb.checked;
+  });
+  if(id){await sb.from('profiles').update({doc_access:docAccess}).eq('id',id);const uu=uById(id);if(uu)uu.docAccess=docAccess;}
+  else{const newU=DB.users[DB.users.length-1];if(newU){newU.docAccess=docAccess;await sb.from('profiles').update({doc_access:docAccess}).eq('id',newU.id);}}
+  log(fullName(me()),id?'Edited user':'Created user',fn+' '+ln);closeModal();render();};
 App.resetPw=(id)=>{
   const u=uById(id);
   openModal(
@@ -2538,11 +2591,17 @@ App._docNav=(id)=>{S.filters.docFolder=id;rr();};
 
 // ── New folder ──
 App._newFolder=()=>{
+  const scope=S.filters.docScopeKey;
+  if(!scope){toast('Select a department or location first','warn');return;}
+  const parent=S.filters.docFolder||null;
+  const parentName=parent?(DB.folders||[]).find(f=>f.id===parent)?.name:'Root';
   openModal(
     '<div class="p-6">'
     +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">New folder</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-    +fld('Folder name','nf-name','')
-    +'<div class="flex gap-2 mt-4">'
+    +(parent?'<p style="font-size:12px;color:#9CA3AF;margin-bottom:12px">Inside: '+esc(parentName)+'</p>':'')
+    +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Folder name</label>'
+    +'<input id="nf-name" type="text" placeholder="e.g. Procurement, Inventory…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf" autofocus/></div>'
+    +'<div class="flex gap-2">'
     +'<button onclick="App.closeModal()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
     +'<button onclick="App._createFolder()" style="flex:1;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Create</button>'
     +'</div></div>',
@@ -2550,11 +2609,18 @@ App._newFolder=()=>{
   );
 };
 App._createFolder=()=>{
-  const name=$('#nf-name')?.value?.trim();if(!name){toast('Enter a name','err');return;}
-  const f={id:uid('fld'),name,type:S.filters.docScope||'dept',scope:S.filters.docScopeKey,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
+  const name=document.getElementById('nf-name')?.value?.trim();
+  if(!name){toast('Enter a folder name','err');return;}
+  const scope=S.filters.docScopeKey;
+  if(!scope){toast('No scope selected','err');return;}
   if(!DB.folders)DB.folders=[];
+  const f={id:uid('fld'),name,type:S.filters.docScope||'dept',scope,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
   DB.folders.push(f);
-  log(fullName(me()),'Created folder',name);toast('Folder created');closeModal();saveDB();rr();
+  // Direct Supabase write
+  sb.from('doc_folders').insert({id:f.id,name:f.name,parent_id:f.parentId,type:f.type,scope:f.scope,created_by:f.createdBy,created_at:f.createdAt}).catch(e=>console.warn('folder:',e));
+  log(fullName(me()),'Created folder',name);
+  toast('Folder "'+name+'" created');
+  closeModal();saveDB();rr();
 };
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
