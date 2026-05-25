@@ -308,6 +308,7 @@ const I={
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
   folder:'<path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>',
+  copy:'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
   flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
   cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
@@ -335,7 +336,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[]}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],status:c.status||'Active'}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -377,7 +378,7 @@ async function _sync(){
   await Promise.all([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[]})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],status:c.status||'Active'})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -1224,7 +1225,7 @@ let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(
       const ass=(c.assignees||[]).map(uById).filter(Boolean);
       const active=clOn(c,todayISO());
       const locs=(c.locationIds||[]).map(locById).filter(Boolean);
-      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('list','w-3 h-3 inline mr-0.5')}${(c.tasks||[]).length} tasks</span><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${isAdmin()?`<div class="flex gap-1"><button onclick="App.editCl('${c.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.delCl('${c.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button></div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
+      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}${c.status==='Draft'?'<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#FEF3C7;color:#92400E;margin-left:6px;vertical-align:middle">DRAFT</span>':''}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('list','w-3 h-3 inline mr-0.5')}${(c.tasks||[]).length} tasks</span><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${(isAdmin()||isMgr())?`<div class="flex gap-1"><button onclick="App.editCl('${c.id}')" title="Edit" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.dupCl('${c.id}')" title="Duplicate" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#EFF6FF';this.style.color='#3B82F6'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('copy','w-3.5 h-3.5')}</button>${isAdmin()?`<button onclick="App.delCl('${c.id}')" title="Delete" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button>`:''}</div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
     }).join('')}
     ${list.length?'':empty('list','No checklists','Create your first checklist.')}
   </div></div>`;}
@@ -1271,7 +1272,8 @@ function _renderClModal(editing){
           <textarea id="cn-desc" rows="2" placeholder="Brief description of this checklist's purpose…" class="w-full bg-white border-2 border-ink-200 focus:border-brand-500 rounded-xl px-3.5 py-3 text-sm rf transition resize-none">${esc(c.description)}</textarea>
         </div>
         <div class="grid grid-cols-2 gap-3">
-          ${selF('Department','cn-dep',DB.departments.map(d=>d.name),c.department)}
+          ${selF('Status','cn-status',['Active','Draft'],c?.status||'Active')}
+       ${selF('Department','cn-dep',DB.departments.map(d=>d.name),c.department)}
           <div>
             <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Frequency</label>
             <select id="cn-freq" onchange="App._freqChange(this.value)" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-3 text-sm font-medium rf">
@@ -1492,6 +1494,7 @@ App._addTask=()=>{if(!CLD.tasks)CLD.tasks=[];CLD.tasks.push({id:uid('t'),name:''
 App._refreshTasks=()=>{const el=$('#cn-tasks');if(el)el.innerHTML=CLD.tasks.map((t,i)=>_taskEditRow(t,i)).join('')||'<p class="text-sm text-ink-300 py-2">No tasks yet.</p>';};
 App._saveCl=async(editing)=>{
   CLD.name=$('#cn-name')?.value.trim();CLD.description=$('#cn-desc')?.value.trim();
+  CLD.status=$('#cn-status')?.value||'Active';
   CLD.department=$('#cn-dep')?.value;CLD.frequency=$('#cn-freq')?.value;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
@@ -1501,6 +1504,36 @@ App._saveCl=async(editing)=>{
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   toast(editing?'Saved':'Checklist created');closeModal();render();saveDB();
 };
+App.dupCl=async(id)=>{
+  const src=clById(id);if(!src)return;
+  const newId=uid('cl');
+  const copy=JSON.parse(JSON.stringify(src)); // deep clone
+  copy.id=newId;
+  copy.name='Duplicated — '+src.name;
+  copy.status='Draft';          // always draft so it can be reviewed before going live
+  copy.assignees=[];            // clear assignees — manager will assign fresh
+  copy.startDate='';
+  copy.endDate='';
+  // Give each task a fresh ID to avoid any ID collisions
+  (copy.tasks||[]).forEach(t=>{t.id=uid('t');});
+  DB.checklists.unshift(copy);  // show at top of list
+  // Sync to Supabase
+  await sb.from('checklists').insert({
+    id:copy.id,name:copy.name,description:copy.description||'',
+    department:copy.department||'',frequency:copy.frequency||'Daily',
+    schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
+    selected_dates:copy.selectedDates||[],custom_dates:copy.customDates||[],
+    start_date:null,end_date:null,
+    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],
+    status:'Draft'
+  }).catch(e=>console.warn('dupCl sync:',e));
+  log(fullName(me()),'Duplicated checklist',src.name);
+  toast('✓ Duplicated — edit and activate when ready');
+  saveDB();rr();
+  // Auto-open the editor so they can review immediately
+  setTimeout(()=>App.editCl(newId),400);
+};
+
 App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('issues').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.issues=(DB.issues||[]).filter(x=>x.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
