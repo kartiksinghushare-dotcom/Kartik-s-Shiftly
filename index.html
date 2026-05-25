@@ -456,7 +456,10 @@ function isDesc(a,b){return subTree(b).some(u=>u.id===a);}
 const uById=id=>DB.users.find(u=>u.id===id);
 const clById=id=>DB.checklists.find(c=>c.id===id);
 const locById=id=>DB.locations.find(l=>l.id===id);
-function myCls(uid,date){return DB.checklists.filter(c=>(c.assignees||[]).includes(uid)&&clOn(c,date));}
+function myCls(uid,date){
+  const assigned=DB.checklists.filter(c=>(c.assignees||[]).includes(uid)&&clOn(c,date));
+  return assigned;
+}
 const subFor=(clId,uid,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);
 
 /* ===== AVATARS ===== */
@@ -1451,8 +1454,9 @@ function myClsPage(){
       ?dayCls.map(c=>_clCard(c,sel)).join('')
       :`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8">
           <div style="font-size:40px;margin-bottom:10px">✅</div>
-          <div class="fd" style="font-size:17px;font-weight:800;color:#111110">All clear</div>
-          <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${sel>today?'Nothing scheduled yet':'No checklists today'}</p>
+          <div class="fd" style="font-size:17px;font-weight:800;color:#111110">${sel>today?'Nothing scheduled':'All clear'}</div>
+          <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${sel>today?'No checklists for this date':isAdmin()&&DB.checklists.length?'You are not assigned to any checklist. Go to Checklists → edit → assign yourself.':'No checklists scheduled'}</p>
+          ${isAdmin()&&DB.checklists.length?`<button onclick="App.go('checklists')" style="margin-top:12px;padding:8px 20px;border-radius:10px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Go to Checklists</button>`:''}
         </div>`}
   </div></div>`;
 }
@@ -1643,9 +1647,8 @@ App._submitRun=(clId,date)=>{
     // Issue-flagged tasks need response='Issue' AND a comment
     if(rt.response===null||rt.response===undefined){toast('Complete "'+t.name+'" — tap Done/Pass/Yes or flag an issue','warn');return;}
     if(rt.issue&&!rt.issueComment?.trim()){toast('Issue comment required for "'+t.name+'"','warn');return;}
-    if(t.photo&&!rt.photo&&!rt.issue){toast('Photo required for "'+t.name+'"','warn');return;}
-    // only validate comment if comment UI was rendered (non-issue path)
-    if(t.comment&&!rt.comment?.trim()&&!rt.issue){toast('Comment required for "'+t.name+'"','warn');return;}
+    // Photo is encouraged but not blocking (user may not have ability)
+    // Comment is optional
   }
   const today=todayISO();
   const late=(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))||date<today;
@@ -1705,7 +1708,9 @@ App._sendReq=(clId,date)=>{
 function teamViewPage(){
   // If no user selected → show team member picker
   if(!S.tvUser){
-    const team=subTree(S.uid);
+    // Managers see DIRECT reports only, not the full recursive tree
+    const directReports=DB.users.filter(u=>u.managerId===S.uid&&u.id!==S.uid);
+    const team=isAdmin()?subTree(S.uid):directReports;
     if(!team.length)return myClsPage();
     return`<div class="fade">
       ${hdr('Team','Select a team member to view their checklists')}
@@ -2060,7 +2065,19 @@ App._saveFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);const text=$('#
 App._setTab=(t)=>{S.filters.atab=t;rr();};
 App._decideApprove=(id)=>App._decide(id,'Approved');
 App._decideReject=(id)=>App._decide(id,'Rejected');
-App._viewSubFor=(btn)=>{const s=DB.submissions.find(x=>x.checklistId===btn.dataset.cl&&x.userId===btn.dataset.uid&&x.date===btn.dataset.dt);if(s)App.viewSub(s.id);else toast('No submission yet','warn');};
+App._viewSubFor=async(btn)=>{
+  let s=DB.submissions.find(x=>x.checklistId===btn.dataset.cl&&x.userId===btn.dataset.uid&&x.date===btn.dataset.dt);
+  if(!s){
+    // Try loading from Supabase
+    const{data}=await sb.from('submissions').select('*').eq('checklist_id',btn.dataset.cl).eq('user_id',btn.dataset.uid).eq('date',btn.dataset.dt).single();
+    if(data){
+      s={id:data.id,checklistId:data.checklist_id,userId:data.user_id,date:data.date,status:data.status||'Pending',submittedAt:data.submitted_at||null,tasks:data.tasks||[],editCount:data.edit_count||0,editHistory:data.edit_history||[]};
+      DB.submissions.push(s);
+    }
+  }
+  if(s)App.viewSub(s.id);
+  else toast('No submission found for this date','warn');
+};
 App._resolveIssue=(id)=>{
   const iss=DB.issues.find(x=>x.id===id);if(!iss)return;
   iss.status='Resolved';iss.resolvedAt=new Date().toISOString();iss.resolvedBy=S.uid;iss.updatedAt=new Date().toISOString();
