@@ -311,10 +311,7 @@ const I={
   copy:'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   unlock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
-  lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
-  unlock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
   upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
-  flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><line x1="4" y1="22" x2="4" y2="15"/>',
   cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   chevR:'<path d="M9 18l6-6-6-6"/>',
@@ -341,7 +338,7 @@ const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="
 const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},password:'***'}));}
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],status:c.status||'Active',createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
@@ -374,7 +371,17 @@ async function loadFromSB(){
   if(appr&&appr.length>=0)DB.approvals=_mA(appr);
   DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
   DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
-  DB.users=_mU(profiles);DB.feedback=DB.feedback||[];
+  // Preserve local-only tables (tickets, questionLists) before overwriting DB
+  const _savedTickets=DB.tickets||[];
+  const _savedQLists=DB.questionLists||[];
+  // Preserve questionsAccess set locally (in case Supabase profile column doesn't exist yet)
+  const _savedQAccess={};DB.users.forEach(u=>{if(u.questionsAccess)_savedQAccess[u.id]=true;});
+  DB.users=_mU(profiles);
+  // Re-apply questionsAccess from local snapshot for users where Supabase returned false
+  DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
+  DB.tickets=_savedTickets;
+  DB.questionLists=_savedQLists;
+  DB.feedback=DB.feedback||[];
   if(issues)DB.issues=issues.map(iss=>({id:iss.id,submissionId:iss.submission_id||null,checklistId:iss.checklist_id,userId:iss.user_id,date:iss.date,taskIndex:iss.task_index,taskName:iss.task_name||'',comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',managerNotes:iss.manager_notes||[],createdAt:iss.created_at,updatedAt:iss.updated_at||iss.created_at}));
   if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
   if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
@@ -436,7 +443,7 @@ function seed(){
     {id:uid('loc'),name:'Housekeeping Depot',address:'Ground Floor, East Wing',department:'Housekeeping',status:'Active'},
     {id:uid('loc'),name:'Restaurant Floor',address:'Level 2, South Wing',department:'Food & Beverage',status:'Active'},
   ];
-  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];DB.issues=[];DB.notifications=[];
+  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];DB.issues=[];DB.notifications=[];DB.questionLists=[];DB.tickets=[];
   log('System','Workspace initialised','');
 }
 
@@ -458,7 +465,7 @@ function loadDB(){
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
     ['users','departments','locations','checklists','submissions','approvals','feedback','issues','folders','documents','audit','notifications','questionLists','tickets'].forEach(k=>{if(!DB[k])DB[k]=[];});
-    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};if(!u.hasOwnProperty('questionsAccess'))u.questionsAccess=false;});
+    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};if(u.questionsAccess===undefined)u.questionsAccess=false;});
     S.uid=p.uid||null;return true;
   }catch(e){return false;}
 }
@@ -585,7 +592,14 @@ App.rr=rr;
 
 function shell(content){
   const u=me();const nav=navFor();
-  const mob=isAdmin()?MOB_ADM:isMgr()?MOB_MGR:MOB_USR;
+  // Dynamic mobile nav — add 'questions' slot if user has questionsAccess
+  let mob=isAdmin()?[...MOB_ADM]:isMgr()?[...MOB_MGR]:[...MOB_USR];
+  if(!isAdmin()&&me()?.questionsAccess&&!mob.includes('questions')){
+    // Insert after first item (mychecklists)
+    mob.splice(1,0,'questions');
+    // Keep max 5 items + more; push overflow to 'more'
+    if(mob.length>5)mob=[...mob.slice(0,4),'more'];
+  }
   const unread=DB.notifications.filter(n=>n.userId===S.uid&&!n.read).length;
 
   const notifBadge=_notifCount();
@@ -905,7 +919,10 @@ App.saveUser=async(id)=>{
     status:$('#u-status')?.value,manager_id:mId||null,
     rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},
     approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')},
-    doc_access:docAccess};
+    doc_access:docAccess,questions_access:questionsAccess};
+
+  // ── Read toggles NOW, before closeModal destroys the DOM ──
+  const questionsAccess=togV('u-qa');
 
   if(id){
     // Update local state immediately
@@ -914,8 +931,10 @@ App.saveUser=async(id)=>{
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
       rules:pd.rules,approval:pd.approval_settings,
-      questionsAccess:togV('u-qa'),
+      questionsAccess,
       docAccess});
+    // Add questionsAccess to the Supabase payload too
+    pd.questions_access=questionsAccess;
     log(fullName(me()),'Edited user',fn+' '+ln);
     toast('Saved ✓');closeModal();saveDB();render();
     // Sync all fields including doc_access to Supabase in background
@@ -941,7 +960,7 @@ App.saveUser=async(id)=>{
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
       rules:pd.rules,approval:pd.approval_settings,
-      questionsAccess:togV('u-qa'),
+      questionsAccess,
       docAccess,password:'***'});
     // Save doc_access for new user too
     sb.from('profiles').update({doc_access:docAccess}).eq('id',newId).catch(()=>{});
@@ -1990,8 +2009,8 @@ App._submitRun=(clId,date)=>{
     if(adminU2&&adminU2.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false});
   }
   log(fullName(u),'Submitted '+run.status,c.name);
-  toast(hasIssues?'Submitted with issues':needsAppr?'Pending approval':late?'Submitted (late)':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];saveDB();rr();
+  toast(hasIssues?'Submitted with issues ⚑':needsAppr?'Submitted — pending approval':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
+  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];S.expandedCl=null;saveDB();render();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -2322,7 +2341,7 @@ App._decide=(id,status)=>{
   if(s)sb.from('submissions').update({status:s.status}).eq('id',s.id).catch(()=>{});
   log(fullName(me()),status+' '+a.type,fullName(u));
   _invalidateNotifCache();saveDB();toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
-  rr();
+  render();
 };
 
 App.viewSub=(subId)=>{
@@ -3405,7 +3424,9 @@ App._delDoc=(id)=>{
 function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
-(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();
+      // Snapshot local-only fields before loadFromSB overwrites DB
+      loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 /* ===== QUESTIONS & TICKETS ===== */
 
@@ -3500,7 +3521,7 @@ App._confirmFlagWithQuestion=(clId,taskIdx)=>{
   }
   log(fullName(me()),'Created ticket',ticketTitle);
   toast('Ticket created ✓');
-  closeModal();saveDB();rr();
+  closeModal();saveDB();render();
 };
 
 // Questions page — admin AND users with questionsAccess get full management view
@@ -3605,7 +3626,7 @@ App._resolveTicket=(id)=>{
   const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
   tk.status='Resolved';tk.resolvedBy=S.uid;tk.resolvedAt=new Date().toISOString();
   log(fullName(me()),'Resolved ticket',tk.questionText);
-  toast('Ticket resolved ✓');saveDB();rr();
+  toast('Ticket resolved ✓');saveDB();render();
 };
 
 App._editTicket=(id)=>{
@@ -3635,7 +3656,7 @@ App._saveTicketEdit=(id)=>{
   }
   tk.assignedTo=newAssignee||null;
   tk.notes=$('#tk-notes')?.value.trim()||'';
-  toast('Saved ✓');closeModal();saveDB();rr();
+  toast('Saved ✓');closeModal();saveDB();render();
 };
 
 // Question List CRUD
@@ -3660,7 +3681,7 @@ App._editQL=(id)=>{
       <button onclick="App._saveQL('${id||''}')" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${ql?'Save':'Create'}</button>
     </div>
   </div>`,'max-w-lg');
-  window._qlQuestions=ql?JSON.parse(JSON.stringify(ql.questions||[])):[];
+  window._qlQuestions=ql?JSON.parse(JSON.stringify(ql.questions||[])):[];window._editingQLId=id||null;
 };
 
 function _qlQRow(q,qi){
@@ -3689,7 +3710,7 @@ App._saveQL=(id)=>{
   } else {
     DB.questionLists.push({id:uid('ql'),name,questions});
   }
-  toast(id?'Saved ✓':'Question list created ✓');closeModal();saveDB();rr();
+  toast(id?'Saved ✓':'Question list created ✓');closeModal();saveDB();render();
 };
 
 App._delQL=(id)=>{
@@ -3697,7 +3718,7 @@ App._delQL=(id)=>{
   DB.questionLists=(DB.questionLists||[]).filter(x=>x.id!==id);
   // Remove references from tasks
   DB.checklists.forEach(c=>(c.tasks||[]).forEach(t=>{if(t.questionListId===id)t.questionListId=null;}));
-  toast('Deleted','warn');saveDB();rr();
+  toast('Deleted','warn');saveDB();render();
 };
 
 App._exportCSV=()=>{
