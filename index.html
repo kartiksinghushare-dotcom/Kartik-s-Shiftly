@@ -531,9 +531,10 @@ function _notifCount(){
   _notifCache={uid,count,ts:now};
   return count;
 }
-// Open ticket count for Questions badge (separate so nav can use it)
+// Open ticket count for Tickets badge — personal for normal users, all open for admin/questionsAccess
 function _myOpenTicketCount(){
   const uid=S.uid;if(!uid)return 0;
+  if(isAdmin()||me()?.questionsAccess)return (DB.tickets||[]).filter(tk=>tk.status==='Open').length;
   return (DB.tickets||[]).filter(tk=>tk.assignedTo===uid&&tk.status==='Open').length;
 }
 function _invalidateNotifCache(){_notifCache.ts=0;}
@@ -552,12 +553,12 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
-const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
-const MOB_ADM=['dashboard','mychecklists','questions','notifications','more'];
-const MOB_USR=['mychecklists','notifications'];
-const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
+const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
+const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
+const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
+const MOB_USR=['mychecklists','tickets','notifications'];
+const MOB_MGR=['mychecklists','tickets','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
@@ -592,12 +593,10 @@ App.rr=rr;
 
 function shell(content){
   const u=me();const nav=navFor();
-  // Dynamic mobile nav — add 'questions' slot if user has questionsAccess
+  // Mobile nav: base array; add 'questions' for questionsAccess non-admin users
   let mob=isAdmin()?[...MOB_ADM]:isMgr()?[...MOB_MGR]:[...MOB_USR];
   if(!isAdmin()&&me()?.questionsAccess&&!mob.includes('questions')){
-    // Insert after first item (mychecklists)
     mob.splice(1,0,'questions');
-    // Keep max 5 items + more; push overflow to 'more'
     if(mob.length>5)mob=[...mob.slice(0,4),'more'];
   }
   const unread=DB.notifications.filter(n=>n.userId===S.uid&&!n.read).length;
@@ -607,7 +606,8 @@ function shell(content){
     const act=S.route===r;
     let badge='';
     if(r==='notifications'&&notifBadge)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`;
-    if(r==='questions'){const qb=isAdmin()?(DB.tickets||[]).filter(t=>t.status==='Open').length:_myOpenTicketCount();if(qb)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${qb}</span>`;}
+    if(r==='questions'){const qb=(DB.questionLists||[]).length;if(qb)badge=`<span style="font-size:10px;font-weight:800;background:#1D4ED8;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${qb}</span>`;}
+    if(r==='tickets'){const tb=_myOpenTicketCount();if(tb)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${tb}</span>`;}
     return`<button onclick="App.go('${r}')"
     style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${act?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
     onmouseover="if('${S.route}'!=='${r}')this.style.background='rgba(255,255,255,.07)';this.style.color='#fff'"
@@ -658,7 +658,7 @@ function shell(content){
         const act=S.route===r;
         let nb=0;
         if(r==='notifications')nb=_notifCount();
-        if(r==='questions')nb=isAdmin()?(DB.tickets||[]).filter(t=>t.status==='Open').length:_myOpenTicketCount();
+        if(r==='tickets')nb=_myOpenTicketCount();
         return`<button onclick="App.go('${r}')" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:${act?'#0E9F6E':'#9CA3AF'}">${ic(m[1],'w-5 h-5')}${nb?`<span style="position:absolute;top:4px;right:calc(50% - 18px);font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:16px;text-align:center">${nb}</span>`:''}<span style="font-size:10px;font-weight:600">${m[2].split(' ')[0]}</span></button>`;
       }).join('')}
     </div>
@@ -708,7 +708,8 @@ function pageContent(){
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
   if(r==='documents')return documentsPage();
-  if(r==='questions')return questionsPage();
+  if(r==='questions'){if(isAdmin()||me()?.questionsAccess)return questionsPage();S.route='tickets';return ticketsPage();}
+  if(r==='tickets')return ticketsPage();
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
   if(r==='profile')return profilePage();
@@ -3524,102 +3525,102 @@ App._confirmFlagWithQuestion=(clId,taskIdx)=>{
   closeModal();saveDB();render();
 };
 
-// Questions page — admin AND users with questionsAccess get full management view
+// ── QUESTIONS PAGE — access-gated (admin + questionsAccess users) — lists management only ──
 function questionsPage(){
-  const canManage=isAdmin()||me()?.questionsAccess;
-  if(canManage)return questionsAdminPage();
-  return empty('help','No access','Contact your admin to get access to Questions');
-}
-
-function questionsAdminPage(){
   const lists=DB.questionLists||[];
-  const tickets=DB.tickets||[];
-  const tab=S.filters.qTab||'lists';
-  const openCount=tickets.filter(t=>t.status==='Open').length;
-
-  return`<div class="fade">${hdr('Questions','Question lists & issue tickets',btnP('New Question List','App._newQL()','plus'))}
-  <!-- Tab bar -->
-  <div style="display:flex;gap:2px;background:#F5F4F0;border-radius:10px;padding:2px;margin-bottom:20px;width:fit-content">
-    <button onclick="S.filters.qTab='lists';rr()" style="padding:7px 20px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;${tab==='lists'?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.1)':'background:transparent;color:#9CA3AF'}">
-      ${ic('help','w-4 h-4 inline')} Question Lists
-    </button>
-    <button onclick="S.filters.qTab='tickets';rr()" style="display:flex;align-items:center;gap:6px;padding:7px 20px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;${tab==='tickets'?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.1)':'background:transparent;color:#9CA3AF'}">
-      ${ic('ticket','w-4 h-4')} Tickets ${openCount?`<span style="background:#EF4444;color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px">${openCount}</span>`:''}
-    </button>
-  </div>
-
-  ${tab==='lists'
-    ?(!lists.length
-      ?empty('help','No question lists yet','Create a list, add questions, and assign each to a user. Attach the list to any checklist task.')
-      :`<div class="space-y-3">
-        ${lists.map(ql=>`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.05)">
+  return`<div class="fade">${hdr('Questions','Manage question lists',btnP('New Question List','App._newQL()','plus'))}
+  ${!lists.length
+    ?empty('help','No question lists yet','Create a list, add questions, and assign each to a user. Then attach the list to a checklist task — when a user flags that task it will trigger a ticket.')
+    :`<div class="space-y-3">
+      ${lists.map(ql=>{
+        const openTk=(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length;
+        return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.05)">
           <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #F5F4F0">
             <div style="width:38px;height:38px;background:#EFF6FF;border-radius:10px;display:grid;place-items:center;color:#1D4ED8;flex-shrink:0">${ic('help','w-4 h-4')}</div>
             <div style="flex:1;min-width:0">
               <div class="fd" style="font-size:15px;font-weight:700">${esc(ql.name)}</div>
-              <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(ql.questions||[]).length} question${(ql.questions||[]).length!==1?'s':''} · ${(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length} open ticket${(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length!==1?'s':''}</div>
+              <div style="display:flex;gap:10px;margin-top:3px;flex-wrap:wrap">
+                <span style="font-size:12px;color:#9CA3AF">${(ql.questions||[]).length} question${(ql.questions||[]).length!==1?'s':''}</span>
+                ${openTk?`<span style="font-size:12px;font-weight:700;color:#EF4444">● ${openTk} open ticket${openTk!==1?'s':''}</span>`:`<span style="font-size:12px;color:#10B981">✓ No open tickets</span>`}
+              </div>
             </div>
-            <div style="display:flex;gap:6px">
-              <button onclick="App._editQL('${ql.id}')" style="padding:6px 14px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>
+            <div style="display:flex;gap:6px;flex-shrink:0">
+              <button onclick="App._editQL('${ql.id}')" style="padding:6px 14px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>
               <button onclick="App._delQL('${ql.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-4 h-4')}</button>
             </div>
           </div>
-          ${!(ql.questions||[]).length?`<div style="padding:14px 18px;font-size:13px;color:#D1D5DB;text-align:center">No questions — edit to add some</div>`:
-          (ql.questions||[]).map((q,qi)=>{const u=uById(q.assignedTo);return`<div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid #F5F4F0">
-            <span style="font-size:10px;font-weight:700;color:#C8C5BD;width:18px;text-align:center;flex-shrink:0">${qi+1}</span>
-            <div style="flex:1;font-size:13px;color:#15171C">${esc(q.text)}</div>
-            ${u?`<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${avatar(u,'w-6 h-6','text-[9px]')}<span style="font-size:12px;font-weight:600;color:#6B7280">${esc(fullName(u))}</span></div>`:`<span style="font-size:11px;color:#D1D5DB;flex-shrink:0">Unassigned</span>`}
-          </div>`;}).join('')}
-        </div>`).join('')}
-      </div>`)
-    :`${_ticketsTable(tickets,true)}`}
+          ${!(ql.questions||[]).length
+            ?`<div style="padding:14px 18px;font-size:13px;color:#D1D5DB;text-align:center;font-style:italic">No questions yet — click Edit to add some</div>`
+            :(ql.questions||[]).map((q,qi)=>{const u=uById(q.assignedTo);return`<div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid #F9F8F5">
+              <span style="font-size:10px;font-weight:700;color:#C8C5BD;width:18px;text-align:center;flex-shrink:0">${qi+1}</span>
+              <div style="flex:1;font-size:13px;color:#15171C">${esc(q.text)}</div>
+              ${u
+                ?`<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${avatar(u,'w-6 h-6','text-[9px]')}<span style="font-size:12px;font-weight:600;color:#6B7280">${esc(fullName(u))}</span></div>`
+                :`<span style="font-size:11px;font-style:italic;color:#D1D5DB;flex-shrink:0">Unassigned</span>`}
+            </div>`;}).join('')}
+        </div>`;
+      }).join('')}
+    </div>`}
   </div>`;
 }
 
-function _ticketsTable(tickets,isAdm){
+// ── TICKETS PAGE — visible to everyone; each user sees their assigned tickets ──
+// Admins + questionsAccess users see ALL tickets with full controls
+function ticketsPage(){
+  const canManageAll=isAdmin()||me()?.questionsAccess;
+  const allTickets=DB.tickets||[];
+  const myTickets=canManageAll?allTickets:allTickets.filter(tk=>tk.assignedTo===S.uid);
   const statusFilter=S.filters.tkStat||'';
-  let list=statusFilter?tickets.filter(t=>t.status===statusFilter):tickets;
-  const open=tickets.filter(t=>t.status==='Open').length;
-  const resolved=tickets.filter(t=>t.status==='Resolved').length;
-  if(!tickets.length)return empty('ticket','No tickets yet','Tickets are created when a user flags an issue on a task that has a question list attached');
-  return`<div>
+  const list=statusFilter?myTickets.filter(t=>t.status===statusFilter):myTickets;
+  const openCount=myTickets.filter(t=>t.status==='Open').length;
+  const resolvedCount=myTickets.filter(t=>t.status==='Resolved').length;
+
+  return`<div class="fade">${hdr('Tickets',canManageAll?'All issue tickets':'Your assigned tickets')}
+  <!-- Filter pills -->
   <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
-    ${[['','All',tickets.length],['Open','Open',open],['Resolved','Resolved',resolved]].map(([s,l,n])=>`<button onclick="S.filters.tkStat='${s}';rr()" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .12s;${statusFilter===s?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.65">(${n})</span></button>`).join('')}
+    ${[['','All',myTickets.length],['Open','Open',openCount],['Resolved','Resolved',resolvedCount]].map(([s,l,n])=>`<button onclick="S.filters.tkStat='${s}';rr()" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .12s;${statusFilter===s?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.6">(${n})</span></button>`).join('')}
   </div>
-  ${!list.length?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${statusFilter.toLowerCase()} tickets</div>`:''}
-  <div class="space-y-3">
-  ${list.map(tk=>{
-    const creator=uById(tk.createdBy);const assignee=uById(tk.assignedTo);
-    const isOpen=tk.status==='Open';
-    const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
-    const resolvedAt=tk.resolvedAt?new Date(tk.resolvedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-    return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${isOpen?'#EF4444':'#10B981'};overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">
-      <div style="padding:14px 16px">
-        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
-              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;${isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534'}">${tk.status}</span>
-              <span style="font-size:11px;color:#B8B5AC">${createdAt}</span>
-              ${creator?`<span style="font-size:11px;color:#B8B5AC">by ${esc(fullName(creator))}</span>`:''}
+
+  ${!myTickets.length
+    ?empty('ticket','No tickets yet',canManageAll?'Tickets appear when users flag issues on tasks with a question list attached':'You have no tickets assigned to you')
+    :!list.length
+      ?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${statusFilter.toLowerCase()} tickets</div>`
+      :`<div class="space-y-3">
+        ${list.map(tk=>{
+          const creator=uById(tk.createdBy);const assignee=uById(tk.assignedTo);
+          const isOpen=tk.status==='Open';
+          const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+          const resolvedAt=tk.resolvedAt?new Date(tk.resolvedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+          return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${isOpen?'#EF4444':'#10B981'};overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">
+            <div style="padding:14px 16px">
+              <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                <div style="flex:1;min-width:0">
+                  <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                    <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;${isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534'}">${tk.status}</span>
+                    <span style="font-size:11px;color:#B8B5AC">${createdAt}</span>
+                    ${creator?`<span style="font-size:11px;color:#B8B5AC">by ${esc(fullName(creator))}</span>`:''}
+                  </div>
+                  <div style="font-size:12px;color:#9CA3AF;font-weight:500;margin-bottom:3px">${esc(tk.checklistName)} › ${esc(tk.taskName)}</div>
+                  <div class="fd" style="font-size:15px;font-weight:700;color:#15171C;margin-bottom:8px">${esc(tk.questionText)}</div>
+                  ${tk.comment?`<div style="background:#FFF5F5;border:1px solid #FEE2E2;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;line-height:1.5">${esc(tk.comment)}</div>`:''}
+                </div>
+                <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+                  ${assignee
+                    ?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-7 h-7','text-[10px]')}<div><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`
+                    :`<span style="font-size:11px;font-weight:600;color:#D1D5DB;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</span>`}
+                  <div style="display:flex;gap:6px">
+                    ${canManageAll?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>`:''}
+                    ${isOpen?`<button onclick="App._resolveTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Mark Resolved</button>`:''}
+                  </div>
+                </div>
+              </div>
+              ${tk.notes?`<div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12px;color:#374151;border:1px solid #ECEDF0">📝 ${esc(tk.notes)}</div>`:''}
+              ${!isOpen&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
             </div>
-            <div style="font-size:12px;color:#9CA3AF;font-weight:500;margin-bottom:3px">${esc(tk.checklistName)} › ${esc(tk.taskName)}</div>
-            <div class="fd" style="font-size:15px;font-weight:700;color:#15171C;margin-bottom:8px">${esc(tk.questionText)}</div>
-            ${tk.comment?`<div style="background:#FFF5F5;border:1px solid #FEE2E2;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;line-height:1.5">${esc(tk.comment)}</div>`:''}
-          </div>
-          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
-            ${assignee?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-7 h-7','text-[10px]')}<div style="text-align:right"><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`:`<span style="font-size:11px;font-weight:600;color:#D1D5DB;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</span>`}
-            <div style="display:flex;gap:6px">
-              ${isAdm?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>`:''}
-              ${isOpen?`<button onclick="App._resolveTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer">Mark Resolved</button>`:''}
-            </div>
-          </div>
-        </div>
-        ${tk.notes?`<div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12px;color:#374151;border:1px solid #ECEDF0">📝 ${esc(tk.notes)}</div>`:''}
-        ${!isOpen&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
-      </div>
-    </div>`;
-  }).join('')}
-  </div></div>`;
+          </div>`;
+        }).join('')}
+      </div>`}
+  </div>`;
 }
 
 App._resolveTicket=(id)=>{
