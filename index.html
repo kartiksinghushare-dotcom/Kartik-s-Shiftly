@@ -331,6 +331,8 @@ const I={
   flag:'<path d="M4 15s1-1 4-1 5 2 8 2 4-1 4-1V3s-1 1-4 1-5-2-8-2-4 1-4 1z"/><path d="M4 22v-7"/>',
   alert:'<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><path d="M12 9v4M12 17h.01"/>',
   doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
+  help:`<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/>`,
+  ticket:`<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 17v2M13 11v2"/>`,
 };
 const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]||''}</svg>`;
 
@@ -423,7 +425,7 @@ const critBadge=c=>`<span style="font-size:10px;font-weight:700;padding:1px 6px;
 const DEPTS=['Operations','Housekeeping','Front Office','Maintenance','Food & Beverage','Security'];
 let DB={
   departments:DEPTS.map(n=>({id:uid('d'),name:n})),
-  users:[],checklists:[],submissions:[],approvals:[],feedback:[],issues:[],folders:[],documents:[],locations:[],audit:[],notifications:[]
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],issues:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questionLists:[],tickets:[]
 };
 function log(a,b,c){if(!a||!b)return;if(DB.audit.length>200)DB.audit.length=200;DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
 function seed(){
@@ -455,8 +457,8 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','issues','folders','documents','audit','notifications'].forEach(k=>{if(!DB[k])DB[k]=[];});
-    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','issues','folders','documents','audit','notifications','questionLists','tickets'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};if(!u.hasOwnProperty('questionsAccess'))u.questionsAccess=false;});
     S.uid=p.uid||null;return true;
   }catch(e){return false;}
 }
@@ -522,6 +524,11 @@ function _notifCount(){
   _notifCache={uid,count,ts:now};
   return count;
 }
+// Open ticket count for Questions badge (separate so nav can use it)
+function _myOpenTicketCount(){
+  const uid=S.uid;if(!uid)return 0;
+  return (DB.tickets||[]).filter(tk=>tk.assignedTo===uid&&tk.status==='Open').length;
+}
 function _invalidateNotifCache(){_notifCache.ts=0;}
 
 // B11 fix: recover submissions stuck in 'Editing' if RUN cache lost
@@ -538,15 +545,19 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
 const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
-const MOB_ADM=['dashboard','mychecklists','approvals','notifications','more'];
+const MOB_ADM=['dashboard','mychecklists','questions','notifications','more'];
 const MOB_USR=['mychecklists','notifications'];
 const MOB_MGR=['mychecklists','teamview','approvals','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
+  // Users with questionsAccess see the Questions tab
+  if(!isAdmin()&&me()?.questionsAccess){
+    if(!base.find(n=>n[0]==='questions'))base.splice(1,0,['questions','help','Questions']);
+  }
   // Users/managers with doc access see Departments and/or Locations tab (filtered)
   if(!isAdmin()&&hasDocAccess()){
     const da=(me()?.docAccess)||{};
@@ -578,11 +589,17 @@ function shell(content){
   const unread=DB.notifications.filter(n=>n.userId===S.uid&&!n.read).length;
 
   const notifBadge=_notifCount();
-  const sideLinks=nav.map(([r,i,l])=>`<button onclick="App.go('${r}')"
-    style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${S.route===r?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
+  const sideLinks=nav.map(([r,i,l])=>{
+    const act=S.route===r;
+    let badge='';
+    if(r==='notifications'&&notifBadge)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`;
+    if(r==='questions'){const qb=isAdmin()?(DB.tickets||[]).filter(t=>t.status==='Open').length:_myOpenTicketCount();if(qb)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${qb}</span>`;}
+    return`<button onclick="App.go('${r}')"
+    style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${act?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
     onmouseover="if('${S.route}'!=='${r}')this.style.background='rgba(255,255,255,.07)';this.style.color='#fff'"
     onmouseout="if('${S.route}'!=='${r}'){this.style.background='transparent';this.style.color='rgba(255,255,255,.55)'}"
-  ><span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic(i,'w-[17px] h-[17px]')}</span><span style="flex:1">${l}</span>${r==='notifications'&&notifBadge?`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`:''}</button>`).join('');
+  ><span style="width:18px;height:18px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${ic(i,'w-[17px] h-[17px]')}</span><span style="flex:1">${l}</span>${badge}</button>`;
+  }).join('');
 
   return`<div style="min-height:100vh;display:flex">
   <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="background:#15171C;color:#fff">
@@ -625,7 +642,9 @@ function shell(content){
         if(r==='more')return`<button onclick="App.moreMenu()" style="display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('grid','w-5 h-5')}<span style="font-size:10px;font-weight:600">More</span></button>`;
         const m=[...NAV_ADM,...NAV_USR,...(typeof NAV_MGR!=='undefined'?NAV_MGR:[])].find(n=>n[0]===r);if(!m)return'';
         const act=S.route===r;
-        const nb=r==='notifications'?_notifCount():0;
+        let nb=0;
+        if(r==='notifications')nb=_notifCount();
+        if(r==='questions')nb=isAdmin()?(DB.tickets||[]).filter(t=>t.status==='Open').length:_myOpenTicketCount();
         return`<button onclick="App.go('${r}')" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:${act?'#0E9F6E':'#9CA3AF'}">${ic(m[1],'w-5 h-5')}${nb?`<span style="position:absolute;top:4px;right:calc(50% - 18px);font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:16px;text-align:center">${nb}</span>`:''}<span style="font-size:10px;font-weight:600">${m[2].split(' ')[0]}</span></button>`;
       }).join('')}
     </div>
@@ -675,6 +694,7 @@ function pageContent(){
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
   if(r==='documents')return documentsPage();
+  if(r==='questions')return questionsPage();
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
   if(r==='profile')return profilePage();
@@ -853,6 +873,7 @@ App.editUser=(id=null)=>{
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??false,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??false,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??true,'Past entries')}${mkTog('u-af',u?.approval?.future??true,'Future entries')}${mkTog('u-ae',u?.approval?.edited??true,'Edited entries')}</div>
+    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Tab Access</p>${mkTog('u-qa',u?.questionsAccess??false,'Access to Questions tab')}</div>
     ${_docAccessSection(u)}
   </div>
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveUser('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
@@ -893,7 +914,8 @@ App.saveUser=async(id)=>{
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
       rules:pd.rules,approval:pd.approval_settings,
-      docAccess}); // ← docAccess now included
+      questionsAccess:togV('u-qa'),
+      docAccess});
     log(fullName(me()),'Edited user',fn+' '+ln);
     toast('Saved ✓');closeModal();saveDB();render();
     // Sync all fields including doc_access to Supabase in background
@@ -919,6 +941,7 @@ App.saveUser=async(id)=>{
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
       rules:pd.rules,approval:pd.approval_settings,
+      questionsAccess:togV('u-qa'),
       docAccess,password:'***'});
     // Save doc_access for new user too
     sb.from('profiles').update({doc_access:docAccess}).eq('id',newId).catch(()=>{});
@@ -1581,11 +1604,18 @@ function _taskEditRow(t,i){
       <input value="${esc(t.description||'')}" onchange="CLD.tasks[${i}].description=this.value" placeholder="Description (optional)"
         style="width:100%;background:transparent;border:none;border-bottom:1px solid #F3F4F6;font-size:12px;color:#9CA3AF;outline:none;padding:2px 0"/>
       ${rt==='dropdown'?`<input value="${esc((t.dropdownOptions||[]).join(', '))}" onchange="CLD.tasks[${i}].dropdownOptions=this.value.split(',').map(x=>x.trim()).filter(Boolean)" placeholder="Dropdown options: Good, Average, Bad (comma-separated)" style="width:100%;background:#F6F7F8;border:1px solid #ECEDF0;border-radius:7px;padding:4px 9px;font-size:12px;outline:none"/>`:'' }
+      <div style="display:flex;align-items:center;gap:8px;margin-top:2px">
+        <label style="font-size:11px;font-weight:600;color:#9CA3AF;white-space:nowrap;flex-shrink:0">On issue flag, show question list:</label>
+        <select onchange="CLD.tasks[${i}].questionListId=this.value||null" style="flex:1;background:#F6F7F8;border:1px solid #ECEDF0;border-radius:7px;padding:3px 8px;font-size:11px;outline:none;color:#374151">
+          <option value="">— None —</option>
+          ${(DB.questionLists||[]).map(ql=>`<option value="${ql.id}" ${t.questionListId===ql.id?'selected':''}>${esc(ql.name)}</option>`).join('')}
+        </select>
+      </div>
     </div>
   </div>`;
 }
 
-App._addTask=()=>{if(!CLD.tasks)CLD.tasks=[];CLD.tasks.push({id:uid('t'),name:'',description:'',time:'09:00',criticality:'Low',responseType:'tick',dropdownOptions:[],issueFlagging:true,photo:false,comment:false,approval:false});App._refreshTasks();};
+App._addTask=()=>{if(!CLD.tasks)CLD.tasks=[];CLD.tasks.push({id:uid('t'),name:'',description:'',time:'09:00',criticality:'Low',responseType:'tick',dropdownOptions:[],issueFlagging:true,photo:false,comment:false,approval:false,questionListId:null});App._refreshTasks();};
 App._refreshTasks=()=>{const el=$('#cn-tasks');if(el)el.innerHTML=CLD.tasks.map((t,i)=>_taskEditRow(t,i)).join('')||'<p class="text-sm text-ink-300 py-2">No tasks yet.</p>';};
 App._saveCl=async(editing)=>{
   CLD.name=$('#cn-name')?.value.trim();CLD.description=$('#cn-desc')?.value.trim();
@@ -1838,6 +1868,7 @@ function _taskRow(c,t,i,run,submitted,date){
 
     <!-- Issue strip — inline below, no separate block -->
     ${isIssue?`<div class="iss-strip">
+      ${rt.selectedQuestion?`<div style="display:flex;align-items:center;gap:6px;padding:0 0 6px 0;border-bottom:1px solid #FEE2E2;margin-bottom:6px"><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FEE2E2;color:#DC2626">Q</span><span style="font-size:12px;font-weight:600;color:#374151">${esc(rt.selectedQuestion.text)}</span></div>`:''}
       <div style="display:flex;align-items:center;gap:8px">
         <div style="flex:1"><input type="text" ${submitted?'disabled':''} value="${esc(rt.issueComment||'')}" oninput="App._issueCmt('${c.id}',${i},this.value)" placeholder="Describe the issue (required to submit)…" class="iss-inp"/></div>
         ${!submitted?`<button class="act-ic" onclick="document.getElementById('iph-${c.id}-${i}').click()" style="${rt.issuePhoto?'border-color:#FCA5A5;background:#FEE2E2;color:#DC2626':''}">${ic('cam','w-3 h-3')}</button><input id="iph-${c.id}-${i}" type="file" accept="image/*" style="display:none" onchange="App._issuePh('${c.id}',${i},this)"/>`:'' }
@@ -1865,17 +1896,17 @@ App._getR=(clId,i)=>{return RUN[clId]?.tasks?.[i]?.response??null;};
 App._togIssue=(clId,i)=>{
   if(!RUN[clId])return;
   const rt=RUN[clId].tasks[i];
-  rt.issue=!rt.issue;
+  const c=clById(clId);const t=(c?.tasks||[])[i];
+  // If un-flagging
   if(rt.issue){
-    rt.response='Issue'; // Mark as responded
-    rt.done=true;
-  } else {
-    rt.response=null; // Clear response so user must pick again
-    rt.done=false;
-    rt.issueComment='';
-    rt.issuePhoto=null;
+    rt.issue=false;rt.response=null;rt.done=false;rt.issueComment='';rt.issuePhoto=null;rt.selectedQuestion=null;rr();return;
   }
-  rr();
+  // If a question list is configured and it hasn't been answered yet, show the question modal first
+  if(t?.questionListId&&!rt.selectedQuestion){
+    App._showQuestionModal(clId,i);return;
+  }
+  // Proceed to flag the issue directly
+  rt.issue=true;rt.response='Issue';rt.done=true;rr();
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].issueComment=v;};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
@@ -3375,6 +3406,299 @@ function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<
 
 /* ===== BOOT ===== */
 (async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+
+/* ===== QUESTIONS & TICKETS ===== */
+
+// Show the question selection modal when user flags an issue on a task that has a questionListId
+App._showQuestionModal=(clId,taskIdx)=>{
+  const c=clById(clId);const t=(c?.tasks||[])[taskIdx];if(!t)return;
+  const ql=(DB.questionLists||[]).find(x=>x.id===t.questionListId);
+  if(!ql){
+    // No question list found — just flag directly (standard flow)
+    const rt=RUN[clId].tasks[taskIdx];rt.issue=true;rt.response='Issue';rt.done=true;rr();return;
+  }
+  // Check if an open ticket already exists for this checklist+task
+  const existingTicket=(DB.tickets||[]).find(tk=>tk.checklistId===clId&&tk.taskIndex===taskIdx&&tk.status==='Open');
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4">
+      <h2 class="fd text-xl font-bold">Flag Issue</h2>
+      <button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button>
+    </div>
+    <div style="background:#F9FAFB;border-radius:10px;padding:8px 12px;margin-bottom:14px">
+      <span style="font-size:11px;color:#9CA3AF">Task</span>
+      <div style="font-size:13px;font-weight:700;color:#15171C;margin-top:1px">${esc(c.name)} › ${esc(t.name)}</div>
+    </div>
+    ${existingTicket
+      ?`<div style="background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:10px;padding:12px 14px;margin-bottom:12px">
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">${ic('alert','w-4 h-4')} <span style="font-size:13px;font-weight:700;color:#C2410C">Open ticket already exists</span></div>
+          <p style="font-size:12px;color:#92400E;margin:0">A ticket is already open for this task. Please resolve it before creating a new one.</p>
+        </div>
+        <button onclick="App.closeModal()" style="width:100%;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Got it</button>`
+      :`<p style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:8px">Select the question this issue relates to *</p>
+      <div class="space-y-2 mb-4" id="ql-opts">
+        ${(ql.questions||[]).map((q,qi)=>`<label style="display:flex;align-items:flex-start;gap:10px;background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;cursor:pointer;transition:border-color .12s" onmouseover="this.style.borderColor='#15171C'" onmouseout="if(!this.querySelector('input').checked)this.style.borderColor='#E5E7EB'">
+          <input type="radio" name="ql-q" value="${qi}" style="margin-top:2px;accent-color:#EF4444" onchange="document.querySelectorAll('#ql-opts label').forEach(l=>l.style.borderColor='#E5E7EB');this.closest('label').style.borderColor='#EF4444';this.closest('label').style.background='#FFF5F5'"/>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:#15171C">${esc(q.text)}</div>
+            ${q.assignedTo?`<div style="font-size:11px;color:#9CA3AF;margin-top:2px">→ Assigned to: <strong>${esc(fullName(uById(q.assignedTo)||{firstName:'Unknown',lastName:''}))}</strong></div>`:'<div style="font-size:11px;color:#D1D5DB;margin-top:2px">Unassigned</div>'}
+          </div>
+        </label>`).join('')}
+      </div>
+      <div style="margin-bottom:14px">
+        <p style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Describe the issue *</p>
+        <textarea id="flag-comment" rows="3" placeholder="Required — explain what happened…" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:13px;resize:vertical;outline:none;font-family:inherit" class="rf"></textarea>
+      </div>
+      <div class="flex gap-2">
+        <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+        <button onclick="App._confirmFlagWithQuestion('${clId}',${taskIdx})" style="flex:1;padding:11px;border-radius:11px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${ic('flag','w-4 h-4 inline')} Flag &amp; Create Ticket</button>
+      </div>`}
+  </div>`,'max-w-md');
+};
+
+App._confirmFlagWithQuestion=(clId,taskIdx)=>{
+  const sel=document.querySelector('input[name="ql-q"]:checked');
+  if(!sel){toast('Please select a question','err');return;}
+  const comment=($('#flag-comment')?.value||'').trim();
+  if(!comment){toast('Please describe the issue','err');$('#flag-comment')?.focus();return;}
+  const qi=parseInt(sel.value);
+  const c=clById(clId);const t=(c?.tasks||[])[taskIdx];
+  const ql=(DB.questionLists||[]).find(x=>x.id===t?.questionListId);
+  if(!ql)return;
+  const q=ql.questions[qi];if(!q)return;
+  // Structured ticket title: Checklist › Task › Question · Comment
+  const ticketTitle=`${c.name} › ${t.name} › ${q.text}`;
+  // Mark the run task as issue and pre-fill the issueComment (so existing mandatory check passes)
+  const rt=RUN[clId]?.tasks?.[taskIdx];
+  if(rt){
+    rt.issue=true;rt.response='Issue';rt.done=true;
+    rt.issueComment=comment; // pre-fill so checklist submit doesn't block
+    rt.selectedQuestion={qlId:ql.id,qi,text:q.text,assignedTo:q.assignedTo||null};
+  }
+  // Create the ticket
+  const ticket={
+    id:uid('tk'),
+    title:ticketTitle,
+    checklistId:clId,checklistName:c.name,
+    taskIndex:taskIdx,taskName:t.name,
+    questionListId:ql.id,questionListName:ql.name,
+    questionIndex:qi,questionText:q.text,
+    comment,  // the mandatory comment from the flag modal
+    assignedTo:q.assignedTo||null,
+    createdBy:S.uid,
+    createdAt:new Date().toISOString(),
+    status:'Open',
+    resolvedAt:null,resolvedBy:null,
+    notes:''
+  };
+  if(!DB.tickets)DB.tickets=[];
+  DB.tickets.unshift(ticket);
+  // Notification to assigned user
+  if(q.assignedTo&&q.assignedTo!==S.uid){
+    const notifText=`New ticket: "${esc(ticketTitle)}" — ${esc(comment.slice(0,60))}${comment.length>60?'…':''}`;
+    DB.notifications.push({id:uid('n'),userId:q.assignedTo,text:notifText,read:false,time:new Date().toISOString()});
+    _invalidateNotifCache();
+  }
+  log(fullName(me()),'Created ticket',ticketTitle);
+  toast('Ticket created ✓');
+  closeModal();saveDB();rr();
+};
+
+// Questions page — admin AND users with questionsAccess get full management view
+function questionsPage(){
+  const canManage=isAdmin()||me()?.questionsAccess;
+  if(canManage)return questionsAdminPage();
+  return empty('help','No access','Contact your admin to get access to Questions');
+}
+
+function questionsAdminPage(){
+  const lists=DB.questionLists||[];
+  const tickets=DB.tickets||[];
+  const tab=S.filters.qTab||'lists';
+  const openCount=tickets.filter(t=>t.status==='Open').length;
+
+  return`<div class="fade">${hdr('Questions','Question lists & issue tickets',btnP('New Question List','App._newQL()','plus'))}
+  <!-- Tab bar -->
+  <div style="display:flex;gap:2px;background:#F5F4F0;border-radius:10px;padding:2px;margin-bottom:20px;width:fit-content">
+    <button onclick="S.filters.qTab='lists';rr()" style="padding:7px 20px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;${tab==='lists'?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.1)':'background:transparent;color:#9CA3AF'}">
+      ${ic('help','w-4 h-4 inline')} Question Lists
+    </button>
+    <button onclick="S.filters.qTab='tickets';rr()" style="display:flex;align-items:center;gap:6px;padding:7px 20px;border-radius:8px;border:none;font-size:13px;font-weight:700;cursor:pointer;${tab==='tickets'?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.1)':'background:transparent;color:#9CA3AF'}">
+      ${ic('ticket','w-4 h-4')} Tickets ${openCount?`<span style="background:#EF4444;color:#fff;font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px">${openCount}</span>`:''}
+    </button>
+  </div>
+
+  ${tab==='lists'
+    ?(!lists.length
+      ?empty('help','No question lists yet','Create a list, add questions, and assign each to a user. Attach the list to any checklist task.')
+      :`<div class="space-y-3">
+        ${lists.map(ql=>`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.05)">
+          <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #F5F4F0">
+            <div style="width:38px;height:38px;background:#EFF6FF;border-radius:10px;display:grid;place-items:center;color:#1D4ED8;flex-shrink:0">${ic('help','w-4 h-4')}</div>
+            <div style="flex:1;min-width:0">
+              <div class="fd" style="font-size:15px;font-weight:700">${esc(ql.name)}</div>
+              <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(ql.questions||[]).length} question${(ql.questions||[]).length!==1?'s':''} · ${(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length} open ticket${(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length!==1?'s':''}</div>
+            </div>
+            <div style="display:flex;gap:6px">
+              <button onclick="App._editQL('${ql.id}')" style="padding:6px 14px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>
+              <button onclick="App._delQL('${ql.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-4 h-4')}</button>
+            </div>
+          </div>
+          ${!(ql.questions||[]).length?`<div style="padding:14px 18px;font-size:13px;color:#D1D5DB;text-align:center">No questions — edit to add some</div>`:
+          (ql.questions||[]).map((q,qi)=>{const u=uById(q.assignedTo);return`<div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid #F5F4F0">
+            <span style="font-size:10px;font-weight:700;color:#C8C5BD;width:18px;text-align:center;flex-shrink:0">${qi+1}</span>
+            <div style="flex:1;font-size:13px;color:#15171C">${esc(q.text)}</div>
+            ${u?`<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${avatar(u,'w-6 h-6','text-[9px]')}<span style="font-size:12px;font-weight:600;color:#6B7280">${esc(fullName(u))}</span></div>`:`<span style="font-size:11px;color:#D1D5DB;flex-shrink:0">Unassigned</span>`}
+          </div>`;}).join('')}
+        </div>`).join('')}
+      </div>`)
+    :`${_ticketsTable(tickets,true)}`}
+  </div>`;
+}
+
+function _ticketsTable(tickets,isAdm){
+  const statusFilter=S.filters.tkStat||'';
+  let list=statusFilter?tickets.filter(t=>t.status===statusFilter):tickets;
+  const open=tickets.filter(t=>t.status==='Open').length;
+  const resolved=tickets.filter(t=>t.status==='Resolved').length;
+  if(!tickets.length)return empty('ticket','No tickets yet','Tickets are created when a user flags an issue on a task that has a question list attached');
+  return`<div>
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    ${[['','All',tickets.length],['Open','Open',open],['Resolved','Resolved',resolved]].map(([s,l,n])=>`<button onclick="S.filters.tkStat='${s}';rr()" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .12s;${statusFilter===s?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.65">(${n})</span></button>`).join('')}
+  </div>
+  ${!list.length?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${statusFilter.toLowerCase()} tickets</div>`:''}
+  <div class="space-y-3">
+  ${list.map(tk=>{
+    const creator=uById(tk.createdBy);const assignee=uById(tk.assignedTo);
+    const isOpen=tk.status==='Open';
+    const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+    const resolvedAt=tk.resolvedAt?new Date(tk.resolvedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${isOpen?'#EF4444':'#10B981'};overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">
+      <div style="padding:14px 16px">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+              <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;${isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534'}">${tk.status}</span>
+              <span style="font-size:11px;color:#B8B5AC">${createdAt}</span>
+              ${creator?`<span style="font-size:11px;color:#B8B5AC">by ${esc(fullName(creator))}</span>`:''}
+            </div>
+            <div style="font-size:12px;color:#9CA3AF;font-weight:500;margin-bottom:3px">${esc(tk.checklistName)} › ${esc(tk.taskName)}</div>
+            <div class="fd" style="font-size:15px;font-weight:700;color:#15171C;margin-bottom:8px">${esc(tk.questionText)}</div>
+            ${tk.comment?`<div style="background:#FFF5F5;border:1px solid #FEE2E2;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;line-height:1.5">${esc(tk.comment)}</div>`:''}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+            ${assignee?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-7 h-7','text-[10px]')}<div style="text-align:right"><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`:`<span style="font-size:11px;font-weight:600;color:#D1D5DB;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</span>`}
+            <div style="display:flex;gap:6px">
+              ${isAdm?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>`:''}
+              ${isOpen?`<button onclick="App._resolveTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer">Mark Resolved</button>`:''}
+            </div>
+          </div>
+        </div>
+        ${tk.notes?`<div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12px;color:#374151;border:1px solid #ECEDF0">📝 ${esc(tk.notes)}</div>`:''}
+        ${!isOpen&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
+      </div>
+    </div>`;
+  }).join('')}
+  </div></div>`;
+}
+
+App._resolveTicket=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  tk.status='Resolved';tk.resolvedBy=S.uid;tk.resolvedAt=new Date().toISOString();
+  log(fullName(me()),'Resolved ticket',tk.questionText);
+  toast('Ticket resolved ✓');saveDB();rr();
+};
+
+App._editTicket=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Edit Ticket</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
+    <div class="space-y-3">
+      <div style="background:#F9FAFB;border-radius:10px;padding:10px 12px">
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px">Question</div>
+        <div style="font-size:13px;font-weight:600">${esc(tk.questionText)}</div>
+      </div>
+      ${selF('Assign to','tk-asgn',[['','— Unassigned —'],...DB.users.filter(u=>u.status==='Active').map(u=>[u.id,fullName(u)])],tk.assignedTo||'')}
+      <div><label class="block text-xs font-semibold text-ink-500 mb-1">Notes</label><textarea id="tk-notes" rows="3" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;resize:vertical;outline:none" class="rf">${esc(tk.notes||'')}</textarea></div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._saveTicketEdit('${id}')" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Save</button>
+    </div>
+  </div>`,'max-w-md');
+};
+
+App._saveTicketEdit=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  const newAssignee=$('#tk-asgn')?.value||null;
+  if(newAssignee&&newAssignee!==tk.assignedTo){
+    DB.notifications.push({id:uid('n'),userId:newAssignee,text:'Ticket assigned to you: '+esc(tk.questionText),read:false,time:new Date().toISOString()});
+  }
+  tk.assignedTo=newAssignee||null;
+  tk.notes=$('#tk-notes')?.value.trim()||'';
+  toast('Saved ✓');closeModal();saveDB();rr();
+};
+
+// Question List CRUD
+App._newQL=()=>App._editQL(null);
+App._editQL=(id)=>{
+  const ql=id?(DB.questionLists||[]).find(x=>x.id===id):null;
+  const qsJson=JSON.stringify(ql?.questions||[]);
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${ql?'Edit':'New'} Question List</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
+    <div class="space-y-3">
+      ${fld('List name','ql-name',ql?.name||'')}
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+          <label class="text-xs font-semibold text-ink-500">Questions</label>
+          <button onclick="App._addQLQ()" style="display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 10px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')} Add question</button>
+        </div>
+        <div id="ql-qrows" class="space-y-2">${(ql?.questions||[]).map((q,qi)=>_qlQRow(q,qi)).join('')||'<p style="text-align:center;font-size:13px;color:#D1D5DB;padding:12px">No questions yet</p>'}</div>
+      </div>
+    </div>
+    <div class="flex gap-2 mt-5">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._saveQL('${id||''}')" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${ql?'Save':'Create'}</button>
+    </div>
+  </div>`,'max-w-lg');
+  window._qlQuestions=ql?JSON.parse(JSON.stringify(ql.questions||[])):[];
+};
+
+function _qlQRow(q,qi){
+  return`<div id="qlq-${qi}" style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:10px;font-weight:700;color:#9CA3AF;flex-shrink:0">${qi+1}</span>
+    <input value="${esc(q.text)}" onchange="window._qlQuestions[${qi}].text=this.value" placeholder="Question text…" style="flex:1;background:transparent;border:none;font-size:13px;font-weight:500;outline:none;color:#15171C"/>
+    <select onchange="window._qlQuestions[${qi}].assignedTo=this.value||null" style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:3px 8px;font-size:11px;outline:none;color:#374151">
+      <option value="">— Assign user —</option>
+      ${DB.users.filter(u=>u.status==='Active').map(u=>`<option value="${u.id}" ${q.assignedTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}
+    </select>
+    <button onclick="window._qlQuestions.splice(${qi},1);App._refreshQLRows()" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-3 h-3')}</button>
+  </div>`;
+}
+
+App._addQLQ=()=>{if(!window._qlQuestions)window._qlQuestions=[];window._qlQuestions.push({text:'',assignedTo:null});App._refreshQLRows();};
+App._refreshQLRows=()=>{const el=$('#ql-qrows');if(el)el.innerHTML=window._qlQuestions.length?window._qlQuestions.map((q,qi)=>_qlQRow(q,qi)).join(''):'<p style="text-align:center;font-size:13px;color:#D1D5DB;padding:12px">No questions yet</p>';};
+
+App._saveQL=(id)=>{
+  const name=($('#ql-name')?.value||'').trim();
+  if(!name){toast('Name required','err');return;}
+  const questions=(window._qlQuestions||[]).filter(q=>q.text.trim());
+  if(!DB.questionLists)DB.questionLists=[];
+  if(id){
+    const ql=DB.questionLists.find(x=>x.id===id);
+    if(ql){ql.name=name;ql.questions=questions;}
+  } else {
+    DB.questionLists.push({id:uid('ql'),name,questions});
+  }
+  toast(id?'Saved ✓':'Question list created ✓');closeModal();saveDB();rr();
+};
+
+App._delQL=(id)=>{
+  if(!confirm('Delete this question list? Any task using it will lose the link.'))return;
+  DB.questionLists=(DB.questionLists||[]).filter(x=>x.id!==id);
+  // Remove references from tasks
+  DB.checklists.forEach(c=>(c.tasks||[]).forEach(t=>{if(t.questionListId===id)t.questionListId=null;}));
+  toast('Deleted','warn');saveDB();rr();
+};
 
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
