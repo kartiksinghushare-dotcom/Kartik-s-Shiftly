@@ -680,7 +680,7 @@ App.saveProfile=async()=>{
     phone:u.phone,position:u.position
   }).eq('id',u.id);
   if(error){toast('Save failed: '+error.message,'err');return;}
-  saveDB();toast('Profile updated ✓');rr();
+  saveDB();toast('Profile updated ✓');render();
 };
 App.changePw=async()=>{const cur=($('#pw-cur')?.value||'').trim();const nw=($('#pw-new')?.value||'').trim();if(!cur||!nw){toast('Fill both fields','err');return;}if(nw.length<6){toast('Min 6 characters','err');return;}const u=me();const{error:se}=await sb.auth.signInWithPassword({email:u.email,password:cur});if(se){toast('Current password incorrect','err');return;}const{error}=await sb.auth.updateUser({password:nw});if(error){toast(error.message,'err');return;}toast('Password updated');const c=$('#pw-cur'),n=$('#pw-new');if(c)c.value='';if(n)n.value='';};
 // _showNotifs removed — now using notificationsPage route
@@ -914,16 +914,17 @@ App.saveUser=async(id)=>{
     docAccess.locations[loc][p]=cb.checked;
   });
 
+  // ── Read ALL toggles and DOM values NOW, before any async/closeModal ──
+  const questionsAccess=togV('u-qa');
+  const rules={past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')};
+  const approval_settings={past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')};
+
   const pd={first_name:fn,last_name:ln,email,
     phone:g('u-phone'),position:g('u-pos'),
     department:$('#u-dep')?.value,role:$('#u-role')?.value,
     status:$('#u-status')?.value,manager_id:mId||null,
-    rules:{past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')},
-    approval_settings:{past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')},
+    rules,approval_settings,
     doc_access:docAccess,questions_access:questionsAccess};
-
-  // ── Read toggles NOW, before closeModal destroys the DOM ──
-  const questionsAccess=togV('u-qa');
 
   if(id){
     // Update local state immediately
@@ -931,11 +932,9 @@ App.saveUser=async(id)=>{
     if(u)Object.assign(u,{firstName:fn,lastName:ln,email,
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
-      rules:pd.rules,approval:pd.approval_settings,
+      rules,approval:approval_settings,
       questionsAccess,
       docAccess});
-    // Add questionsAccess to the Supabase payload too
-    pd.questions_access=questionsAccess;
     log(fullName(me()),'Edited user',fn+' '+ln);
     toast('Saved ✓');closeModal();saveDB();render();
     // Sync all fields including doc_access to Supabase in background
@@ -963,8 +962,8 @@ App.saveUser=async(id)=>{
       rules:pd.rules,approval:pd.approval_settings,
       questionsAccess,
       docAccess,password:'***'});
-    // Save doc_access for new user too
-    sb.from('profiles').update({doc_access:docAccess}).eq('id',newId).catch(()=>{});
+    // Save doc_access + questions_access for new user
+    sb.from('profiles').update({doc_access:docAccess,questions_access:questionsAccess}).eq('id',newId).catch(()=>{});
     log(fullName(me()),'Created user',fn+' '+ln);
     toast('✓ '+fn+' '+ln+' created');
     closeModal();saveDB();render();
@@ -1906,12 +1905,18 @@ function _respBtns(rType,rt,i,clId,t){
   if(rType==='yesno')   return`<div class="rc">${b('Yes','Yes',1)}${b('No','No',0)}</div>`;
   if(rType==='passfail')return`<div class="rc">${b('Pass','Pass',1)}${b('Fail','Fail',0)}</div>`;
   if(rType==='dropdown')return`<select onchange="App._setR('${clId}',${i},this.value)" style="height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:700;outline:none;cursor:pointer;color:${r?'#111110':'#9CA3AF'};appearance:none"><option value="">Choose…</option>${(t.dropdownOptions||[]).map(o=>`<option ${r===o?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
-  if(rType==='text')    return`<input type="text" value="${esc(r||'')}" onchange="App._setR('${clId}',${i},this.value)" placeholder="Type here…" style="width:100px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:600;outline:none;color:#111110"/>`;
-  if(rType==='numeric') return`<input type="number" value="${esc(r||'')}" onchange="App._setR('${clId}',${i},this.value)" placeholder="0" style="width:64px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:700;outline:none;color:#111110"/>`;
+  if(rType==='text')    return`<input type="text" value="${esc(r||'')}" oninput="App._setR('${clId}',${i},this.value,true)" onchange="App._setR('${clId}',${i},this.value)" placeholder="Type here…" style="width:100px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:600;outline:none;color:#111110"/>`;
+  if(rType==='numeric') return`<input type="number" value="${esc(r||'')}" oninput="App._setR('${clId}',${i},this.value,true)" onchange="App._setR('${clId}',${i},this.value)" placeholder="0" style="width:64px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:700;outline:none;color:#111110"/>`;
   return'';
 }
 
-App._setR=(clId,i,val)=>{if(!RUN[clId]||!RUN[clId].tasks[i])return;RUN[clId].tasks[i].response=val;RUN[clId].tasks[i].done=!!val;rr();clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);};
+App._setR=(clId,i,val,skipRr)=>{
+  if(!RUN[clId]||!RUN[clId].tasks[i])return;
+  RUN[clId].tasks[i].response=val;RUN[clId].tasks[i].done=!!val;
+  if(!skipRr)rr(); // skip re-render for text/numeric inputs to preserve cursor
+  _updateSubmitBtn(clId);
+  clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+};
 App._getR=(clId,i)=>{return RUN[clId]?.tasks?.[i]?.response??null;};
 App._togIssue=(clId,i)=>{
   if(!RUN[clId])return;
@@ -1928,7 +1933,7 @@ App._togIssue=(clId,i)=>{
   // Proceed to flag the issue directly
   rt.issue=true;rt.response='Issue';rt.done=true;rr();
 };
-App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].issueComment=v;};
+App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i]){RUN[clId].tasks[i].issueComment=v;_updateSubmitBtn(clId);}};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
 App._addPh=(clId,i,el)=>{
   const f=el.files[0];if(!f)return;
@@ -1962,7 +1967,7 @@ function _updateSubmitBtn(clId){
   });
 }
 App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
-App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();rr();};
+App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');rr();};
 
 App._submitRun=(clId,date)=>{
@@ -2029,7 +2034,7 @@ App._sendReq=(clId,date)=>{
   const admin=DB.users.find(x=>x.role==='Admin');
   if(admin&&admin.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:admin.id,text:'Edit request: '+fullName(u)+' — '+clName,time:new Date().toISOString(),read:false});
   log(fullName(u),'Edit request',clName);
-  toast('Edit request sent to your manager');saveDB();closeModal();rr();
+  toast('Edit request sent to your manager');saveDB();closeModal();render();
 };
 
 /* ===== APPROVALS ===== */
@@ -3636,8 +3641,10 @@ App._editTicket=(id)=>{
     <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Edit Ticket</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
     <div class="space-y-3">
       <div style="background:#F9FAFB;border-radius:10px;padding:10px 12px">
-        <div style="font-size:11px;color:#9CA3AF;margin-bottom:4px">Question</div>
-        <div style="font-size:13px;font-weight:600">${esc(tk.questionText)}</div>
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Ticket</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:3px">${esc(tk.checklistName)} › ${esc(tk.taskName)}</div>
+        <div style="font-size:13px;font-weight:700;color:#15171C">${esc(tk.questionText)}</div>
+        ${tk.comment?`<div style="font-size:12px;color:#6B7280;margin-top:6px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #E5E7EB">${esc(tk.comment)}</div>`:''}
       </div>
       ${selF('Assign to','tk-asgn',[['','— Unassigned —'],...DB.users.filter(u=>u.status==='Active').map(u=>[u.id,fullName(u)])],tk.assignedTo||'')}
       <div><label class="block text-xs font-semibold text-ink-500 mb-1">Notes</label><textarea id="tk-notes" rows="3" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;resize:vertical;outline:none" class="rf">${esc(tk.notes||'')}</textarea></div>
@@ -3682,18 +3689,18 @@ App._editQL=(id)=>{
       <button onclick="App._saveQL('${id||''}')" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${ql?'Save':'Create'}</button>
     </div>
   </div>`,'max-w-lg');
-  window._qlQuestions=ql?JSON.parse(JSON.stringify(ql.questions||[])):[];window._editingQLId=id||null;
+  window._qlQuestions=ql?JSON.parse(JSON.stringify(ql.questions||[])):[];window._editingQLId=id||null;window._qlQIdsnapshot=Date.now();
 };
 
 function _qlQRow(q,qi){
-  return`<div id="qlq-${qi}" style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">
-    <span style="font-size:10px;font-weight:700;color:#9CA3AF;flex-shrink:0">${qi+1}</span>
-    <input value="${esc(q.text)}" onchange="window._qlQuestions[${qi}].text=this.value" placeholder="Question text…" style="flex:1;background:transparent;border:none;font-size:13px;font-weight:500;outline:none;color:#15171C"/>
-    <select onchange="window._qlQuestions[${qi}].assignedTo=this.value||null" style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:3px 8px;font-size:11px;outline:none;color:#374151">
+  return`<div id="qlq-${qi}" data-qi="${qi}" style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:10px 12px;display:flex;align-items:center;gap:8px">
+    <span style="font-size:10px;font-weight:700;color:#9CA3AF;flex-shrink:0;width:16px;text-align:center">${qi+1}</span>
+    <input type="text" value="${esc(q.text)}" oninput="if(window._qlQuestions&&window._qlQuestions[${qi}]!==undefined)window._qlQuestions[${qi}].text=this.value" placeholder="Question text…" style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;font-weight:500;outline:none;color:#15171C;padding:2px 0"/>
+    <select onchange="if(window._qlQuestions&&window._qlQuestions[${qi}]!==undefined)window._qlQuestions[${qi}].assignedTo=this.value||null" style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:4px 8px;font-size:11px;outline:none;color:#374151;max-width:160px">
       <option value="">— Assign user —</option>
       ${DB.users.filter(u=>u.status==='Active').map(u=>`<option value="${u.id}" ${q.assignedTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}
     </select>
-    <button onclick="window._qlQuestions.splice(${qi},1);App._refreshQLRows()" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-3 h-3')}</button>
+    <button onclick="window._qlQuestions.splice(${qi},1);App._refreshQLRows()" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-3 h-3')}</button>
   </div>`;
 }
 
@@ -3703,7 +3710,21 @@ App._refreshQLRows=()=>{const el=$('#ql-qrows');if(el)el.innerHTML=window._qlQue
 App._saveQL=(id)=>{
   const name=($('#ql-name')?.value||'').trim();
   if(!name){toast('Name required','err');return;}
-  const questions=(window._qlQuestions||[]).filter(q=>q.text.trim());
+  // Read question rows directly from DOM at save time (don't rely on onchange-synced state)
+  const qRows=document.querySelectorAll('#ql-qrows [data-qi]');
+  let questions=[];
+  if(qRows.length){
+    qRows.forEach(row=>{
+      const qi=parseInt(row.dataset.qi);
+      const textEl=row.querySelector('input[type="text"]');
+      const selEl=row.querySelector('select');
+      const text=(textEl?.value||'').trim();
+      if(text)questions.push({text,assignedTo:selEl?.value||null});
+    });
+  } else {
+    // Fallback: use window._qlQuestions (synced by onchange)
+    questions=(window._qlQuestions||[]).filter(q=>(q.text||'').trim());
+  }
   if(!DB.questionLists)DB.questionLists=[];
   if(id){
     const ql=DB.questionLists.find(x=>x.id===id);
