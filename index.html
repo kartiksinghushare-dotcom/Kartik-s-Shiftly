@@ -551,7 +551,7 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['documents','doc','Documents'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
 const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
@@ -708,7 +708,6 @@ function pageContent(){
   if(r==='analytics')return analyticsPage();
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
-  if(r==='documents')return documentsPage();
   if(r==='questions'){if(isAdmin()||me()?.questionsAccess)return questionsPage();S.route='tickets';return ticketsPage();}
   if(r==='tickets')return ticketsPage();
   if(r==='mychecklists')return myClsPage();
@@ -2041,7 +2040,7 @@ App._submitRun=(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues ⚑':needsAppr?'Submitted — pending approval':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];S.expandedCl=null;saveDB();render();
+  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();render();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -3224,171 +3223,12 @@ function profilePage(){
   </div>`;
 }
 
-/* ===== DOCUMENTS ===== */
-function documentsPage(){
-  const u=me();if(!u)return'';
-  const isAdm=isAdmin();
-  const da=u.docAccess||{departments:{},locations:{}};
-  const scopeTab=S.filters.docScope||'dept';
-  const folderId=S.filters.docFolder||null; // current folder (null=root)
-
-  // Which departments/locations can this user see?
-  const visibleDepts=isAdm
-    ?DB.departments.map(d=>d.name)
-    :Object.entries(da.departments||{}).filter(([,p])=>p.view).map(([k])=>k);
-  const visibleLocs=isAdm
-    ?DB.locations.map(l=>l.id)
-    :Object.entries(da.locations||{}).filter(([,p])=>p.view).map(([k])=>k);
-
-  // Current scope filter (which dept/loc is selected)
-  // Use separate state per tab to prevent cross-contamination
-  const scopeKey=(scopeTab==='dept'?S.filters.docDeptKey:S.filters.docLocKey)||(scopeTab==='dept'?visibleDepts[0]:visibleLocs[0])||null;
-
-  // Permissions for current scope
-  function perm(type,key){
-    if(isAdm)return{view:true,upload:true,download:true,edit:true};
-    const map=type==='dept'?da.departments:da.locations;
-    return map?.[key]||{};
-  }
-  const curPerm=perm(scopeTab,scopeKey);
-
-  // Folders and docs in current scope + folder
-  const scopeFolders=(DB.folders||[]).filter(f=>f.type===scopeTab&&f.scope===scopeKey&&(f.parentId||null)===(folderId||null));
-  const scopeDocs=(DB.documents||[]).filter(d=>d.type===scopeTab&&d.scope===scopeKey&&(d.folderId||null)===(folderId||null));
-
-  // Breadcrumb path
-  function buildPath(id){
-    if(!id)return[];
-    const f=(DB.folders||[]).find(x=>x.id===id);
-    if(!f)return[];
-    return[...buildPath(f.parentId||null),f];
-  }
-  const crumbs=buildPath(folderId);
-
-  const scopeLabel=scopeTab==='dept'?scopeKey:(DB.locations.find(l=>l.id===scopeKey)?.name||scopeKey||'');
-
-  return'<div class="fade">'
-    +hdr('Documents','')
-    // ── Scope tabs (Departments / Locations)
-    +'<div style="display:flex;gap:6px;margin-bottom:14px">'
-    +[['dept','Departments'],['loc','Locations']].map(([k,l])=>{
-      const active=scopeTab===k;
-      const cnt=k==='dept'?visibleDepts.length:visibleLocs.length;
-      if(!cnt)return'';
-      return'<button onclick="App._setDocScope(\''+k+'\')" style="padding:7px 16px;border-radius:10px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(active?'#15171C':'transparent')+';color:'+(active?'#fff':'#6B7280')+'">'+l+'</button>';
-    }).join('')
-    +'</div>'
-    // ── Sub-scope selector (which dept or location)
-    +(scopeTab==='dept'&&visibleDepts.length>1
-      ?'<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
-        +visibleDepts.map(d=>'<button onclick="App._setDocScopeKey(\''+d+'\')" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1.5px solid '+(scopeKey===d?'#15171C':'#ECEDF0')+';background:'+(scopeKey===d?'#15171C':'#fff')+';color:'+(scopeKey===d?'#fff':'#6B7280')+';cursor:pointer">'+esc(d)+'</button>').join('')
-        +'</div>'
-      :scopeTab==='loc'&&visibleLocs.length>1
-        ?'<div style="display:flex;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
-          +visibleLocs.map(id=>{const l=DB.locations.find(x=>x.id===id);return'<button onclick="App._setDocScopeKey(\''+id+'\')" style="padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;border:1.5px solid '+(scopeKey===id?'#15171C':'#ECEDF0')+';background:'+(scopeKey===id?'#15171C':'#fff')+';color:'+(scopeKey===id?'#fff':'#6B7280')+';cursor:pointer">'+esc(l?.name||id)+'</button>';}).join('')
-          +'</div>'
-        :''
-    )
-    // ── Breadcrumb
-    +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:14px;flex-wrap:wrap">'
-    +'<button onclick="App._docNav(null)" style="font-size:13px;font-weight:700;color:'+(folderId?'#0E9F6E':'#15171C')+';background:none;border:none;cursor:pointer;padding:0">'+esc(scopeLabel||'Root')+'</button>'
-    +crumbs.map(f=>'<span style="color:#D1D5DB">›</span><button onclick="App._docNav(\''+f.id+'\')" style="font-size:13px;font-weight:700;color:'+(folderId===f.id?'#15171C':'#0E9F6E')+';background:none;border:none;cursor:pointer;padding:0">'+esc(f.name)+'</button>').join('')
-    +'</div>'
-    // ── Toolbar
-    +(scopeKey
-      ?'<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'
-        +(curPerm.edit||isAdm?'<button onclick="App._newFolder()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:13px;font-weight:600;cursor:pointer">'+ic('folder','w-4 h-4')+'New folder</button>':'')
-        +(curPerm.upload||isAdm?'<button onclick="App._uploadDoc()" style="display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:10px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">'+ic('upload','w-4 h-4')+'Upload file</button>':'')
-        +'</div>'
-      :''
-    )
-    // ── Empty state
-    +(scopeKey===null||scopeKey===undefined
-      ?empty('folder','No scope selected','Select a department or location to view documents')
-      :(!scopeFolders.length&&!scopeDocs.length
-        ?empty('folder','Empty folder','No files yet'+(curPerm.upload||isAdm?' — click Upload to add files':''))
-        // ── Folder grid
-        :'<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:10px;margin-bottom:16px">'
-          +scopeFolders.map(f=>'<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px;cursor:pointer;display:flex;flex-direction:column;gap:8px;transition:all .15s" onclick="App._docNav(\''+f.id+'\')" onmouseover="this.style.borderColor=\'#0E9F6E\';this.style.boxShadow=\'0 2px 12px rgba(14,159,110,.1)\'" onmouseout="this.style.borderColor=\'#ECEDF0\';this.style.boxShadow=\'\'">'
-            +'<div style="font-size:28px">📁</div>'
-            +'<div style="font-size:13px;font-weight:700;word-break:break-word">'+esc(f.name)+'</div>'
-            +'<div style="font-size:11px;color:#9CA3AF">'+((DB.documents||[]).filter(d=>d.folderId===f.id).length)+' files</div>'
-            +(isAdm||curPerm.edit?'<button onclick="event.stopPropagation();App._delFolder(\''+f.id+'\')" style="font-size:11px;color:#DC2626;background:none;border:none;cursor:pointer;padding:0;text-align:left">Delete</button>':'')
-            +'</div>'
-          ).join('')
-          +'</div>'
-          // ── Doc list
-          +'<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">'
-          +scopeDocs.map((d,i)=>{
-            const ext=(d.name.split('.').pop()||'').toLowerCase();
-            const icon=ext==='pdf'?'📄':ext.match(/xlsx?|csv/)?'📊':ext.match(/docx?/)?'📝':ext.match(/pptx?/)?'📊':ext.match(/jpe?g|png|gif|webp/)?'🖼':'📎';
-            return'<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:'+(i<scopeDocs.length-1?'1px solid #F3F4F6':'none')+'">'
-              +'<div style="font-size:24px;flex-shrink:0">'+icon+'</div>'
-              +'<div style="flex:1;min-width:0">'
-              +'<div style="font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(d.name)+'</div>'
-              +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+fmtS(d.uploadedAt?.slice(0,10))+(d.uploaderName?' · '+esc(d.uploaderName):'')+(d.fileSize?' · '+_fmtSize(d.fileSize):'')+'</div>'
-              +'</div>'
-              +'<div style="display:flex;gap:6px;flex-shrink:0">'
-              +(curPerm.download||isAdm?'<button onclick="App._downloadDoc(\''+d.id+'\')" style="padding:6px 12px;border-radius:8px;background:#ECFDF5;color:#0E9F6E;font-size:12px;font-weight:700;border:1px solid #A7F3D0;cursor:pointer">Download</button>':'')
-              +(curPerm.view||isAdm?'<button onclick="App._previewDoc(\''+d.id+'\')" style="padding:6px 12px;border-radius:8px;background:#F6F7F8;color:#374151;font-size:12px;font-weight:700;border:1px solid #ECEDF0;cursor:pointer">View</button>':'')
-              +(isAdm||curPerm.edit?'<button onclick="App._delDoc(\''+d.id+'\')" style="padding:6px 10px;border-radius:8px;background:#FEE2E2;color:#DC2626;font-size:12px;font-weight:700;border:1px solid #FECACA;cursor:pointer">✕</button>':'')
-              +'</div>'
-              +'</div>';
-          }).join('')
-          +'</div>'
-      )
-    )
-    +'</div>';
-}
 
 function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return(b/1048576).toFixed(1)+'MB';}
 
-// ── Document navigation & scope helpers ──
-App._setDocScope=(s)=>{S.filters.docScope=s;S.filters.docFolder=null;rr();};
-App._setDocScopeKey=(k)=>{const t=S.filters.docScope||'dept';if(t==='dept')S.filters.docDeptKey=k;else S.filters.docLocKey=k;S.filters.docFolder=null;rr();};
 App._docNav=(id)=>{S.filters.docFolder=id;rr();};
 App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
 
-// ── New folder ──
-App._newFolder=()=>{
-  const _tab=S.filters.docScope||'dept';
-  const scope=S.filters.docScopeKey||(_tab==='dept'?S.filters.docDeptKey:S.filters.docLocKey)||null;
-  if(!scope){toast('Select a department or location first','warn');return;}
-  const parent=S.filters.docFolder||null;
-  const parentName=parent?(DB.folders||[]).find(f=>f.id===parent)?.name:'Root';
-  openModal(
-    '<div class="p-6">'
-    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">New folder</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-    +(parent?'<p style="font-size:12px;color:#9CA3AF;margin-bottom:12px">Inside: '+esc(parentName)+'</p>':'')
-    +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Folder name</label>'
-    +'<input id="nf-name" type="text" placeholder="e.g. Procurement, Inventory…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf" autofocus/></div>'
-    +'<div class="flex gap-2">'
-    +'<button onclick="App.closeModal()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
-    +'<button onclick="App._createFolder()" style="flex:1;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Create</button>'
-    +'</div></div>',
-    'max-w-sm'
-  );
-};
-App._createFolder=()=>{
-  if(App._folderCtx._creating)return;
-  App._folderCtx._creating=true;
-  const createBtn=document.querySelector('[onclick="App._createFolder()"]');
-  if(createBtn){createBtn.disabled=true;createBtn.textContent='Creating…';}
-  const name=document.getElementById('nf-name')?.value?.trim();
-  if(!name){App._folderCtx._creating=false;toast('Enter a folder name','err');if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}return;}
-  const t=S.filters.docScope||'dept';
-  const scope=t==='dept'?S.filters.docDeptKey:S.filters.docLocKey;
-  if(!scope){App._folderCtx._creating=false;toast('No scope selected','err');if(createBtn){createBtn.disabled=false;createBtn.textContent='Create';}return;}
-  if(!DB.folders)DB.folders=[];
-  const f={id:uid('fld'),name,type:t,scope,parentId:S.filters.docFolder||null,createdBy:S.uid,createdAt:new Date().toISOString()};
-  DB.folders.push(f);
-  // Direct Supabase write
-  sb.from('doc_folders').insert({id:f.id,name:f.name,parent_id:f.parentId,type:f.type,scope:f.scope,created_by:f.createdBy,created_at:f.createdAt}).catch(e=>console.warn('folder:',e));
-  log(fullName(me()),'Created folder',name);
-  toast('Folder "'+name+'" created');
-  App._folderCtx._creating=false;
-  closeModal();saveDB();render();
-};
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
   if(!confirm('Delete folder "'+f?.name+'" and all its files?'))return;
