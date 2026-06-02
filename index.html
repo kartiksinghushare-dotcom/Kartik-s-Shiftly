@@ -258,8 +258,8 @@ const WKDAYS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 const DAYS3=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const fmtD=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'—';
 const fmtS=d=>d?new Date(d+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'}):'—';
-const initials=u=>(u.firstName[0]||'')+(u.lastName[0]||'');
-const fullName=u=>u.firstName+' '+u.lastName;
+const initials=u=>((u?.firstName||'?')[0]||'?')+((u?.lastName||'')[0]||'');
+const fullName=u=>(u?(u.firstName||'')+' '+(u.lastName||''):'Unknown').trim()||'Unknown';
 const dayAbbr=iso=>DAYS3[new Date(iso+'T00:00:00').getDay()].slice(0,3);
 
 function clOn(c,date){if(c.status&&c.status!=='Active')return false;
@@ -448,7 +448,7 @@ function seed(){
 }
 
 /* ===== LOCALSTORAGE ===== */
-const LS_KEY='shiftly_v3';
+const LS_KEY=window.LS_KEY='shiftly_v3';
 function saveDB(){
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
   _sync().catch(e=>{
@@ -531,10 +531,11 @@ function _notifCount(){
   _notifCache={uid,count,ts:now};
   return count;
 }
-// Open ticket count for Tickets badge — personal for normal users, all open for admin/questionsAccess
+// Open ticket count for Tickets badge — scoped like ticketsPage
 function _myOpenTicketCount(){
   const uid=S.uid;if(!uid)return 0;
   if(isAdmin()||me()?.questionsAccess)return (DB.tickets||[]).filter(tk=>tk.status==='Open').length;
+  if(isMgr()){const treeIds=[uid,...subTree(uid).map(u=>u.id)];return (DB.tickets||[]).filter(tk=>treeIds.includes(tk.createdBy)&&tk.status==='Open').length;}
   return (DB.tickets||[]).filter(tk=>tk.assignedTo===uid&&tk.status==='Open').length;
 }
 function _invalidateNotifCache(){_notifCache.ts=0;}
@@ -761,7 +762,7 @@ App.login=async()=>{
     if(!S.route||S.route==='login')S.route=u.role==='Admin'?'dashboard':'mychecklists';
     saveDB();render();
     // Load full data in background — don't block UI
-    loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});
+    loadFromSB().then(()=>{saveDB();render();}).catch(()=>{});
   }catch(err){
     const msg=err.message.includes('Invalid')||err.message.includes('credentials')||err.message.includes('invalid_grant')
       ?'Incorrect email or password':err.message;
@@ -1924,6 +1925,11 @@ App._togIssue=(clId,i)=>{
   const c=clById(clId);const t=(c?.tasks||[])[i];
   // If un-flagging
   if(rt.issue){
+    // Warn if an open ticket was created from this flag
+    if(rt.selectedQuestion){
+      const existingTk=(DB.tickets||[]).find(tk=>tk.checklistId===clId&&tk.taskIndex===i&&tk.status==='Open');
+      if(existingTk&&!confirm('An open ticket exists for this flag. Unflagging will not close the ticket. Continue?'))return;
+    }
     rt.issue=false;rt.response=null;rt.done=false;rt.issueComment='';rt.issuePhoto=null;rt.selectedQuestion=null;rr();return;
   }
   // If a question list is configured and it hasn't been answered yet, show the question modal first
@@ -1968,7 +1974,7 @@ function _updateSubmitBtn(clId){
 }
 App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileReader();r.onload=e=>{RUN[clId].tasks[i].issuePhoto=e.target.result;rr();};r.readAsDataURL(f);};
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
-App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');rr();};
+App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');render();};
 
 App._submitRun=(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
@@ -2455,7 +2461,7 @@ App._saveIssueNote=(id)=>{
   iss.managerNotes.push({text,by:S.uid,at:new Date().toISOString()});
   iss.status='Under Review';iss.updatedAt=new Date().toISOString();
   DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Manager note on issue: "'+iss.taskName+'"',time:new Date().toISOString(),read:false});
-  log(fullName(me()),'Added issue note',iss.taskName);toast('Note saved');closeModal();saveDB();rr();
+  _invalidateNotifCache();log(fullName(me()),'Added issue note',iss.taskName);toast('Note saved');closeModal();saveDB();render();
 };
 App._issueFeedback=(id)=>{
   const iss=DB.issues.find(x=>x.id===id);if(!iss)return;
@@ -2478,7 +2484,7 @@ App._saveIssueFeedback=(id)=>{
   if(!iss.managerNotes)iss.managerNotes=[];
   iss.managerNotes.push({text:'[Feedback sent] '+text,by:S.uid,at:new Date().toISOString()});
   DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Feedback on issue "'+iss.taskName+'" — tap to view',time:new Date().toISOString(),read:false});
-  log(fullName(me()),'Sent issue feedback',iss.taskName);toast('Feedback sent');closeModal();saveDB();rr();
+  log(fullName(me()),'Sent issue feedback',iss.taskName);_invalidateNotifCache();toast('Feedback sent');closeModal();saveDB();render();
 };
 
 
@@ -2678,6 +2684,10 @@ App._notifClick=(id)=>{
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
   }
+  // Ticket notification → go to tickets tab
+  if(t.includes('ticket')||t.includes('Ticket')||t.includes('Resolve')){
+    App.go('tickets');return;
+  }
   // Default: go to notifications
   App._setNTab('All');App.go('notifications');
 };
@@ -2718,7 +2728,7 @@ App._saveReplyFb=(id)=>{
   if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,
     text:'💬 Feedback reply from '+fullName(me())+': "'+text.slice(0,60)+(text.length>60?'...':'')+'"',
     time:new Date().toISOString(),read:false,fbId:id});
-  toast('Reply sent ✓');closeModal();saveDB();rr();
+  _invalidateNotifCache();toast('Reply sent ✓');closeModal();saveDB();render();
 };
 
 App._openSendFeedback=(userId)=>{
@@ -2816,8 +2826,8 @@ App._saveSendFeedback=(userId)=>{
     createdAt:new Date().toISOString()
   });
   DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false});
-  log(fullName(me()),'Sent feedback',fullName(uById(userId)));
-  toast('Feedback sent ✓');closeModal();saveDB();rr();
+  _invalidateNotifCache();log(fullName(me()),'Sent feedback',fullName(uById(userId)));
+  toast('Feedback sent ✓');closeModal();saveDB();render();
 };
 /* ===== HIERARCHY ===== */
 let COLL={};
@@ -2855,6 +2865,67 @@ function _issuesAnalytics(f,fArr){
           +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+esc(iss.status)+'</span></div>';
       }).join('')+'</div>';
   }
+  html+='</div>';
+  return html;
+}
+
+function _ticketsAnalytics(f,fArr){
+  // Scoped to same user tree as rest of analytics
+  let allTk=DB.tickets||[];
+  if(!isAdmin())allTk=allTk.filter(tk=>[S.uid,...subTree(S.uid).map(u=>u.id)].includes(tk.createdBy));
+  // Date filter
+  if(f.dr1)allTk=allTk.filter(tk=>(tk.createdAt||'').slice(0,10)>=f.dr1);
+  if(f.dr2)allTk=allTk.filter(tk=>(tk.createdAt||'').slice(0,10)<=f.dr2);
+  // User filter
+  if(fArr('users').length)allTk=allTk.filter(tk=>fArr('users').includes(tk.createdBy));
+
+  const open=allTk.filter(t=>t.status==='Open').length;
+  const resolved=allTk.filter(t=>t.status==='Resolved').length;
+  const total=allTk.length;
+  if(!total)return'<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px">🎫 Tickets</div><p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No tickets in this period</p></div>';
+
+  const pct=Math.round(resolved/total*100);
+  const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
+
+  // Group by question text for breakdown
+  const byQ={};
+  allTk.forEach(tk=>{
+    const key=tk.questionText||'Unknown';
+    if(!byQ[key])byQ[key]={open:0,resolved:0,total:0,assignee:tk.assignedTo};
+    byQ[key].total++;
+    if(tk.status==='Open')byQ[key].open++;else byQ[key].resolved++;
+  });
+  const qRows=Object.entries(byQ).sort((a,b)=>b[1].total-a[1].total).slice(0,5);
+
+  let html='<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:#374151">🎫 Tickets</div>'
+    +'<button onclick="App.go(&quot;tickets&quot;)" style="font-size:11px;font-weight:700;color:#0E9F6E;border:none;background:none;cursor:pointer;padding:0">View all →</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'
+    +[['Open',open,'#DC2626','#FEE2E2'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
+      '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
+    ).join('')+'</div>'
+    +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px;transition:width .5s"></div></div></div>';
+
+  if(qRows.length){
+    html+='<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px">'
+      +'<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Top Questions</div>'
+      +qRows.map(([q,d])=>{
+        const assignee=uById(d.assignee);
+        return'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'
+          +(assignee?avatar(assignee,'w-6 h-6','text-[9px]'):'<div style="width:24px;height:24px;border-radius:50%;background:#F3F4F6"></div>')
+          +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(q)+'</div>'
+          +(assignee?'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(assignee))+'</div>':'')
+          +'</div>'
+          +'<div style="display:flex;gap:4px;flex-shrink:0">'
+          +(d.open?'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+d.open+' open</span>':'')
+          +(d.resolved?'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#DCFCE7;color:#059669">'+d.resolved+' done</span>':'')
+          +'</div></div>';
+      }).join('')+'</div>';
+  }
+
   html+='</div>';
   return html;
 }
@@ -2959,7 +3030,7 @@ function analyticsPage(){
   </div>
 
   ${_issuesAnalytics(f,fArr)}
-  ${_issuesAnalytics(f,fArr)}
+  ${_ticketsAnalytics(f,fArr)}
 
   <!-- Charts -->
 
@@ -3388,7 +3459,7 @@ App._doUpload=async()=>{
   }
   log(fullName(me()),'Uploaded '+done+' file(s)',scopeKey);
   toast('Uploaded '+done+' file'+(done>1?'s':''));
-  saveDB();closeModal();rr();
+  saveDB();closeModal();render();
 };
 
 App._downloadDoc=async(id)=>{
@@ -3424,15 +3495,15 @@ App._delDoc=(id)=>{
   const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc||!confirm('Delete "'+doc.name+'"?'))return;
   sb.storage.from('documents').remove([doc.storagePath||doc.url]).catch(()=>{});
   DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
-  log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();rr();
+  log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();render();
 };
 
-function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem('${LS_KEY}');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
+function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
 (async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();
       // Snapshot local-only fields before loadFromSB overwrites DB
-      loadFromSB().then(()=>{saveDB();rr();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+      loadFromSB().then(()=>{saveDB();render();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 /* ===== QUESTIONS & TICKETS ===== */
 
@@ -3521,7 +3592,7 @@ App._confirmFlagWithQuestion=(clId,taskIdx)=>{
   DB.tickets.unshift(ticket);
   // Notification to assigned user
   if(q.assignedTo&&q.assignedTo!==S.uid){
-    const notifText=`New ticket: "${esc(ticketTitle)}" — ${esc(comment.slice(0,60))}${comment.length>60?'…':''}`;
+    const notifText='New ticket: '+ticketTitle+' — '+comment.slice(0,60)+(comment.length>60?'…':'');
     DB.notifications.push({id:uid('n'),userId:q.assignedTo,text:notifText,read:false,time:new Date().toISOString()});
     _invalidateNotifCache();
   }
@@ -3530,72 +3601,156 @@ App._confirmFlagWithQuestion=(clId,taskIdx)=>{
   closeModal();saveDB();render();
 };
 
-// ── QUESTIONS PAGE — access-gated (admin + questionsAccess users) — lists management only ──
+// ── QUESTIONS PAGE — access-gated (admin + questionsAccess users) ──
+// Shows ALL individual questions across all lists, each as its own card.
+// Lists are managed via the "Manage Lists" button.
 function questionsPage(){
   const lists=DB.questionLists||[];
-  return`<div class="fade">${hdr('Questions','Manage question lists',btnP('New Question List','App._newQL()','plus'))}
-  ${!lists.length
-    ?empty('help','No question lists yet','Create a list, add questions, and assign each to a user. Then attach the list to a checklist task — when a user flags that task it will trigger a ticket.')
-    :`<div class="space-y-3">
-      ${lists.map(ql=>{
-        const openTk=(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length;
-        return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.05)">
-          <div style="display:flex;align-items:center;gap:12px;padding:14px 18px;border-bottom:1px solid #F5F4F0">
-            <div style="width:38px;height:38px;background:#EFF6FF;border-radius:10px;display:grid;place-items:center;color:#1D4ED8;flex-shrink:0">${ic('help','w-4 h-4')}</div>
+  // Flatten all questions across all lists into individual cards
+  const allQuestions=[];
+  lists.forEach(ql=>{
+    (ql.questions||[]).forEach((q,qi)=>{
+      const openTk=(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.questionIndex===qi&&tk.status==='Open').length;
+      const totalTk=(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.questionIndex===qi).length;
+      allQuestions.push({q,qi,ql,openTk,totalTk});
+    });
+  });
+
+  const qFilter=S.filters.qFilt||''; // 'assigned', 'unassigned', or ''
+  const displayed=qFilter==='assigned'?allQuestions.filter(x=>x.q.assignedTo):
+                  qFilter==='unassigned'?allQuestions.filter(x=>!x.q.assignedTo):allQuestions;
+
+  return`<div class="fade">${hdr('Questions','Individual question assignment',btnP('Manage Lists','App._manageQLists()','list'))}
+  <!-- Filter + stats bar -->
+  <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+    <div style="display:flex;gap:6px">
+      ${[['','All',allQuestions.length],['assigned','Assigned',allQuestions.filter(x=>x.q.assignedTo).length],['unassigned','Unassigned',allQuestions.filter(x=>!x.q.assignedTo).length]].map(([v,l,n])=>`<button onclick="S.filters.qFilt='${v}';rr()" style="padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;${qFilter===v?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.6">(${n})</span></button>`).join('')}
+    </div>
+    <div style="margin-left:auto;display:flex;gap:8px">
+      ${!lists.length?btnP('New List','App._newQL()','plus'):''}
+    </div>
+  </div>
+
+  ${!allQuestions.length
+    ?empty('help','No questions yet',lists.length?'Click "Manage Lists" to add questions to your lists':'Click "Manage Lists" to create a question list first')
+    :!displayed.length
+      ?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${qFilter} questions</div>`
+      :`<div class="space-y-2">
+        ${displayed.map(({q,qi,ql,openTk,totalTk})=>{
+          const assignee=uById(q.assignedTo);
+          return`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:14px 16px;display:flex;align-items:center;gap:12px;box-shadow:0 1px 3px rgba(16,24,40,.04);transition:box-shadow .15s" onmouseover="this.style.boxShadow='0 4px 12px rgba(16,24,40,.1)'" onmouseout="this.style.boxShadow='0 1px 3px rgba(16,24,40,.04)'">
+            <!-- Question number in list -->
+            <div style="width:28px;height:28px;border-radius:8px;background:#EFF6FF;color:#1D4ED8;display:grid;place-items:center;font-size:11px;font-weight:800;flex-shrink:0" title="Question ${qi+1} in '${esc(ql.name)}'">${qi+1}</div>
+            <!-- Content -->
             <div style="flex:1;min-width:0">
-              <div class="fd" style="font-size:15px;font-weight:700">${esc(ql.name)}</div>
-              <div style="display:flex;gap:10px;margin-top:3px;flex-wrap:wrap">
-                <span style="font-size:12px;color:#9CA3AF">${(ql.questions||[]).length} question${(ql.questions||[]).length!==1?'s':''}</span>
-                ${openTk?`<span style="font-size:12px;font-weight:700;color:#EF4444">● ${openTk} open ticket${openTk!==1?'s':''}</span>`:`<span style="font-size:12px;color:#10B981">✓ No open tickets</span>`}
+              <div style="font-size:14px;font-weight:600;color:#15171C;margin-bottom:4px">${esc(q.text)}</div>
+              <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                <span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;background:#EFF6FF;color:#1D4ED8">${esc(ql.name)}</span>
+                ${openTk?`<span style="font-size:11px;font-weight:700;color:#EF4444">● ${openTk} open</span>`:''}
+                ${totalTk&&!openTk?`<span style="font-size:11px;color:#10B981">✓ ${totalTk} resolved</span>`:''}
               </div>
             </div>
-            <div style="display:flex;gap:6px;flex-shrink:0">
-              <button onclick="App._editQL('${ql.id}')" style="padding:6px 14px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>
-              <button onclick="App._delQL('${ql.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-4 h-4')}</button>
+            <!-- Assignee -->
+            <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+              ${assignee
+                ?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-8 h-8','text-[10px]')}<div><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`
+                :`<div style="text-align:center"><div style="font-size:11px;color:#D1D5DB;font-style:italic;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</div></div>`}
+              <button onclick="App._editQLQuestion('${ql.id}',${qi})" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:11px;font-weight:600;cursor:pointer;color:#374151;flex-shrink:0" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>
             </div>
-          </div>
-          ${!(ql.questions||[]).length
-            ?`<div style="padding:14px 18px;font-size:13px;color:#D1D5DB;text-align:center;font-style:italic">No questions yet — click Edit to add some</div>`
-            :(ql.questions||[]).map((q,qi)=>{const u=uById(q.assignedTo);return`<div style="display:flex;align-items:center;gap:10px;padding:10px 18px;border-bottom:1px solid #F9F8F5">
-              <span style="font-size:10px;font-weight:700;color:#C8C5BD;width:18px;text-align:center;flex-shrink:0">${qi+1}</span>
-              <div style="flex:1;font-size:13px;color:#15171C">${esc(q.text)}</div>
-              ${u
-                ?`<div style="display:flex;align-items:center;gap:6px;flex-shrink:0">${avatar(u,'w-6 h-6','text-[9px]')}<span style="font-size:12px;font-weight:600;color:#6B7280">${esc(fullName(u))}</span></div>`
-                :`<span style="font-size:11px;font-style:italic;color:#D1D5DB;flex-shrink:0">Unassigned</span>`}
-            </div>`;}).join('')}
-        </div>`;
-      }).join('')}
-    </div>`}
+          </div>`;
+        }).join('')}
+      </div>`}
   </div>`;
 }
 
-// ── TICKETS PAGE — visible to everyone; each user sees their assigned tickets ──
-// Admins + questionsAccess users see ALL tickets with full controls
+// ── TICKETS PAGE ──
+// Admin / questionsAccess → ALL tickets + Edit control
+// Manager → tickets where createdBy is in their subtree
+// User → only tickets assigned to them personally
+// Render tickets grouped by the user who created them (for manager/admin view)
+function _ticketsByUser(tickets){
+  if(!tickets.length)return'<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No tickets</div>';
+  const groups={};
+  tickets.forEach(tk=>{const k=tk.createdBy||'unknown';if(!groups[k])groups[k]=[];groups[k].push(tk);});
+  const sortedGroups=Object.entries(groups).sort((a,b)=>b[1].filter(t=>t.status==='Open').length-a[1].filter(t=>t.status==='Open').length);
+  return'<div class="space-y-4">'+sortedGroups.map(([createdById,tks])=>{
+    const u=uById(createdById);
+    const open=tks.filter(t=>t.status==='Open').length;
+    const resolved=tks.filter(t=>t.status==='Resolved').length;
+    return'<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#FAFAF8;border-bottom:1px solid #F5F4F0">'
+      +(u?avatar(u,'w-8 h-8','text-[10px]'):'')
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:700">'+(u?esc(fullName(u)):'Unknown user')+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF">'+tks.length+' ticket'+(tks.length!==1?'s':'')+'</div></div>'
+      +(open?'<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#FEE2E2;color:#DC2626">'+open+' open</span>':'')
+      +(resolved?'<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#DCFCE7;color:#166534;margin-left:4px">'+resolved+' resolved</span>':'')
+      +'</div>'
+      +tks.map(tk=>{
+        const assignee=uById(tk.assignedTo);
+        const isOpen=tk.status==='Open';
+        const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+        return'<div style="padding:10px 16px;border-top:1px solid #F5F4F0;border-left:3px solid '+(isOpen?'#EF4444':'#10B981')+'">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px">'
+          +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;'+(isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534')+'">'+tk.status+'</span>'
+          +'<span style="font-size:10px;color:#B8B5AC">'+createdAt+'</span>'
+          +'</div>'
+          +'<div style="font-size:11px;color:#9CA3AF;margin-bottom:2px">'+esc(tk.checklistName)+' › '+esc(tk.taskName)+'</div>'
+          +'<div style="font-size:13px;font-weight:600;color:#15171C">'+esc(tk.questionText)+'</div>'
+          +(tk.comment?'<div style="font-size:12px;color:#6B7280;margin-top:4px;padding:5px 8px;background:#FFF5F5;border-radius:6px">'+esc(tk.comment.slice(0,100))+(tk.comment.length>100?'...':'')+'</div>':'')
+          +'</div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+          +(assignee?'<div style="display:flex;align-items:center;gap:4px">'+avatar(assignee,'w-6 h-6','text-[9px]')+'<span style="font-size:11px;font-weight:600">'+esc(fullName(assignee))+'</span></div>':'')
+          +(isOpen?'<button onclick="App._resolveTicket(&quot;'+tk.id+'&quot;)" style="padding:4px 10px;border-radius:7px;background:#15171C;color:#fff;font-size:11px;font-weight:700;border:none;cursor:pointer">Resolve</button>':'')
+          +'</div></div></div>';
+      }).join('')
+      +'</div>';
+  }).join('')+'</div>';
+}
+
+function _scopedTickets(){
+  const all=DB.tickets||[];
+  if(isAdmin()||me()?.questionsAccess)return{tickets:all,canEdit:true,scope:'all'};
+  if(isMgr()){
+    const treeIds=[S.uid,...subTree(S.uid).map(u=>u.id)];
+    // Manager sees tickets created by OR assigned to their team
+    return{tickets:all.filter(tk=>treeIds.includes(tk.createdBy)||treeIds.includes(tk.assignedTo)),canEdit:false,scope:'team'};
+  }
+  return{tickets:all.filter(tk=>tk.assignedTo===S.uid),canEdit:false,scope:'personal'};
+}
+
 function ticketsPage(){
-  const canManageAll=isAdmin()||me()?.questionsAccess;
-  const allTickets=DB.tickets||[];
-  const myTickets=canManageAll?allTickets:allTickets.filter(tk=>tk.assignedTo===S.uid);
+  const {tickets:myTickets,canEdit,scope}=_scopedTickets();
   const statusFilter=S.filters.tkStat||'';
   const list=statusFilter?myTickets.filter(t=>t.status===statusFilter):myTickets;
   const openCount=myTickets.filter(t=>t.status==='Open').length;
   const resolvedCount=myTickets.filter(t=>t.status==='Resolved').length;
+  const subtitle=scope==='all'?'All issue tickets':scope==='team'?"Your team's tickets":'Your assigned tickets';
+  const groupByUser=scope!=='personal'&&(S.filters.tkGroup==='user');
 
-  return`<div class="fade">${hdr('Tickets',canManageAll?'All issue tickets':'Your assigned tickets')}
-  <!-- Filter pills -->
+  return`<div class="fade">${hdr('Tickets',subtitle)}
+  <!-- Filter bar -->
   <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
     ${[['','All',myTickets.length],['Open','Open',openCount],['Resolved','Resolved',resolvedCount]].map(([s,l,n])=>`<button onclick="S.filters.tkStat='${s}';rr()" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .12s;${statusFilter===s?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.6">(${n})</span></button>`).join('')}
+    ${scope!=='personal'?`<button onclick="S.filters.tkGroup=groupByUser?'':'user';rr()" style="margin-left:auto;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;${groupByUser?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">👤 By user</button>`:''}
   </div>
 
   ${!myTickets.length
-    ?empty('ticket','No tickets yet',canManageAll?'Tickets appear when users flag issues on tasks with a question list attached':'You have no tickets assigned to you')
+    ?empty('ticket','No tickets',scope==='personal'?'You have no tickets assigned to you':scope==='team'?'No tickets from your team yet':'Tickets appear when users flag tasks with a question list attached')
+    :groupByUser
+      ?_ticketsByUser(list)
     :!list.length
       ?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${statusFilter.toLowerCase()} tickets</div>`
       :`<div class="space-y-3">
         ${list.map(tk=>{
           const creator=uById(tk.createdBy);const assignee=uById(tk.assignedTo);
           const isOpen=tk.status==='Open';
+          const isResolved=tk.status==='Resolved';
           const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
           const resolvedAt=tk.resolvedAt?new Date(tk.resolvedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+          // FIX 4: once resolved, no edit allowed
+          const showEdit=canEdit&&isOpen;
           return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${isOpen?'#EF4444':'#10B981'};overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">
             <div style="padding:14px 16px">
               <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
@@ -3614,13 +3769,13 @@ function ticketsPage(){
                     ?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-7 h-7','text-[10px]')}<div><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`
                     :`<span style="font-size:11px;font-weight:600;color:#D1D5DB;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</span>`}
                   <div style="display:flex;gap:6px">
-                    ${canManageAll?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>`:''}
+                    ${showEdit?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>`:''}
                     ${isOpen?`<button onclick="App._resolveTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Mark Resolved</button>`:''}
                   </div>
                 </div>
               </div>
               ${tk.notes?`<div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12px;color:#374151;border:1px solid #ECEDF0">📝 ${esc(tk.notes)}</div>`:''}
-              ${!isOpen&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
+              ${isResolved&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
             </div>
           </div>`;
         }).join('')}
@@ -3637,6 +3792,7 @@ App._resolveTicket=(id)=>{
 
 App._editTicket=(id)=>{
   const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  if(tk.status==='Resolved'){toast('Resolved tickets cannot be edited','warn');return;}
   openModal(`<div class="p-5">
     <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Edit Ticket</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
     <div class="space-y-3">
@@ -3664,14 +3820,66 @@ App._saveTicketEdit=(id)=>{
   }
   tk.assignedTo=newAssignee||null;
   tk.notes=$('#tk-notes')?.value.trim()||'';
-  toast('Saved ✓');closeModal();saveDB();render();
+  _invalidateNotifCache();toast('Saved ✓');closeModal();saveDB();render();
 };
 
 // Question List CRUD
 App._newQL=()=>App._editQL(null);
+
+// Open a modal showing all lists with edit/delete/add — the "Manage Lists" overlay
+App._manageQLists=()=>{
+  const lists=DB.questionLists||[];
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4">
+      <h2 class="fd text-xl font-bold">Manage Question Lists</h2>
+      <button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button>
+    </div>
+    ${!lists.length?`<p style="font-size:13px;color:#9CA3AF;text-align:center;padding:16px">No lists yet</p>`
+    :`<div class="space-y-2 mb-4">
+      ${lists.map(ql=>`<div style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:#F9FAFB;border-radius:10px;border:1px solid #E5E7EB">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">${esc(ql.name)}</div>
+          <div style="font-size:11px;color:#9CA3AF">${(ql.questions||[]).length} questions</div>
+        </div>
+        <button onclick="App.closeModal();App._editQL('${ql.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:11px;font-weight:600;cursor:pointer">Edit</button>
+        <button onclick="App._delQL('${ql.id}')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-3 h-3')}</button>
+      </div>`).join('')}
+    </div>`}
+    <button onclick="App.closeModal();App._newQL()" style="width:100%;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px">${ic('plus','w-4 h-4')} New Question List</button>
+  </div>`,'max-w-md');
+};
+
+// Edit a single question inline (assign user or change text) — used from questionsPage individual cards
+App._editQLQuestion=(qlId,qi)=>{
+  const ql=(DB.questionLists||[]).find(x=>x.id===qlId);if(!ql)return;
+  const q=ql.questions[qi];if(!q)return;
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Edit Question</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
+    <div class="space-y-3">
+      <div style="background:#EFF6FF;border-radius:10px;padding:8px 12px;font-size:11px;font-weight:700;color:#1D4ED8">List: ${esc(ql.name)}</div>
+      <div><label class="block text-xs font-semibold text-ink-500 mb-1">Question text</label>
+        <input id="eq-text" type="text" value="${esc(q.text)}" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf" placeholder="Question text…"/>
+      </div>
+      ${selF('Assign to','eq-assign',[['','— Unassigned —'],...DB.users.filter(u=>u.status==='Active').map(u=>[u.id,fullName(u)])],q.assignedTo||'')}
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._saveQLQuestion('${qlId}',${qi})" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Save</button>
+    </div>
+  </div>`,'max-w-sm');
+};
+
+App._saveQLQuestion=(qlId,qi)=>{
+  const ql=(DB.questionLists||[]).find(x=>x.id===qlId);if(!ql)return;
+  const q=ql.questions[qi];if(!q)return;
+  const text=($('#eq-text')?.value||'').trim();
+  if(!text){toast('Question text required','err');return;}
+  const assignedTo=$('#eq-assign')?.value||null;
+  q.text=text;q.assignedTo=assignedTo;
+  toast('Saved ✓');closeModal();saveDB();render();
+};
 App._editQL=(id)=>{
   const ql=id?(DB.questionLists||[]).find(x=>x.id===id):null;
-  const qsJson=JSON.stringify(ql?.questions||[]);
   openModal(`<div class="p-5">
     <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${ql?'Edit':'New'} Question List</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
     <div class="space-y-3">
