@@ -531,12 +531,12 @@ function _notifCount(){
   _notifCache={uid,count,ts:now};
   return count;
 }
-// Open ticket count for Tickets badge — scoped like ticketsPage
+// Open ticket count for Tickets badge — matches _scopedTickets logic exactly
 function _myOpenTicketCount(){
   const uid=S.uid;if(!uid)return 0;
   if(isAdmin()||me()?.questionsAccess)return (DB.tickets||[]).filter(tk=>tk.status==='Open').length;
-  if(isMgr()){const treeIds=[uid,...subTree(uid).map(u=>u.id)];return (DB.tickets||[]).filter(tk=>treeIds.includes(tk.createdBy)&&tk.status==='Open').length;}
-  return (DB.tickets||[]).filter(tk=>tk.assignedTo===uid&&tk.status==='Open').length;
+  if(isMgr()){const teamIds=subTree(uid).map(u=>u.id);return (DB.tickets||[]).filter(tk=>teamIds.includes(tk.assignedTo)&&tk.status==='Open').length;}
+  return (DB.tickets||[]).filter(tk=>(tk.createdBy===uid||tk.assignedTo===uid)&&tk.status==='Open').length;
 }
 function _invalidateNotifCache(){_notifCache.ts=0;}
 
@@ -1194,7 +1194,7 @@ App._createFolderIn=()=>{
   toast('📁 "'+name+'" created');
   App._folderCtx={type:null,scope:null,_creating:false};
   saveDB();
-  rr();
+  render();
 
   // Sync to Supabase in background
   sb.from('doc_folders').insert({
@@ -1266,7 +1266,7 @@ function deptsPage(){
       const cls=DB.checklists.filter(c=>c.department===d.name);
       const docs=(DB.documents||[]).filter(x=>x.type==='dept'&&x.scope===d.name).length;
       const folders=(DB.folders||[]).filter(x=>x.type==='dept'&&x.scope===d.name&&!x.parentId).length;
-      return'<div onclick="App._openDept(this.dataset.id)" data-id="'+d.id+'" class="text-left" style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;cursor:pointer;transition:all .15s;display:block;width:100%" class="dept-card">'
+      return'<div onclick="App._openDept(this.dataset.id)" data-id="'+d.id+'" class="dept-card" style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;cursor:pointer;transition:all .15s;display:block;width:100%">'
         +'<div style="display:flex;justify-content:space-between;margin-bottom:12px">'
         +'<div style="width:36px;height:36px;border-radius:10px;background:#ECFDF5;display:grid;place-items:center">'+ic('dept','w-4 h-4 text-brand-600')+'</div>'
         +(isAdmin()?'<div style="display:flex;gap:4px" onclick="event.stopPropagation()"><button onclick="App.editDept(this.dataset.id)" data-id="'+d.id+'" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#9CA3AF;border:none;background:transparent;cursor:pointer">'+ic('edit','w-3.5 h-3.5')+'</button><button onclick="App.delDept(this.dataset.id)" data-id="'+d.id+'" style="width:28px;height:28px;display:grid;place-items:center;border-radius:7px;color:#9CA3AF;border:none;background:transparent;cursor:pointer">'+ic('trash','w-3.5 h-3.5')+'</button></div>':'')
@@ -1287,7 +1287,8 @@ function deptsPage(){
 }
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveDept=async(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
-App.delDept=async(id)=>{const d=DB.departments.find(x=>x.id===id);if(!confirm('Delete '+d.name+'?'))return;await sb.from('departments').delete().eq('id',id);DB.departments=DB.departments.filter(x=>x.id!==id);log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
+App.delDept=async(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;await sb.from('departments').delete().eq('id',id);DB.departments=DB.departments.filter(x=>x.id!==id);// Clear dept from users and checklists (don't delete them)
+DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
 function locsPage(){
@@ -1772,6 +1773,12 @@ function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEdit
     const btn='<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="'+btnCls+'"'+(allDone?'':' disabled')+'>'+btnLbl+'</button>';
     return '<span style="font-size:12px;color:#B8B5AC">'+prog+'</span>'+btn;
   }
+  // Editing: user clicked 'Edit & Resubmit', tasks are now interactive — show submit button
+  if(sub&&sub.status==='Editing'){
+    const btnCls='submit-pill '+(allDone?'go':'no');
+    const btnLbl=allDone?'\u2713 Submit edit':'Submit ('+(doneN+issN)+'/'+total+')';
+    return '<span style="font-size:12px;font-weight:700;color:#0EA5E9">Editing…</span>'+'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="'+btnCls+'"'+(allDone?'':' disabled')+'>'+btnLbl+'</button>';
+  }
   if(editApproved){
     return '<span style="font-size:12px;font-weight:700;color:#0D7A4E">Edit approved</span>'+'<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
   }
@@ -1802,8 +1809,8 @@ function _clCard(c,date){
   const allDone=(doneN+issN)===total&&total>0&&!run.tasks.some(t=>t.issue&&!t.issueComment?.trim());
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
   const editApproved=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Approved');
-  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late'};
-  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444'};
+  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend'};
+  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444','Editing':'#0EA5E9'};
 
   return`<div class="clc" style="border-top:3px solid ${stBar[st]||'#EEECE8'}">
     <!-- Header -->
@@ -1812,7 +1819,7 @@ function _clCard(c,date){
         <div class="fd" style="font-size:15px;font-weight:800;color:#111110">${esc(c.name)}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           <span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>
-          ${!sub&&total?`<span style="font-size:12px;font-weight:600;color:${doneN+issN>0?stBar[st]:'#C8C5BD'}">${doneN+issN}/${total}</span>`:''}
+          ${(!sub||sub.status==='Editing')&&total?`<span style="font-size:12px;font-weight:600;color:${doneN+issN>0?stBar[st]:'#C8C5BD'}">${doneN+issN}/${total}</span>`:''}
           ${issN>0?`<span style="font-size:11px;font-weight:700;padding:1px 6px;border-radius:4px;background:#FFEDED;color:#C92C2C">⚑ ${issN}</span>`:''}
         </div>
       </div>
@@ -1824,7 +1831,7 @@ function _clCard(c,date){
 
     <!-- Tasks -->
     ${exp?`<div>
-      ${tasks.map((t,i)=>_taskRow(c,t,i,run,!!sub,date)).join('')}
+      ${tasks.map((t,i)=>_taskRow(c,t,i,run,!!sub&&sub.status!=='Editing',date)).join('')}
       <!-- Footer -->
       <div class="clc-ft">${_clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved)}</div>
       ${sub?DB.feedback.filter(fb=>fb.checklistId===c.id&&fb.userId===S.uid&&fb.date===date).map(fb=>{
@@ -2603,8 +2610,10 @@ function _feedbackTabContent(uid){
 function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
-  // Mark all as read
-  const hadUnread=notifs.some(n=>!n.read);
+  // Track which were unread BEFORE marking them (so the dot shows on this render)
+  const unreadIds=new Set(notifs.filter(n=>!n.read).map(n=>n.id));
+  const hadUnread=unreadIds.size>0;
+  // Mark as read after snapshot — do it now so next render they're read
   notifs.forEach(n=>n.read=true);
   if(hadUnread){_invalidateNotifCache();setTimeout(()=>saveDB(),300);}
   // Feedback for this user
@@ -2641,7 +2650,7 @@ function notificationsPage(){
   const counts={
     All:notifs.length,
     Approvals:notifs.filter(n=>['approval','edit'].includes(notifType(n.text))).length,
-    Feedback:myFb.length,
+    Feedback:notifs.filter(n=>notifType(n.text)==='feedback').length+myFb.filter(fb=>!fb.acknowledged).length,
     Issues:notifs.filter(n=>notifType(n.text)==='issue').length,
   };
 
@@ -2664,7 +2673,7 @@ function notificationsPage(){
           +filteredNotifs.map((n,idx)=>{
               const type=notifType(n.text);
               const clr=TYPE_CLR[type];const bg=TYPE_BG[type];const ico=TYPE_ICON[type];
-              const isNew=!n.read;
+              const isNew=unreadIds.has(n.id);
               // Parse deep-link target from notification text
               return '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid #F9F8F5;cursor:pointer;'+(isNew?'background:#FAFFFE':'background:#fff')+'" onclick="App._notifClick(this.dataset.id)" data-id="'+n.id+'">'
                 +'<div style="width:36px;height:36px;border-radius:10px;background:'+bg+';display:grid;place-items:center;flex-shrink:0;margin-top:1px">'+ic(ico,'w-4 h-4 text-['+clr+']')+'</div>'
@@ -2695,7 +2704,15 @@ App._notifClick=(id)=>{
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Issues'};render();window.scrollTo(0,0);return;
   }
-  if(t.includes('approved')||t.includes('Approved')||t.includes('rejected')||t.includes('Rejected')||t.includes('approval')){
+  if(t.includes('approved')||t.includes('Approved')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Approved'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('rejected')||t.includes('Rejected')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Rejected'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('approval')||t.includes('Pending')){
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
   }
@@ -2704,8 +2721,12 @@ App._notifClick=(id)=>{
     S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
   }
   // Ticket notification → go to tickets tab
-  if(t.includes('ticket')||t.includes('Ticket')||t.includes('Resolve')){
+  if(t.includes('ticket')||t.includes('Ticket')){
     App.go('tickets');return;
+  }
+  // Checklist removed → go to my checklists
+  if(t.includes('Checklist removed')||t.includes('no longer assigned')){
+    App.go('mychecklists');return;
   }
   // Default: go to notifications
   App._setNTab('All');App.go('notifications');
@@ -2835,7 +2856,6 @@ App._saveSendFeedback=(userId)=>{
   const type=(document.getElementById('sfb-type-val')?.value)||'General';
   const priority=$('#sfb-pri')?.value||'Low';
   const taskName=$('#sfb-task')?.value?.trim()||null;
-  const fbType=document.querySelector('[data-type]'+(''/*find active*/))?.dataset?.type;
   if(!DB.feedback)DB.feedback=[];
   DB.feedback.push({
     id:uid('fb'),title:title||type+' Feedback',type,
@@ -3060,7 +3080,7 @@ function analyticsPage(){
       ${[['On Time','#10B981'],['Late','#EF4444'],['Pending Approval','#F97316'],['Rejected','#9F1239']].map(([k,c])=>{const v=byS[k]||0;const pct=Math.round(v/tot*100);return`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">${k}</span><span style="color:#9CA3AF">${v} · ${pct}%</span></div><div style="height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${c};border-radius:3px"></div></div></div>`;}).join('')}
       <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F3F4F6">
         <div style="font-size:12px;font-weight:600;color:#9CA3AF;margin-bottom:6px">MISSED (past, no submission)</div>
-        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600;color:#F97316">${totalMissed} missed</span><span style="color:#9CA3AF">of ${totalAssigned} total assigned (last 7d)</span></div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600;color:#F97316">${totalMissed} missed</span><span style="color:#9CA3AF">of ${totalAssigned} assigned in period</span></div>
       </div>
     </div>
     <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:18px">
@@ -3378,7 +3398,7 @@ App._createFolder=()=>{
   log(fullName(me()),'Created folder',name);
   toast('Folder "'+name+'" created');
   App._folderCtx._creating=false;
-  closeModal();saveDB();rr();
+  closeModal();saveDB();render();
 };
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
@@ -3394,7 +3414,7 @@ App._delFolder=(id)=>{
   DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
   DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId));
   log(fullName(me()),'Deleted folder',f?.name||'');
-  toast('Deleted','warn');saveDB();rr();
+  toast('Deleted','warn');saveDB();render();
   // Delete from Supabase in background
   Promise.all(
     toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid))
@@ -3730,13 +3750,18 @@ function _ticketsByUser(tickets){
 
 function _scopedTickets(){
   const all=DB.tickets||[];
-  if(isAdmin()||me()?.questionsAccess)return{tickets:all,canEdit:true,scope:'all'};
+  // Admin always sees everything and can edit
+  if(isAdmin())return{tickets:all,canEdit:true,scope:'all'};
+  // questionsAccess users (question list managers) see all tickets and can edit/assign
+  if(me()?.questionsAccess)return{tickets:all,canEdit:true,scope:'all'};
+  // Manager (no questionsAccess): sees only tickets ASSIGNED to their direct team members
+  // They can monitor but not edit ticket assignments
   if(isMgr()){
-    const treeIds=[S.uid,...subTree(S.uid).map(u=>u.id)];
-    // Manager sees tickets created by OR assigned to their team
-    return{tickets:all.filter(tk=>treeIds.includes(tk.createdBy)||treeIds.includes(tk.assignedTo)),canEdit:false,scope:'team'};
+    const teamIds=subTree(S.uid).map(u=>u.id); // direct reports' tree only
+    return{tickets:all.filter(tk=>teamIds.includes(tk.assignedTo)),canEdit:false,scope:'team'};
   }
-  return{tickets:all.filter(tk=>tk.assignedTo===S.uid),canEdit:false,scope:'personal'};
+  // Regular user: sees tickets THEY created (flagged) OR are assigned to them personally
+  return{tickets:all.filter(tk=>tk.createdBy===S.uid||tk.assignedTo===S.uid),canEdit:false,scope:'personal'};
 }
 
 function ticketsPage(){
@@ -3835,7 +3860,7 @@ App._saveTicketEdit=(id)=>{
   const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
   const newAssignee=$('#tk-asgn')?.value||null;
   if(newAssignee&&newAssignee!==tk.assignedTo){
-    DB.notifications.push({id:uid('n'),userId:newAssignee,text:'Ticket assigned to you: '+esc(tk.questionText),read:false,time:new Date().toISOString()});
+    DB.notifications.push({id:uid('n'),userId:newAssignee,text:'Ticket assigned to you: '+tk.questionText,read:false,time:new Date().toISOString()});
   }
   tk.assignedTo=newAssignee||null;
   tk.notes=$('#tk-notes')?.value.trim()||'';
@@ -3967,6 +3992,8 @@ App._delQL=(id)=>{
   DB.questionLists=(DB.questionLists||[]).filter(x=>x.id!==id);
   // Remove references from tasks
   DB.checklists.forEach(c=>(c.tasks||[]).forEach(t=>{if(t.questionListId===id)t.questionListId=null;}));
+  // Orphan tickets — keep them but clear the questionListId reference
+  (DB.tickets||[]).forEach(tk=>{if(tk.questionListId===id)tk.questionListId=null;});
   toast('Deleted','warn');saveDB();render();
 };
 
