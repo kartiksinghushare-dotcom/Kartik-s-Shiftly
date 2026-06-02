@@ -3547,6 +3547,32 @@ function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<
 /* ===== QUESTIONS & TICKETS ===== */
 
 // Show the question selection modal when user flags an issue on a task that has a questionListId
+// Add a question from the Questions tab — if multiple lists exist, ask which list first
+App._addNewQuestion=()=>{
+  const lists=DB.questionLists||[];
+  if(!lists.length){toast('Create a list first in the Lists tab','warn');S.filters.qTab='lists';rr();return;}
+  if(lists.length===1){
+    // Only one list — go straight to editing it
+    App._editQL(lists[0].id);return;
+  }
+  // Multiple lists — ask which one
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Add Question to…</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
+    <p style="font-size:13px;color:#9CA3AF;margin-bottom:14px">Which list should this question go into?</p>
+    <div class="space-y-2">
+      ${lists.map(ql=>`<button onclick="App.closeModal();App._editQL('${ql.id}')" style="display:flex;align-items:center;gap:12px;width:100%;padding:12px 14px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;text-align:left" onmouseover="this.style.borderColor='#15171C';this.style.background='#F9FAFB'" onmouseout="this.style.borderColor='#ECEDF0';this.style.background='#fff'">
+        <div style="width:34px;height:34px;border-radius:9px;background:#EFF6FF;display:grid;place-items:center;flex-shrink:0;color:#1D4ED8">${ic('list','w-4 h-4')}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700;color:#15171C">${esc(ql.name)}</div>
+          <div style="font-size:12px;color:#9CA3AF">${(ql.questions||[]).length} question${(ql.questions||[]).length!==1?'s':''}</div>
+        </div>
+        <span style="color:#D1D5DB">${ic('chevR','w-4 h-4')}</span>
+      </button>`).join('')}
+    </div>
+    <button onclick="App.closeModal()" style="margin-top:12px;width:100%;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:#6B7280">Cancel</button>
+  </div>`,'max-w-sm');
+};
+
 App._showQuestionModal=(clId,taskIdx)=>{
   const c=clById(clId);const t=(c?.tasks||[])[taskIdx];if(!t)return;
   const ql=(DB.questionLists||[]).find(x=>x.id===t.questionListId);
@@ -3807,11 +3833,17 @@ function questionsPage(){
     <div style="display:flex;gap:6px">
       ${[['','All',allQ.length],['open','Has open tickets',allQ.filter(x=>x.openTk>0).length]].map(([v,l,n])=>`<button onclick="S.filters.qFilt='${v}';rr()" style="padding:5px 13px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;${qFilt===v?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.6">(${n})</span></button>`).join('')}
     </div>
+    ${lists.length?btnP('Add Question','App._addNewQuestion()','plus'):''}
   </div>
   ${!lists.length
-    ?empty('help','No lists yet','Go to the Lists tab to create a question list first.')
+    ?empty('help','No lists yet',lists.length===0?'First create a list in the Lists tab, then add questions here.':'')
     :!allQ.length
-      ?empty('help','No questions yet','Open a list and add questions to it.')
+      ?`<div style="text-align:center;padding:48px 24px;background:#fff;border-radius:16px;border:1px solid #ECEDF0">
+          <div style="width:44px;height:44px;border-radius:16px;background:#F6F7F8;color:#D1D5DB;display:grid;place-items:center;margin:0 auto 12px">${ic('help','w-5 h-5')}</div>
+          <p class="fd" style="font-weight:600;color:#6B7280;font-size:14px">No questions yet</p>
+          <p style="font-size:12px;color:#9CA3AF;margin:6px 0 16px">Add questions to your lists. Each question can have multiple answer options, each assigned to a different user.</p>
+          ${btnP('Add First Question','App._addNewQuestion()','plus')}
+        </div>`
       :!shown.length
         ?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No questions with open tickets</div>`
         :`<div class="space-y-3">
@@ -3862,20 +3894,24 @@ App._editQLQuestion=(qlId,qi)=>{
 
   const renderAnswerRows=()=>{
     const el=document.getElementById('eq-answers');if(!el)return;
-    el.innerHTML=(window._editingAnswers.length
-      ?window._editingAnswers.map((a,ai)=>`
-        <div data-ai="${ai}" style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:8px 10px;margin-bottom:6px">
-          <span style="font-size:11px;font-weight:700;color:#9CA3AF;flex-shrink:0;width:18px;text-align:center">${String.fromCharCode(65+ai)}</span>
-          <input type="text" value="${esc(a.text)}" oninput="window._editingAnswers[${ai}].text=this.value" placeholder="Answer option…"
-            style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;outline:none;color:#15171C;padding:2px 0"/>
-          <select onchange="window._editingAnswers[${ai}].assignedTo=this.value||null"
-            style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:3px 8px;font-size:11px;outline:none;color:#374151;max-width:150px">
-            <option value="">— Assign user —</option>
-            ${DB.users.filter(u=>u.status==='Active').map(u=>`<option value="${u.id}" ${a.assignedTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('')}
-          </select>
-          <button onclick="window._editingAnswers.splice(${ai},1);App._refreshAnswerRows()" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-3 h-3')}</button>
-        </div>`).join('')
-      :'<p style="text-align:center;font-size:12px;color:#D1D5DB;padding:10px">No answer options yet — add some below</p>');
+    if(!window._editingAnswers||!window._editingAnswers.length){
+      el.innerHTML='<p style="text-align:center;font-size:12px;color:#D1D5DB;padding:10px">No answer options yet — click Add answer</p>';
+      return;
+    }
+    const activeUsers=DB.users.filter(u=>u.status==='Active');
+    let html='';
+    window._editingAnswers.forEach(function(a,ai){
+      const letter=String.fromCharCode(65+ai);
+      let opts='<option value="">— Assign user —</option>';
+      activeUsers.forEach(function(u){opts+='<option value="'+u.id+'"'+(a.assignedTo===u.id?' selected':'')+'>'+esc(fullName(u))+'</option>';});
+      html+='<div data-ai="'+ai+'" style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:8px 10px;margin-bottom:6px">'
+        +'<span style="font-size:11px;font-weight:700;color:#9CA3AF;flex-shrink:0;width:18px;text-align:center">'+letter+'</span>'
+        +'<input type="text" data-answer-idx="'+ai+'" value="'+esc(a.text)+'" placeholder="Answer option…" style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;outline:none;color:#15171C;padding:2px 0"/>'
+        +'<select data-assign-idx="'+ai+'" style="background:#fff;border:1px solid #E5E7EB;border-radius:7px;padding:3px 8px;font-size:11px;outline:none;color:#374151;max-width:150px">'+opts+'</select>'
+        +'<button data-del-ai="'+ai+'" onclick="App._delAnswerRow(this)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;flex-shrink:0">'+ic('trash','w-3 h-3')+'</button>'
+        +'</div>';
+    });
+    el.innerHTML=html;
   };
   window.App._refreshAnswerRows=renderAnswerRows;
 
@@ -3907,28 +3943,31 @@ App._editQLQuestion=(qlId,qi)=>{
   setTimeout(()=>renderAnswerRows(),0);
 };
 
+App._delAnswerRow=(btn)=>{
+  const ai=parseInt(btn.dataset.delAi);
+  if(isNaN(ai)||!window._editingAnswers)return;
+  window._editingAnswers.splice(ai,1);
+  App._refreshAnswerRows();
+};
 App._saveQLQuestion=(qlId,qi)=>{
   const ql=(DB.questionLists||[]).find(x=>x.id===qlId);if(!ql)return;
   const q=ql.questions[qi];if(!q)return;
   const text=($('#eq-text')?.value||'').trim();
   if(!text){toast('Question text required','err');return;}
-  // Read answer rows from DOM first (more reliable than oninput state)
-  const rows=document.querySelectorAll('#eq-answers [data-ai]');
-  let answers=[];
-  if(rows.length){
-    rows.forEach(row=>{
-      const ai=parseInt(row.dataset.ai);
-      const inp=row.querySelector('input[type="text"]');
-      const sel=row.querySelector('select');
-      const t=(inp?.value||'').trim();
-      if(t)answers.push({text:t,assignedTo:sel?.value||null});
-    });
-  } else {
-    answers=(window._editingAnswers||[]).filter(a=>(a.text||'').trim());
+  // Always read answers directly from DOM — data-answer-idx inputs and data-assign-idx selects
+  const answers=[];
+  document.querySelectorAll('#eq-answers [data-ai]').forEach(row=>{
+    const inp=row.querySelector('[data-answer-idx]');
+    const sel=row.querySelector('[data-assign-idx]');
+    const t=(inp?.value||'').trim();
+    if(t)answers.push({text:t,assignedTo:sel?.value||null});
+  });
+  // Fallback: if DOM is gone, use in-memory state
+  if(!answers.length&&window._editingAnswers?.length){
+    (window._editingAnswers||[]).forEach(a=>{if((a.text||'').trim())answers.push({text:a.text.trim(),assignedTo:a.assignedTo||null});});
   }
   q.text=text;q.answers=answers;
-  // Remove old flat assignedTo — answers now carry individual assignees
-  delete q.assignedTo;
+  delete q.assignedTo; // remove old flat field
   toast('Saved ✓');closeModal();saveDB();render();
 };
 
