@@ -1805,7 +1805,8 @@ function _clCard(c,date){
   const doneN=run.tasks.filter(t=>t.response!==null&&t.response!==undefined&&!t.issue).length;
   const issN=run.tasks.filter(t=>t.issue).length;
   const total=tasks.length;
-  const allDone=(doneN+issN)===total&&total>0&&!run.tasks.some(t=>t.issue&&!t.issueComment?.trim());
+  const photoDone=!(c.tasks||[]).some((ct,ci)=>ct.photo&&!run.tasks[ci]?.photo&&!run.tasks[ci]?.issue);
+  const allDone=(doneN+issN)===total&&total>0&&!run.tasks.some(t=>t.issue&&!t.issueComment?.trim())&&photoDone;
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
   const editApproved=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Approved');
   const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend'};
@@ -1949,7 +1950,7 @@ App._togIssue=(clId,i)=>{
     App._showQuestionModal(clId,i);return;
   }
   // Proceed to flag the issue directly
-  rt.issue=true;rt.response='Issue';rt.done=true;render();
+  rt.issue=true;rt.response='Issue';rt.done=true;if(!rt.issueComment)rt.issueComment='Flagged';render();
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i]){RUN[clId].tasks[i].issueComment=v;_updateSubmitBtn(clId);}};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
@@ -3732,7 +3733,7 @@ App._showQuestionModal=(clId,taskIdx)=>{
 
   // ── No list → create ticket assigned to user's manager (once per task) ──
   if(!ql){
-    rt.issue=true;rt.response='Issue';rt.done=true;
+    rt.issue=true;rt.response='Issue';rt.done=true;if(!rt.issueComment)rt.issueComment='Auto-flagged';
     const mgrId=me()?.managerId;
     if(mgrId){
       // Dup guard: only create if no open general-flag ticket for this task
@@ -3765,7 +3766,7 @@ App._showQuestionModal=(clId,taskIdx)=>{
 
   // ── No questions in list → same as no list ──
   if(!questions.length){
-    rt.issue=true;rt.response='Issue';rt.done=true;
+    rt.issue=true;rt.response='Issue';rt.done=true;if(!rt.issueComment)rt.issueComment='Auto-flagged';
     const mgrId=me()?.managerId;
     if(mgrId){
       const dupGen=(DB.tickets||[]).find(tk=>tk.checklistId===clId&&tk.taskIndex===taskIdx&&tk.questionText==='General flag'&&tk.status==='Open');
@@ -3904,7 +3905,7 @@ App._flagPickAnswer=(qi,ai)=>{
   if(dup){
     // Flag the task normally (no new ticket)
     const rt=RUN[clId]?.tasks?.[taskIdx];
-    if(rt){rt.issue=true;rt.response='Issue';rt.done=true;rt.issueComment='';
+    if(rt){rt.issue=true;rt.response='Issue';rt.done=true;rt.issueComment=rt.issueComment||'Already reported';
       rt.selectedQuestion={qlId:ql.id,qi,text:q.text+': '+a.text,assignedTo:a.assignedTo||null,noNewTicket:true};}
     toast('Already reported — flagged without new ticket','warn');
     closeModal();saveDB();render();
