@@ -579,8 +579,11 @@ const navFor=()=>{
   return base;
 };
 App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
-  // Preserve analytics filters when navigating to/from analytics; reset everything else
-  if(r!=='analytics')S.filters={};
+  // Preserve analytics filters; preserve questions sub-tab state; reset everything else
+  if(r==='analytics'){/* keep filters */}
+  else if(r==='questions'){const qTab=S.filters.qTab;const eQ=S.filters.expandedQ;const eL=S.filters.expandedL;S.filters={};if(qTab)S.filters.qTab=qTab;if(eQ)S.filters.expandedQ=eQ;if(eL)S.filters.expandedL=eL;}
+  else if(r==='notifications'){const ntab=S.filters.ntab;S.filters={};if(ntab)S.filters.ntab=ntab;}
+  else{S.filters={};}
   if(r!=='teamview')S.tvUser=null;
   render();window.scrollTo(0,0);};
 
