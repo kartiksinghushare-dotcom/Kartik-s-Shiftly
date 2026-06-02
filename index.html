@@ -2597,7 +2597,7 @@ function _feedbackTabContent(uid){
 }
 function notificationsPage(){
   const uid=S.uid;
-  const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>b.time.localeCompare(a.time)).slice(0,80);
+  const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
   // Track which were unread BEFORE marking them (so the dot shows on this render)
   const unreadIds=new Set(notifs.filter(n=>!n.read).map(n=>n.id));
   const hadUnread=unreadIds.size>0;
@@ -3370,7 +3370,31 @@ App._delDoc=(id)=>{
   log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();render();
 };
 
-function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="if(confirm('Reset all workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
+App._clearOperational=async()=>{
+  if(!confirm('Clear checklists, submissions, tickets, approvals, notifications and audit log?\n\nUsers, departments, locations, questions and lists will be kept.'))return;
+  // Clear locally
+  DB.checklists=[];
+  DB.submissions=[];
+  DB.tickets=[];
+  DB.approvals=[];
+  DB.notifications=[];
+  DB.audit=[];
+  // Clear RUN cache
+  Object.keys(RUN).forEach(k=>delete RUN[k]);
+  _invalidateNotifCache();
+  // Clear from Supabase in background
+  Promise.allSettled([
+    sb.from('checklists').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('submissions').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('approvals').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('notifications').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('audit_logs').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+  ]).catch(e=>console.warn('clear sync:',e));
+  log(fullName(me()),'Cleared operational data','checklists, submissions, tickets, approvals, notifications, audit');
+  toast('Cleared ✓');saveDB();S.route='dashboard';render();
+};
+
+function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3 flex-wrap">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FED7AA;color:#C2410C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='#fff'">🧹 Clear data</button><button onclick="if(confirm('Reset ALL workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
 
 /* ===== BOOT ===== */
 (async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();
@@ -3981,7 +4005,7 @@ App._submitFlagAnswers=(clId,taskIdx)=>{
   if(a.assignedTo&&a.assignedTo!==S.uid){
     DB.notifications.push({
       id:uid('n'),userId:a.assignedTo,
-      text:'🚩 '+esc(t.name)+' — '+esc(q.text)+': '+esc(a.text)+(comment?' · '+comment.slice(0,60):''),
+      text:'🚩 New ticket: '+esc(t.name)+' — '+esc(q.text)+': '+esc(a.text)+(comment?' · '+comment.slice(0,60):''),
       read:false,time:new Date().toISOString()
     });
     _invalidateNotifCache();
