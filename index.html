@@ -607,7 +607,8 @@ function shell(content){
     const act=S.route===r;
     let badge='';
     if(r==='notifications'&&notifBadge)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`;
-    if(r==='questions'){const qb=(DB.questionLists||[]).length;if(qb)badge=`<span style="font-size:10px;font-weight:800;background:#1D4ED8;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${qb}</span>`;}
+    if(r==='approvals'){const ab=DB.approvals.filter(a=>a.status==='Pending').length;if(ab)badge=`<span style="font-size:10px;font-weight:800;background:#F97316;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${ab}</span>`;}
+    if(r==='questions'){const qb=(DB.tickets||[]).filter(t=>t.status==='Open').length;if(qb)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${qb}</span>`;}
     if(r==='tickets'){const tb=_myOpenTicketCount();if(tb)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${tb}</span>`;}
     return`<button onclick="App.go('${r}')"
     style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${act?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
@@ -1980,8 +1981,10 @@ function _updateSubmitBtn(clId){
   const photoDone=!(c.tasks||[]).some((t,i)=>t.photo&&!run.tasks[i]?.photo&&!run.tasks[i]?.issue);
   const canSubmit=allDone&&photoDone;
   const btns=document.querySelectorAll('.submit-pill');
+  // Detect editing mode from nearest checklist card
+  const isEditing=RUN[clId]?.status==='Editing';
   btns.forEach(btn=>{
-    if(canSubmit){btn.disabled=false;btn.className='submit-pill go';btn.textContent='✓ Submit';}
+    if(canSubmit){btn.disabled=false;btn.className='submit-pill go';btn.textContent=isEditing?'✓ Submit edit':'✓ Submit';}
     else{btn.disabled=true;btn.className='submit-pill no';btn.textContent='Submit ('+(doneN+issN)+'/'+total+')';}
   });
 }
@@ -2442,6 +2445,7 @@ App._resolveIssue=async(id)=>{
   const{error}=await sb.from('issues').update({status:'Resolved',resolved_at:iss.resolvedAt,updated_at:iss.updatedAt}).eq('id',id);
   if(error)console.warn('Issue resolve sync:',error.message);
   else DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue resolved: "'+iss.taskName+'" in '+(clById(iss.checklistId)?.name||'checklist'),time:new Date().toISOString(),read:false});
+  _invalidateNotifCache();saveDB();
   log(fullName(me()),'Resolved issue',iss.taskName);
 };
 App._reopenIssue=async(id)=>{
@@ -2450,6 +2454,7 @@ App._reopenIssue=async(id)=>{
   toast('Issue reopened','warn');saveDB();render();
   const{error}=await sb.from('issues').update({status:'Reopened',updated_at:iss.updatedAt}).eq('id',id);
   if(!error)DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue reopened: "'+iss.taskName+'" — please review',time:new Date().toISOString(),read:false});
+  _invalidateNotifCache();saveDB();
   log(fullName(me()),'Reopened issue',iss.taskName);
 };
 App._issueNote=(id)=>{
@@ -3883,7 +3888,7 @@ App._showQuestionModal=(clId,taskIdx)=>{
   if(!ql){
     const rt=RUN[clId]?.tasks?.[taskIdx];
     if(rt){rt.issue=true;rt.response='Issue';rt.done=true;}
-    rr();return;
+    render();return;
   }
   // Check for duplicate open ticket
   const existing=(DB.tickets||[]).find(tk=>tk.checklistId===clId&&tk.taskIndex===taskIdx&&tk.status==='Open');
