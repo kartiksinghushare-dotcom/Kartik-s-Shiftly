@@ -437,7 +437,7 @@ let DB={
 function log(a,b,c){if(!a||!b)return;if(DB.audit.length>200)DB.audit.length=200;DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
 function seed(){
   DB.feedback=[];DB.issues=[];
-  DB.users=[{id:uid('u'),firstName:'Kartiksingh',lastName:'Hushare',email:'kartiksinghushare@gmail.com',phone:'+971509660624',password:'***',position:'Business Process & System Analyst',department:'Operations',role:'Admin',status:'Active',managerId:null,rules:{past:true,future:true,edit:true},approval:{past:false,future:false,edited:false}}];
+  DB.users=[{id:uid('u'),firstName:'Kartiksingh',lastName:'Hushare',email:'kartiksinghushare@gmail.com',phone:'+971509660624',password:'***',position:'Business Process & System Analyst',department:'Operations',role:'Admin',status:'Active',managerId:null,rules:{past:true,future:true,edit:true},approval:{past:false,future:false,edited:false},questionsAccess:true,docAccess:{departments:{},locations:{}}}];
   DB.locations=[
     {id:uid('loc'),name:'Main Building',address:'Floor 1, Main Block',department:'',status:'Active'},
     {id:uid('loc'),name:'Housekeeping Depot',address:'Ground Floor, East Wing',department:'Housekeeping',status:'Active'},
@@ -755,7 +755,7 @@ App.login=async()=>{
     const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
     if(!profile){await sb.auth.signOut();S.uid=null;render();throw new Error('Profile not found');}
     if(profile.status==='Inactive'){await sb.auth.signOut();S.uid=null;render();throw new Error('Account inactive — contact admin');}
-    const u={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},password:'***'};
+    const u={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};
     const idx=DB.users.findIndex(x=>x.id===u.id);
     if(idx>-1)DB.users[idx]=u;else DB.users.push(u);
     S.uid=u.id;
@@ -1018,6 +1018,8 @@ App.delUser=async(id)=>{
   DB.notifications=DB.notifications.filter(n=>n.userId!==id);
   DB.issues=(DB.issues||[]).filter(x=>x.userId!==id);
   DB.feedback=(DB.feedback||[]).filter(f=>f.userId!==id&&f.managerId!==id);
+  // Unassign tickets (don't delete — ticket data is still valid)
+  (DB.tickets||[]).forEach(tk=>{if(tk.assignedTo===id)tk.assignedTo=null;if(tk.createdBy===id)tk.createdBy=null;});
   // FIX3: If ex-manager now has 0 direct reports, downgrade to User
   if(u.managerId){
     const exMgr=uById(u.managerId);
@@ -1335,7 +1337,7 @@ function locsPage(){
     +visibleLocs.map(l=>{
       const docs=(DB.documents||[]).filter(x=>x.type==='loc'&&x.scope===l.id).length;
       const folders=(DB.folders||[]).filter(x=>x.type==='loc'&&x.scope===l.id&&!x.parentId).length;
-      return'<div onclick="App._openLoc(this.dataset.id)" data-id="'+l.id+'" class="text-left" style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;cursor:pointer;transition:all .15s;display:block;width:100%" class="loc-card">'
+      return'<div onclick="App._openLoc(this.dataset.id)" data-id="'+l.id+'" class="loc-card" style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;cursor:pointer;transition:all .15s;display:block;width:100%">'
         +'<div style="display:flex;justify-content:space-between;margin-bottom:12px">'
         +'<div style="width:36px;height:36px;border-radius:10px;background:#EFF6FF;display:grid;place-items:center">'+ic('pin','w-4 h-4')+'</div>'
         +chip(l.status||'Active')+'</div>'
@@ -1679,7 +1681,7 @@ App.dupCl=async(id)=>{
   }).catch(e=>console.warn('dupCl sync:',e));
 };
 
-App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('issues').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.issues=(DB.issues||[]).filter(x=>x.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
+App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('issues').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);const clAssignees=c.assignees||[];DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.issues=(DB.issues||[]).filter(x=>x.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);DB.feedback=(DB.feedback||[]).filter(f=>f.checklistId!==id);DB.tickets=(DB.tickets||[]).filter(tk=>tk.checklistId!==id);clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});_invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
 let RUN={};
@@ -1695,6 +1697,8 @@ function myClsPage(){
   const dow=ref.getDay();
   ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.calWk*7);
   const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10);});
+  // Ensure calDate is within the displayed week; if not, snap to today's weekday in the displayed week
+  if(!week.includes(S.calDate)){S.calDate=week.find(d=>d===today)||week[0];}
   const sel=S.calDate;
   const dayCls=myCls(S.uid,sel);
   const doneN=dayCls.filter(c=>subFor(c.id,S.uid,sel)).length;
@@ -1709,9 +1713,9 @@ function myClsPage(){
       <p style="font-size:13px;color:#B8B5AC;margin-top:2px">${new Date(sel+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>
     </div>
     <div style="display:flex;gap:3px;align-items:center;margin-top:2px">
-      <button onclick="S.calWk--;rr()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
+      <button onclick="(()=>{S.calWk--;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.toISOString().slice(0,10);S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
       <button onclick="S.calWk=0;S.calDate='${today}';S.expandedCl=null;rr()" style="padding:0 12px;height:30px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${S.calWk===0&&sel===today?'#111110':'#F5F4F0'};color:${S.calWk===0&&sel===today?'#fff':'#9CA3AF'}">Today</button>
-      <button onclick="S.calWk++;rr()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
+      <button onclick="(()=>{S.calWk++;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.toISOString().slice(0,10);S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
     </div>
   </div>
 
@@ -1777,6 +1781,7 @@ function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEdit
   const left='<span style="font-size:12px;color:#B8B5AC">'+stxt+eb+'</span>';
   let right='';
   if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
+  else if(sub&&(sub.status==='Pending Approval'||sub.status==='Pending'))right='<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>';
   else if(u?.rules?.edit)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
   return left+right;
 }
@@ -1786,7 +1791,8 @@ function _clCard(c,date){
   const isPast=date<today;const isFuture=date>today;const u=me();
   const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':date===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))?'Late':'Pending';
   const exp=S.expandedCl===c.id;
-  if(!RUN[c.id]||RUN[c.id].date!==date){
+  // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
+  if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
     RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(c.tasks||[]).map(t=>({taskId:t.id,response:null,issue:false,issueComment:'',issuePhoto:null,done:false,photo:null,comment:''}))};
   }
   const run=RUN[c.id];const tasks=c.tasks||[];
@@ -1993,9 +1999,13 @@ App._submitRun=(clId,date)=>{
   }
   const today=todayISO();
   const late=date<today||(date===todayISO()&&(c.tasks||[]).some(t=>t.time&&nowHM()>hm2m(t.time)));
-  const needsAppr=(c.tasks||[]).some(t=>t.approval);
+  // needsAppr: task-level flag OR user's date-type approval settings
+  const _ua=(me()?.approval)||{};
+  const _isPast=date<todayISO();const _isFut=date>todayISO();
+  const dateAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
+  const needsAppr=(c.tasks||[]).some(t=>t.approval)||dateAppr;
   const hasIssues=(run.tasks||[]).some(t=>t.issue);
-  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false});}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
+  const isResub=run.status==='Editing';run.status=needsAppr?'Pending Approval':late?'Late':'On Time';run.submittedAt=new Date().toISOString();const u=me();const mgrId=u?.managerId;if(isResub){const ei=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);if(ei>-1){const ex=DB.submissions[ei];ex.tasks=JSON.parse(JSON.stringify(run.tasks));ex.status=run.status;ex.submittedAt=run.submittedAt;ex.editCount=run.editCount||0;ex.editHistory=run.editHistory||[];}if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Resubmitted after edit #'+(run.editCount||1),createdAt:new Date().toISOString(),isResubmit:true});if(mgrId)DB.notifications.unshift({id:uid('n'),userId:mgrId,text:'Re-submitted: '+fullName(u)+' edited and resubmitted — needs re-approval',time:new Date().toISOString(),read:false});}}else{run.id=uid('s');DB.submissions.push(JSON.parse(JSON.stringify(run)));if(needsAppr){DB.approvals.push({id:uid('a'),type:'Submission',requesterId:S.uid,checklistId:clId,date,status:'Pending',note:'Awaiting approval',createdAt:new Date().toISOString()});_invalidateNotifCache();}}
   if(hasIssues){
     const names=(c.tasks||[]).filter((_,i)=>run.tasks[i]?.issue).map(t=>t.name).join(', ');
     const issText='⚠️ '+fullName(u)+' flagged issues in "'+c.name+'" ('+names+') on '+fmtS(date);
@@ -2028,6 +2038,9 @@ App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-
 App._sendReq=(clId,date)=>{
   const note=$('#re-n')?.value.trim()||'Edit requested';
   const u=me();
+  // Guard: prevent duplicate pending edit requests for same checklist+date
+  const existingReq=DB.approvals.find(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===clId&&a.date===date&&a.status==='Pending');
+  if(existingReq){toast('Edit request already pending — awaiting manager approval','warn');closeModal();return;}
   DB.approvals.push({id:uid('a'),type:'Edit Request',requesterId:S.uid,checklistId:clId,date,status:'Pending',note,createdAt:new Date().toISOString()});
   // Mark submission status as "Pending Approval" to show in UI
   const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);
@@ -2334,10 +2347,19 @@ function _issuesTab(issues){
   }).join('');
 }
 App._decide=(id,status)=>{
-  const a=DB.approvals.find(x=>x.id===id);a.status=status;
+  const a=DB.approvals.find(x=>x.id===id);if(!a)return;
+  if(a.status!=='Pending'){toast('Already '+a.status.toLowerCase(),'warn');return;}
+  a.status=status;
   const u=uById(a.requesterId),c=clById(a.checklistId);
   const s=DB.submissions.find(x=>x.checklistId===a.checklistId&&x.userId===a.requesterId&&x.date===a.date);
-  if(s&&a.type==='Submission') s.status=status==='Approved'?'On Time':'Rejected';
+  if(s&&a.type==='Submission'){
+    if(status==='Approved'){
+      // Preserve 'Late' if the submission was originally late
+      s.status=s.status==='Late'?'Late':'On Time';
+    } else {
+      s.status='Rejected';
+    }
+  }
   if(s&&a.type==='Edit Request'){
     s.editRequestStatus=status;
     // If rejected, clear any pending edit status
@@ -2401,7 +2423,7 @@ App.viewSub=(subId)=>{
   </div>`,'max-w-lg');
 };
 App._addFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Add feedback</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-3">This will be sent to <strong>${esc(fullName(uById(a.requesterId)))}</strong> for acknowledgement.</p><textarea id="fb-t" rows="4" placeholder="Write feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._saveFb('${aprId}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send feedback</button></div>`,'max-w-sm');};
-App._saveFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);const text=$('#fb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}if(!DB.feedback)DB.feedback=[];DB.feedback.push({id:uid('fb'),checklistId:a.checklistId,userId:a.requesterId,managerId:S.uid,date:a.date,text,level:'checklist',acknowledged:false,createdAt:new Date().toISOString()});DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:'Feedback received on '+(clById(a.checklistId)?.name||'a checklist'),time:new Date().toISOString(),read:false});log(fullName(me()),'Feedback sent',fullName(uById(a.requesterId)));toast('Feedback sent');closeModal();};
+App._saveFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);const text=$('#fb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}if(!DB.feedback)DB.feedback=[];DB.feedback.push({id:uid('fb'),checklistId:a.checklistId,userId:a.requesterId,managerId:S.uid,date:a.date,text,level:'checklist',acknowledged:false,createdAt:new Date().toISOString()});DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:'Feedback received on '+(clById(a.checklistId)?.name||'a checklist'),time:new Date().toISOString(),read:false});log(fullName(me()),'Feedback sent',fullName(uById(a.requesterId)));_invalidateNotifCache();toast('Feedback sent');closeModal();saveDB();render();};
 App._setTab=(t)=>{S.filters.atab=t;rr();};
 App._decideApprove=(id)=>App._decide(id,'Approved');
 App._decideReject=(id)=>App._decide(id,'Rejected');
@@ -2415,7 +2437,7 @@ App._viewSubFor=async(btn)=>{
       DB.submissions.push(s);
     }
   }
-  if(s)App.viewSub(s.id);
+  if(s){if(DB.submissions.findIndex(x=>x.id===s.id)<0){DB.submissions.push(s);saveDB();}App.viewSub(s.id);}
   else toast('No submission found for this date','warn');
 };
 App._resolveIssue=async(id)=>{
@@ -2424,10 +2446,7 @@ App._resolveIssue=async(id)=>{
   iss.status='Resolved';iss.resolvedAt=new Date().toISOString();iss.resolvedBy=S.uid;iss.updatedAt=new Date().toISOString();
   _invalidateNotifCache();
   toast('✓ Issue marked solved','ok');
-  // Update button state immediately without full re-render
-  const btn=document.querySelector('[data-id="'+id+'"].resolve-btn');
-  if(btn){btn.textContent='✓ Resolved';btn.disabled=true;btn.style.opacity='0.6';}
-  saveDB();rr();
+  saveDB();render();
   // Then sync to Supabase
   const{error}=await sb.from('issues').update({status:'Resolved',resolved_at:iss.resolvedAt,updated_at:iss.updatedAt}).eq('id',id);
   if(error)console.warn('Issue resolve sync:',error.message);
@@ -2437,7 +2456,7 @@ App._resolveIssue=async(id)=>{
 App._reopenIssue=async(id)=>{
   const iss=DB.issues.find(x=>x.id===id);if(!iss)return;
   iss.status='Reopened';iss.updatedAt=new Date().toISOString();
-  toast('Issue reopened','warn');saveDB();rr();
+  toast('Issue reopened','warn');saveDB();render();
   const{error}=await sb.from('issues').update({status:'Reopened',updated_at:iss.updatedAt}).eq('id',id);
   if(!error)DB.notifications.unshift({id:uid('n'),userId:iss.userId,text:'Issue reopened: "'+iss.taskName+'" — please review',time:new Date().toISOString(),read:false});
   log(fullName(me()),'Reopened issue',iss.taskName);
