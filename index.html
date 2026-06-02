@@ -534,12 +534,7 @@ function _notifCount(){
   return count;
 }
 // Open ticket count for Tickets badge — matches _scopedTickets logic exactly
-function _myOpenTicketCount(){
-  const uid=S.uid;if(!uid)return 0;
-  if(isAdmin()||me()?.questionsAccess)return (DB.tickets||[]).filter(tk=>tk.status==='Open').length;
-  if(isMgr()){const teamIds=subTree(uid).map(u=>u.id);return (DB.tickets||[]).filter(tk=>teamIds.includes(tk.assignedTo)&&tk.status==='Open').length;}
-  return (DB.tickets||[]).filter(tk=>(tk.createdBy===uid||tk.assignedTo===uid)&&tk.status==='Open').length;
-}
+// _myOpenTicketCount defined below
 function _invalidateNotifCache(){_notifCache.ts=0;}
 
 // B11 fix: recover submissions stuck in 'Editing' if RUN cache lost
@@ -3592,41 +3587,15 @@ function questionsPage(){
   }
 
   // ══ TAB: LISTS ══
+  const expandedL=S.filters.expandedL||null;
   return'<div class="fade">'+hdr('Questions','')
     +tabBar
     +'<div style="display:flex;justify-content:flex-end;margin-bottom:12px">'
     +btnP('New List','App._newQL()','plus')
     +'</div>'
     +(!lists.length
-      ?empty('list','No lists yet','Create a list and select questions from the Questions tab to add to it. Then assign the list to a checklist task.')
-      :'<div class="space-y-3">'
-        +lists.map(function(ql){
-          const qlQs=_listQuestions(ql);
-          const openTk=(DB.tickets||[]).filter(function(tk){return tk.questionListId===ql.id&&tk.status==='Open';}).length;
-          return'<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.05)">'
-            +'<div style="display:flex;align-items:center;gap:12px;padding:14px 18px">'
-            +'<div style="width:38px;height:38px;background:#EFF6FF;border-radius:10px;display:grid;place-items:center;color:#1D4ED8;flex-shrink:0">'+ic('list','w-4 h-4')+'</div>'
-            +'<div style="flex:1;min-width:0">'
-            +'<div class="fd" style="font-size:15px;font-weight:700">'+esc(ql.name)+'</div>'
-            +'<div style="display:flex;gap:10px;margin-top:3px;flex-wrap:wrap">'
-            +'<span style="font-size:12px;color:#9CA3AF">'+qlQs.length+' question'+(qlQs.length!==1?'s':'')+'</span>'
-            +(openTk?'<span style="font-size:12px;font-weight:700;color:#EF4444">● '+openTk+' open</span>':'<span style="font-size:12px;color:#10B981">✓ No open tickets</span>')
-            +'</div></div>'
-            +'<div style="display:flex;gap:6px;flex-shrink:0">'
-            +'<button onclick="App._editQL(\''+ql.id+'\')" style="padding:6px 14px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background=\'#F6F7F8\'" onmouseout="this.style.background=\'#fff\'">Edit</button>'
-            +'<button onclick="App._delQL(\''+ql.id+'\')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color=\'#BE123C\';this.style.background=\'#FFF1F2\'" onmouseout="this.style.color=\'#D1D5DB\';this.style.background=\'transparent\'">'+ic('trash','w-4 h-4')+'</button>'
-            +'</div></div>'
-            +(qlQs.length?'<div style="padding:0 18px 12px">'
-              +qlQs.slice(0,3).map(function(q,qi){return'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-top:1px solid #F9F8F5">'
-                +'<span style="font-size:11px;font-weight:700;color:#C8C5BD;width:16px;text-align:center">'+(qi+1)+'</span>'
-                +'<span style="font-size:13px;color:#374151;flex:1;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(q.text)+'</span>'
-                +'<span style="font-size:11px;color:#9CA3AF">'+(q.answers||[]).length+' answers</span>'
-                +'</div>';}).join('')
-              +(qlQs.length>3?'<div style="font-size:12px;color:#9CA3AF;padding-top:4px;text-align:center">+' +(qlQs.length-3)+' more</div>':'')
-              +'</div>':'')
-            +'</div>';
-        }).join('')
-        +'</div>')
+      ?empty('list','No lists yet','Create a list and pick questions from your Questions tab. Then assign the list to a checklist task.')
+      :'<div class="space-y-2">'+lists.map(function(ql){return App._renderLCard(ql,expandedL);}).join('')+'</div>')
     +'</div>';
 }
 
@@ -3677,7 +3646,62 @@ App._renderQCard=(q)=>{
   html+='</div>';
   return html;
 };
+App._renderLCard=(ql,expandedL)=>{
+  const qlQs=_listQuestions(ql);
+  const openTk=(DB.tickets||[]).filter(tk=>tk.questionListId===ql.id&&tk.status==='Open').length;
+  const exp=expandedL===ql.id;
+  let html='<div style="background:#fff;border-radius:14px;border:1.5px solid '+(exp?'#C7D2FE':'#ECEDF0')+';overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.04)">';
+  // Clickable header
+  html+='<div data-lid="'+ql.id+'" onclick="App._togExpandL(this.dataset.lid)" style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer;user-select:none">';
+  html+='<span style="color:#C8C5BD;display:flex;align-items:center;flex-shrink:0;transition:transform .2s;transform:rotate('+(exp?90:0)+'deg)">'+ic('chevR','w-4 h-4')+'</span>';
+  html+='<div style="flex:1;min-width:0">';
+  html+='<div class="fd" style="font-size:14px;font-weight:700">'+esc(ql.name)+'</div>';
+  html+='<div style="display:flex;gap:8px;margin-top:2px;flex-wrap:wrap">';
+  html+='<span style="font-size:11px;color:#9CA3AF">'+qlQs.length+' question'+(qlQs.length!==1?'s':'')+'</span>';
+  if(openTk)html+='<span style="font-size:11px;font-weight:700;color:#EF4444">● '+openTk+' open</span>';
+  html+='</div></div>';
+  // Action buttons — stop propagation
+  html+='<div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">';
+  html+='<button data-lid="'+ql.id+'" onclick="App._editQL(this.dataset.lid)" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>';
+  html+='<button data-lid="'+ql.id+'" onclick="App._delQL(this.dataset.lid)" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color=\'#BE123C\';this.style.background=\'#FFF1F2\'" onmouseout="this.style.color=\'#D1D5DB\';this.style.background=\'transparent\'">'+ic('trash','w-4 h-4')+'</button>';
+  html+='</div></div>';
+  // Expanded: show questions + answers
+  if(exp){
+    if(!qlQs.length){
+      html+='<div style="padding:10px 16px 12px 40px;font-size:12px;color:#D1D5DB;font-style:italic">No questions selected — click Edit to add some</div>';
+    } else {
+      html+='<div style="padding:0 14px 12px 40px">';
+      qlQs.forEach(function(q,qi){
+        const answers=q.answers||[];
+        html+='<div style="padding:8px 0;border-top:1px solid #F5F4F0">';
+        html+='<div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">';
+        html+='<span style="font-size:11px;font-weight:700;color:#C8C5BD;width:16px;text-align:center">'+(qi+1)+'</span>';
+        html+='<span style="font-size:13px;font-weight:600;color:#15171C">'+esc(q.text)+'</span>';
+        html+='</div>';
+        if(!answers.length){
+          html+='<div style="margin-left:22px;font-size:11px;color:#D1D5DB;font-style:italic">No answers configured</div>';
+        } else {
+          html+='<div style="margin-left:22px;display:flex;flex-direction:column;gap:3px">';
+          answers.forEach(function(a,ai){
+            const assignee=uById(a.assignedTo);
+            html+='<div style="display:flex;align-items:center;gap:6px">';
+            html+='<span style="font-size:10px;font-weight:700;color:#9CA3AF;width:14px">'+String.fromCharCode(65+ai)+'</span>';
+            html+='<span style="font-size:12px;color:#374151;flex:1">'+esc(a.text)+'</span>';
+            html+=assignee?'<span style="font-size:11px;font-weight:600;color:#6B7280">→ '+esc(fullName(assignee))+'</span>':'<span style="font-size:11px;color:#D1D5DB">Unassigned</span>';
+            html+='</div>';
+          });
+          html+='</div>';
+        }
+        html+='</div>';
+      });
+      html+='</div>';
+    }
+  }
+  html+='</div>';
+  return html;
+};
 App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr();};
+App._togExpandL=(id)=>{S.filters.expandedL=S.filters.expandedL===id?null:id;rr();};
 App._newQuestion=()=>App._editQuestion(null);
 
 App._editQuestion=(id)=>{
@@ -3890,7 +3914,7 @@ App._showQuestionModal=(clId,taskIdx)=>{
   if(!questions.length){
     const rt=RUN[clId]?.tasks?.[taskIdx];
     if(rt){rt.issue=true;rt.response='Issue';rt.done=true;}
-    toast('Flagged — no questions in this list yet','warn');rr();return;
+    toast('Flagged — no questions in this list yet','warn');render();return;
   }
   App._flagQlId=ql.id;App._flagClId=clId;App._flagTaskIdx=taskIdx;
   App._flagQi=0;App._flagAnswers=[];
@@ -4014,6 +4038,172 @@ App._submitFlagAnswers=(clId,taskIdx)=>{
 // ─────────────────────────────────────────────────────────────
 // TICKETS PAGE scoping uses _scopedTickets (defined below)
 // ─────────────────────────────────────────────────────────────
+// ── Render tickets grouped by creator (manager "By User" view) ──
+function _ticketsByUser(tickets){
+  if(!tickets.length)return'<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No tickets</div>';
+  const groups={};
+  tickets.forEach(tk=>{const k=tk.createdBy||'unknown';if(!groups[k])groups[k]=[];groups[k].push(tk);});
+  const sorted=Object.entries(groups).sort((a,b)=>b[1].filter(t=>t.status==='Open').length-a[1].filter(t=>t.status==='Open').length);
+  return'<div class="space-y-4">'+sorted.map(function([uid2,tks]){
+    const u=uById(uid2);
+    const open=tks.filter(t=>t.status==='Open').length;
+    const res=tks.filter(t=>t.status==='Resolved').length;
+    return'<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">'
+      +'<div style="display:flex;align-items:center;gap:10px;padding:12px 16px;background:#FAFAF8;border-bottom:1px solid #F5F4F0">'
+      +(u?avatar(u,'w-8 h-8','text-[10px]'):'')
+      +'<div style="flex:1"><div style="font-size:14px;font-weight:700">'+(u?esc(fullName(u)):'Unknown')+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF">'+tks.length+' ticket'+(tks.length!==1?'s':'')+'</div></div>'
+      +(open?'<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#FEE2E2;color:#DC2626">'+open+' open</span>':'')
+      +(res?'<span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:#DCFCE7;color:#166534">'+res+' resolved</span>':'')
+      +'</div>'
+      +'<div>'+tks.map(function(tk){
+        const assignee=uById(tk.assignedTo);
+        const isOpen=tk.status==='Open';
+        const t2=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+        return'<div style="padding:10px 16px;border-bottom:1px solid #F9F8F5;border-left:3px solid '+(isOpen?'#EF4444':'#10B981')+'">'
+          +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;flex-wrap:wrap">'
+          +'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;'+(isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534')+'">'+tk.status+'</span>'
+          +'<span style="font-size:10px;color:#B8B5AC">'+t2+'</span>'
+          +'</div>'
+          +'<div style="font-size:11px;color:#9CA3AF;margin-bottom:2px">'+esc(tk.checklistName||'')+' › '+esc(tk.taskName||'')+'</div>'
+          +'<div style="font-size:13px;font-weight:600;color:#15171C">'+esc(tk.questionText||tk.title||'')+'</div>'
+          +(tk.answerText?'<div style="font-size:12px;color:#6B7280;margin-top:2px">Answer: '+esc(tk.answerText)+'</div>':'')
+          +(tk.comment?'<div style="font-size:12px;color:#6B7280;margin-top:4px;padding:5px 8px;background:#FFF5F5;border-radius:6px">'+esc(tk.comment.slice(0,100))+(tk.comment.length>100?'…':'')+'</div>':'')
+          +'</div>'
+          +'<div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px;flex-shrink:0">'
+          +(assignee?'<div style="display:flex;align-items:center;gap:4px">'+avatar(assignee,'w-6 h-6','text-[9px]')+'<span style="font-size:11px;font-weight:600">'+esc(fullName(assignee))+'</span></div>':'')
+          +(isOpen?'<button onclick="App._resolveTicket(\''+tk.id+'\')" style="padding:4px 10px;border-radius:7px;background:#15171C;color:#fff;font-size:11px;font-weight:700;border:none;cursor:pointer">Resolve</button>':'')
+          +'</div></div></div>';
+      }).join('')+'</div></div>';
+  }).join('')+'</div>';
+}
+
+// ── Scoped ticket visibility ──
+function _scopedTickets(){
+  const all=DB.tickets||[];
+  if(isAdmin()||me()?.questionsAccess)return{tickets:all,canEdit:true,scope:'all'};
+  if(isMgr()){
+    const teamIds=subTree(S.uid).map(u=>u.id);
+    return{tickets:all.filter(tk=>teamIds.includes(tk.assignedTo)),canEdit:false,scope:'team'};
+  }
+  return{tickets:all.filter(tk=>tk.createdBy===S.uid||tk.assignedTo===S.uid),canEdit:false,scope:'personal'};
+}
+
+// ── Open ticket count for nav badge — matches _scopedTickets ──
+function _myOpenTicketCount(){
+  if(!S.uid)return 0;
+  const {tickets}=_scopedTickets();
+  return tickets.filter(tk=>tk.status==='Open').length;
+}
+
+function ticketsPage(){
+  const {tickets:myTickets,canEdit,scope}=_scopedTickets();
+  const statusFilter=S.filters.tkStat||'';
+  const list=statusFilter?myTickets.filter(t=>t.status===statusFilter):myTickets;
+  const openCount=myTickets.filter(t=>t.status==='Open').length;
+  const resolvedCount=myTickets.filter(t=>t.status==='Resolved').length;
+  const subtitle=scope==='all'?'All issue tickets':scope==='team'?"Your team's tickets":'Your tickets';
+  const groupByUser=scope!=='personal'&&(S.filters.tkGroup==='user');
+
+  return`<div class="fade">${hdr('Tickets',subtitle)}
+  <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center">
+    ${[['','All',myTickets.length],['Open','Open',openCount],['Resolved','Resolved',resolvedCount]].map(([s,l,n])=>`<button onclick="S.filters.tkStat='${s}';rr()" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;transition:all .12s;${statusFilter===s?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">${l} <span style="opacity:.6">(${n})</span></button>`).join('')}
+    ${scope!=='personal'?`<button onclick="S.filters.tkGroup=groupByUser?'':'user';rr()" style="margin-left:auto;padding:5px 14px;border-radius:20px;font-size:12px;font-weight:700;border:1.5px solid;cursor:pointer;${groupByUser?'background:#15171C;color:#fff;border-color:#15171C':'background:#fff;color:#6B7280;border-color:#ECEDF0'}">👤 By user</button>`:''}
+  </div>
+
+  ${!myTickets.length
+    ?empty('ticket','No tickets',scope==='personal'?'Tickets appear here when you flag a task or are assigned one':scope==='team'?'No tickets from your team yet':'Tickets appear when users flag tasks with a question list attached')
+    :groupByUser
+      ?_ticketsByUser(list)
+      :!list.length
+        ?`<div style="text-align:center;padding:32px;color:#D1D5DB;font-size:13px">No ${statusFilter.toLowerCase()} tickets</div>`
+        :`<div class="space-y-3">
+          ${list.map(tk=>{
+            const creator=uById(tk.createdBy);const assignee=uById(tk.assignedTo);
+            const isOpen=tk.status==='Open';
+            const createdAt=tk.createdAt?new Date(tk.createdAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):'';
+            const resolvedAt=tk.resolvedAt?new Date(tk.resolvedAt).toLocaleDateString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+            const showEdit=canEdit&&isOpen;
+            return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${isOpen?'#EF4444':'#10B981'};overflow:hidden;box-shadow:0 1px 4px rgba(16,24,40,.04)">
+              <div style="padding:14px 16px">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;flex-wrap:wrap">
+                  <div style="flex:1;min-width:0">
+                    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:6px">
+                      <span style="font-size:11px;font-weight:700;padding:2px 9px;border-radius:20px;${isOpen?'background:#FEE2E2;color:#DC2626':'background:#DCFCE7;color:#166534'}">${tk.status}</span>
+                      <span style="font-size:11px;color:#B8B5AC">${createdAt}</span>
+                      ${creator?`<span style="font-size:11px;color:#B8B5AC">by ${esc(fullName(creator))}</span>`:''}
+                    </div>
+                    <div style="font-size:12px;color:#9CA3AF;font-weight:500;margin-bottom:3px">${esc(tk.checklistName||'')} › ${esc(tk.taskName||'')}</div>
+                    <div class="fd" style="font-size:15px;font-weight:700;color:#15171C;margin-bottom:4px">${esc(tk.questionText||tk.title||'')}</div>
+                    ${tk.answerText?`<div style="font-size:13px;font-weight:600;color:#1D4ED8;margin-bottom:6px">Answer: ${esc(tk.answerText)}</div>`:''}
+                    ${tk.comment?`<div style="background:#FFF5F5;border:1px solid #FEE2E2;border-radius:8px;padding:8px 12px;font-size:13px;color:#374151;line-height:1.5">${esc(tk.comment)}</div>`:''}
+                  </div>
+                  <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0">
+                    ${assignee
+                      ?`<div style="display:flex;align-items:center;gap:6px">${avatar(assignee,'w-7 h-7','text-[10px]')}<div><div style="font-size:12px;font-weight:700">${esc(fullName(assignee))}</div><div style="font-size:10px;color:#9CA3AF">Assigned</div></div></div>`
+                      :`<span style="font-size:11px;font-weight:600;color:#D1D5DB;padding:4px 10px;border:1.5px dashed #E5E7EB;border-radius:20px">Unassigned</span>`}
+                    <div style="display:flex;gap:6px">
+                      ${showEdit?`<button onclick="App._editTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">Edit</button>`:''}
+                      ${isOpen?`<button onclick="App._resolveTicket('${tk.id}')" style="padding:5px 12px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Mark Resolved</button>`:''}
+                    </div>
+                  </div>
+                </div>
+                ${tk.notes?`<div style="background:#F9FAFB;border-radius:8px;padding:8px 10px;margin-top:10px;font-size:12px;color:#374151;border:1px solid #ECEDF0">📝 ${esc(tk.notes)}</div>`:''}
+                ${!isOpen&&tk.resolvedAt?`<div style="font-size:11px;color:#9CA3AF;margin-top:8px">✓ Resolved by ${esc(fullName(uById(tk.resolvedBy)||{firstName:'?',lastName:''}))} · ${resolvedAt}</div>`:''}
+              </div>
+            </div>`;
+          }).join('')}
+        </div>`}
+  </div>`;
+}
+
+App._resolveTicket=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  tk.status='Resolved';tk.resolvedBy=S.uid;tk.resolvedAt=new Date().toISOString();
+  // Notify creator
+  if(tk.createdBy&&tk.createdBy!==S.uid)
+    DB.notifications.push({id:uid('n'),userId:tk.createdBy,text:'Ticket resolved: '+(tk.questionText||tk.title||''),read:false,time:new Date().toISOString()});
+  _invalidateNotifCache();
+  log(fullName(me()),'Resolved ticket',tk.questionText||tk.title||'');
+  toast('Ticket resolved ✓');saveDB();render();
+};
+
+App._editTicket=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  openModal(`<div class="p-5">
+    <div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Edit Ticket</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>
+    <div class="space-y-3">
+      <div style="background:#F9FAFB;border-radius:10px;padding:10px 12px">
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Ticket</div>
+        <div style="font-size:11px;color:#9CA3AF;margin-bottom:3px">${esc(tk.checklistName||'')} › ${esc(tk.taskName||'')}</div>
+        <div style="font-size:13px;font-weight:700;color:#15171C">${esc(tk.questionText||tk.title||'')}</div>
+        ${tk.answerText?`<div style="font-size:12px;color:#1D4ED8;margin-top:4px">Answer: ${esc(tk.answerText)}</div>`:''}
+        ${tk.comment?`<div style="font-size:12px;color:#6B7280;margin-top:6px;padding:6px 8px;background:#fff;border-radius:6px;border:1px solid #E5E7EB">${esc(tk.comment)}</div>`:''}
+      </div>
+      ${selF('Assign to','tk-asgn',[['','— Unassigned —'],...DB.users.filter(u=>u.status==='Active').map(u=>[u.id,fullName(u)])],tk.assignedTo||'')}
+      <div><label class="block text-xs font-semibold text-ink-500 mb-1">Notes</label><textarea id="tk-notes" rows="3" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;resize:vertical;outline:none" class="rf">${esc(tk.notes||'')}</textarea></div>
+    </div>
+    <div class="flex gap-2 mt-4">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._saveTicketEdit('${id}')" style="flex:1;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Save</button>
+    </div>
+  </div>`,'max-w-md');
+};
+
+App._saveTicketEdit=(id)=>{
+  const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
+  const newAssignee=$('#tk-asgn')?.value||null;
+  if(newAssignee&&newAssignee!==tk.assignedTo){
+    DB.notifications.push({id:uid('n'),userId:newAssignee,text:'Ticket assigned to you: '+(tk.questionText||tk.title||''),read:false,time:new Date().toISOString()});
+    _invalidateNotifCache();
+  }
+  tk.assignedTo=newAssignee||null;
+  tk.notes=$('#tk-notes')?.value.trim()||'';
+  toast('Saved ✓');closeModal();saveDB();render();
+};
+
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
   const f=S.filters;const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
