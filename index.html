@@ -445,7 +445,7 @@ function seed(){
     {id:uid('loc'),name:'Housekeeping Depot',address:'Ground Floor, East Wing',department:'Housekeeping',status:'Active'},
     {id:uid('loc'),name:'Restaurant Floor',address:'Level 2, South Wing',department:'Food & Beverage',status:'Active'},
   ];
-  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];DB.issues=[];DB.notifications=[];DB.questions=[];DB.questionLists=[];DB.tickets=[];
+  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];DB.issues=[];DB.notifications=[];DB.questions=[];DB.questionLists=[];DB.tickets=[];DB.folders=[];DB.documents=[];
   log('System','Workspace initialised','');
 }
 
@@ -1950,7 +1950,7 @@ App._togIssue=(clId,i)=>{
     App._showQuestionModal(clId,i);return;
   }
   // Proceed to flag the issue directly
-  rt.issue=true;rt.response='Issue';rt.done=true;rr();
+  rt.issue=true;rt.response='Issue';rt.done=true;render();
 };
 App._issueCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i]){RUN[clId].tasks[i].issueComment=v;_updateSubmitBtn(clId);}};
 App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
@@ -2109,6 +2109,8 @@ function teamViewPage(){
   const dow=ref.getDay();
   ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.tvCalWk*7);
   const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10);});
+  // Snap tvCalDate to displayed week if out of sync
+  if(!week.includes(S.tvCalDate)){S.tvCalDate=week.find(d=>d===today)||week[0];}
   const selDate=S.tvCalDate;
   const dayCls=myCls(S.tvUser,selDate);
 
@@ -2289,32 +2291,14 @@ function approvalsPage(){
     )
     // ── Issues tab ──
     +(tab==='Issues' ? _issuesTab(myIssues) : '')
-    // ── Feedback tab ──
-    +(tab==='Feedback'
-      ? (myFeedback.length
-        ? myFeedback.map(fb=>{
-            const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
-            return '<div style="background:#fff;border-radius:16px;border:1px solid '+( fb.acknowledged?'#E5E7EB':'#BFDBFE')+';padding:16px;box-shadow:0 1px 4px rgba(0,0,0,.05)">'
-              +'<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'
-              +'<div><div style="font-size:14px;font-weight:700">'+esc(cl?.name||'Checklist')+'</div>'
-              +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date)+'</div></div>'
-              +(fb.acknowledged?'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#ECFDF5;color:#059669">✓ Acknowledged</span>':'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FFFBEB;color:#D97706">New</span>')
-              +'</div>'
-              +'<p style="font-size:14px;color:#15171C;background:#F6F7F8;border-radius:10px;padding:12px;margin:0">'+esc(fb.text)+'</p>'
-              +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="margin-top:10px;padding:8px 16px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'')
-              +(fb.reply?'<div style="margin-top:10px;padding:10px;background:#F0FDF4;border-radius:10px;font-size:13px;color:#166534"><strong>Your reply:</strong> '+esc(fb.reply)+'</div>':'')
-              +'</div>';
-          }).join('')
-        : empty('msg','No feedback received','Feedback from managers will appear here.')
-      )
-      : ''
-    )
+    // ── Feedback tab (kept for backwards compat but not shown in TABS) ──
+    +(tab==='Feedback'?(()=>{const myFeedback=DB.feedback.filter(fb=>fb.userId===S.uid);return myFeedback.length?myFeedback.map(fb=>{const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);return'<div style="background:#fff;border-radius:16px;border:1px solid '+(fb.acknowledged?'#E5E7EB':'#BFDBFE')+';padding:16px;margin-bottom:10px"><div style="font-size:14px;font-weight:700">'+(cl?.name||'Checklist')+'</div><div style="font-size:12px;color:#9CA3AF">From '+(mgr?esc(fullName(mgr)):'Manager')+'</div><p style="font-size:13px;margin-top:8px">'+esc(fb.text)+'</p>'+(fb.acknowledged?'':'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="margin-top:8px;padding:6px 14px;border-radius:8px;background:#15171C;color:#fff;font-size:12px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>')+'</div>';}).join(''):empty('msg','No feedback','Feedback appears here when managers send it.')})():'')
     +'</div></div>';
 }
 
 function _issuesTab(issues){
   if(!issues.length)return empty('flag','No issues flagged','Issues flagged in checklists will appear here.');
-  const STATUS_CLR={Open:'#DC2626',background:'#FEE2E2','Under Review':'#D97706','Under Review_bg':'#FEF3C7','Feedback Sent':'#2563EB','Feedback Sent_bg':'#DBEAFE',Resolved:'#16A34A','Resolved_bg':'#DCFCE7',Reopened:'#DC2626','Reopened_bg':'#FEE2E2'};
+  // Status colors defined per-issue below
   const canManage=isAdmin()||isMgr();
   const sorted=[...issues].sort((a,b)=>(b.updatedAt||'').localeCompare(a.updatedAt||''));
   return sorted.map(iss=>{
@@ -2329,7 +2313,7 @@ function _issuesTab(issues){
       +(u?'<div style="font-size:14px;font-weight:700">'+esc(fullName(u))+'</div>':'')
       +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">'+esc(c?.name||'Checklist')+' · '+esc(iss.taskName)+' · '+fmtD(iss.date)+'</div>'
       +'</div>'
-      +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+stBg+';color:'+stClr+';flex-shrink:0">'+iss.status+'</span>'
+      +'<span style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:'+(stBg[iss.status]||'#F3F4F6')+';color:'+(stClr[iss.status]||'#374151')+';flex-shrink:0">'+iss.status+'</span>'
       +'</div>'
       // Issue comment
       +(iss.comment?'<p style="font-size:13px;color:#374151;background:#FFF8F8;border:1px solid #FECACA;border-radius:10px;padding:10px;margin-bottom:10px">⚑ '+esc(iss.comment)+'</p>':'')
@@ -2348,7 +2332,7 @@ function _issuesTab(issues){
         :'')
       // User view: own issue status
       +(!canManage||iss.userId===S.uid
-        ?'<div style="font-size:12px;color:#9CA3AF;margin-top:8px">Status: <strong style="color:'+stClr+'">'+iss.status+'</strong></div>'
+        ?'<div style="font-size:12px;color:#9CA3AF;margin-top:8px">Status: <strong style="color:'+(stClr[iss.status]||'#374151')+'">'+iss.status+'</strong></div>'
         :'')
       +'</div>';
   }).join('');
@@ -2700,7 +2684,7 @@ App._notifClick=(id)=>{
   if(t.includes('💬')||t.includes('replied')||t.includes('Feedback')){
     App._goNotifFeedback();return;
   }
-  if(t.includes('Issue')||t.includes('issue')||t.includes('⚑')){
+  if(t.includes('Issue')||t.includes('issue')||t.includes('⚑')||t.includes('resolved')||t.includes('Resolved')||t.includes('Reopened')){
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Issues'};render();window.scrollTo(0,0);return;
   }
