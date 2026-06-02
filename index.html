@@ -556,10 +556,10 @@ function _recoverEditingSubmissions(){
 /* ===== NAVIGATION ===== */
 const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
-const NAV_MGR=[['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
+const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['tickets','ticket','Tickets'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
 const MOB_USR=['mychecklists','tickets','notifications'];
-const MOB_MGR=['mychecklists','tickets','approvals','notifications','more'];
+const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
@@ -618,10 +618,10 @@ function shell(content){
 
   return`<div style="min-height:100vh;display:flex">
   <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="background:#15171C;color:#fff">
-    <div style="padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06)">
+    <button onclick="App.go('dashboard')" style="padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;border-left:none;border-right:none;border-top:none;cursor:pointer;width:100%;text-align:left" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background='transparent'">
       <div class="nav-brand">S</div>
-      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px">Shiftly</span>
-    </div>
+      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Shiftly</span>
+    </button>
     <nav style="flex:1;padding:8px;display:flex;flex-direction:column;gap:2px">${sideLinks}</nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">
       <button onclick="App.go('profile')" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:12px;background:transparent;border:none;cursor:pointer;color:#fff;margin-bottom:2px" onmouseover="this.style.background='rgba(255,255,255,.07)'" onmouseout="this.style.background='transparent'">
@@ -697,7 +697,7 @@ App.logout=()=>{
 /* ===== ROUTER ===== */
 function pageContent(){
   const r=S.route;
-  if(r==='dashboard')return isAdmin()?adminDash():mgrDash();
+  if(r==='dashboard'){if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
   if(r==='users')return usersPage();
   if(r==='departments')return deptsPage();
   if(r==='locations')return locsPage();
