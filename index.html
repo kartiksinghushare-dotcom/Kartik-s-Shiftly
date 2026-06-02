@@ -3884,109 +3884,215 @@ App._delQL=(id)=>{
 // ─────────────────────────────────────────────────────────────
 App._showQuestionModal=(clId,taskIdx)=>{
   const c=clById(clId);const t=(c?.tasks||[])[taskIdx];if(!t)return;
+  const rt=RUN[clId]?.tasks?.[taskIdx];if(!rt)return;
   const ql=(DB.questionLists||[]).find(x=>x.id===t.questionListId);
+
+  // ── No list → create ticket assigned to user's manager ──
   if(!ql){
-    const rt=RUN[clId]?.tasks?.[taskIdx];
-    if(rt){rt.issue=true;rt.response='Issue';rt.done=true;}
-    render();return;
-  }
-  // Check for duplicate open ticket
-  const existing=(DB.tickets||[]).find(tk=>tk.checklistId===clId&&tk.taskIndex===taskIdx&&tk.status==='Open');
-  if(existing){
-    openModal('<div class="p-5">'
-      +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Flag Issue</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-      +'<div style="background:#FFF7ED;border:1.5px solid #FED7AA;border-radius:12px;padding:14px 16px">'
-      +'<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">'+ic('alert','w-4 h-4')+' <span style="font-size:13px;font-weight:700;color:#C2410C">Open ticket already exists</span></div>'
-      +'<p style="font-size:12px;color:#92400E;margin:0">Resolve the existing ticket before creating a new one.</p></div>'
-      +'<button onclick="App.closeModal()" style="margin-top:16px;width:100%;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Got it</button>'
-      +'</div>','max-w-sm');
+    rt.issue=true;rt.response='Issue';rt.done=true;
+    const mgrId=me()?.managerId;
+    if(mgrId){
+      if(!DB.tickets)DB.tickets=[];
+      const ticket={
+        id:uid('tk'),
+        checklistId:clId,checklistName:c.name,
+        taskIndex:taskIdx,taskName:t.name,
+        questionListId:null,questionListName:null,
+        questionId:null,questionIndex:null,
+        questionText:'General flag',answerText:'',
+        comment:'',
+        assignedTo:mgrId,createdBy:S.uid,
+        createdAt:new Date().toISOString(),
+        status:'Open',resolvedAt:null,resolvedBy:null,notes:''
+      };
+      DB.tickets.unshift(ticket);
+      DB.notifications.push({id:uid('n'),userId:mgrId,
+        text:'🚩 Issue flagged: '+esc(t.name)+' in '+esc(c.name),
+        read:false,time:new Date().toISOString()});
+      _invalidateNotifCache();
+      toast('Flagged — ticket sent to your manager');
+      saveDB();render();
+    } else {
+      toast('Flagged');
+      render();
+    }
     return;
   }
+
   const questions=_listQuestions(ql);
+
+  // ── No questions in list → same as no list ──
   if(!questions.length){
-    const rt=RUN[clId]?.tasks?.[taskIdx];
-    if(rt){rt.issue=true;rt.response='Issue';rt.done=true;}
-    toast('Flagged — no questions in this list yet','warn');render();return;
+    rt.issue=true;rt.response='Issue';rt.done=true;
+    const mgrId=me()?.managerId;
+    if(mgrId){
+      if(!DB.tickets)DB.tickets=[];
+      DB.tickets.unshift({
+        id:uid('tk'),checklistId:clId,checklistName:c.name,
+        taskIndex:taskIdx,taskName:t.name,
+        questionListId:ql.id,questionListName:ql.name,
+        questionId:null,questionIndex:null,
+        questionText:'General flag',answerText:'',comment:'',
+        assignedTo:mgrId,createdBy:S.uid,
+        createdAt:new Date().toISOString(),
+        status:'Open',resolvedAt:null,resolvedBy:null,notes:''
+      });
+      DB.notifications.push({id:uid('n'),userId:mgrId,
+        text:'🚩 Issue flagged: '+esc(t.name)+' in '+esc(c.name),
+        read:false,time:new Date().toISOString()});
+      _invalidateNotifCache();
+      toast('Flagged — ticket sent to your manager');
+      saveDB();render();
+    } else {
+      toast('Flagged (no questions configured)','warn');render();
+    }
+    return;
   }
-  App._flagQlId=ql.id;App._flagClId=clId;App._flagTaskIdx=taskIdx;
-  App._flagQi=0;App._flagAnswers=[];
-  App._showFlagQuestion();
+
+  // ── Store context and show question picker ──
+  App._flagClId=clId;App._flagTaskIdx=taskIdx;App._flagQlId=ql.id;
+  App._flagSelQi=null;  // selected question index
+  App._flagSelAi=null;  // selected answer index
+
+  App._showQuestionPicker();
 };
 
-App._showFlagQuestion=()=>{
+// ── Step 1: pick ONE question ──
+App._showQuestionPicker=()=>{
   const ql=(DB.questionLists||[]).find(x=>x.id===App._flagQlId);if(!ql)return;
   const questions=_listQuestions(ql);
   const c=clById(App._flagClId);const t=(c?.tasks||[])[App._flagTaskIdx];
-  const qi=App._flagQi;const q=questions[qi];if(!q)return;
-  const answers=q.answers||[];
-  const total=questions.length;
 
-  let html='<div class="p-5">'
-    +'<div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px">'
-    +'<div>'
-    +(total>1?'<div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:4px">Question '+(qi+1)+' of '+total+'</div>':'')
-    +'<h2 class="fd" style="font-size:18px;font-weight:800">'+esc(q.text)+'</h2>'
-    +'</div>'
-    +'<button onclick="App.closeModal()" class="text-ink-400 flex-shrink-0">'+ic('x')+'</button>'
-    +'</div>'
-    +'<div style="font-size:12px;color:#9CA3AF;margin-bottom:16px">'+esc(c?.name||'')+' › '+esc(t?.name||'')+'</div>';
-
-  if(!answers.length){
-    html+='<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:12px;font-size:13px;color:#92400E;margin-bottom:12px">No answer options configured. Add them in the Questions tab.</div>';
-  } else {
-    html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
-    answers.forEach(function(a,ai){
-      const assignee=uById(a.assignedTo);
-      html+='<button onclick="App._selectFlagAnswer('+qi+','+ai+')"'
-        +' style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-radius:12px;border:1.5px solid #E5E7EB;background:#fff;cursor:pointer;text-align:left;transition:all .12s;width:100%"'
-        +' onmouseover="this.style.borderColor=\'#EF4444\';this.style.background=\'#FFF5F5\'"'
-        +' onmouseout="this.style.borderColor=\'#E5E7EB\';this.style.background=\'#fff\'">'
-        +'<span style="width:28px;height:28px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#6B7280;flex-shrink:0">'+String.fromCharCode(65+ai)+'</span>'
-        +'<div style="flex:1;min-width:0">'
-        +'<div style="font-size:14px;font-weight:600;color:#15171C">'+esc(a.text)+'</div>'
-        +(assignee?'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">Ticket → '+esc(fullName(assignee))+'</div>':'<div style="font-size:11px;color:#D1D5DB;margin-top:2px">No user assigned</div>')
-        +'</div>'
-        +(assignee?avatar(assignee,'w-7 h-7','text-[10px]'):'')
-        +'</button>';
-    });
-    html+='</div>';
-  }
-  html+='<button onclick="App.closeModal()" style="width:100%;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:14px;font-weight:600;cursor:pointer;color:#6B7280">Cancel</button>'
+  let html='<div class="p-5">';
+  html+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">'
+    +'<h2 class="fd" style="font-size:18px;font-weight:800">What went wrong?</h2>'
+    +'<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button>'
     +'</div>';
+  html+='<div style="font-size:12px;color:#9CA3AF;margin-bottom:20px">'+esc(c?.name||'')+' › '+esc(t?.name||'')+'</div>';
+  html+='<p style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">Select the issue:</p>';
+  html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
+
+  questions.forEach(function(q,qi){
+    html+='<button data-qi="'+qi+'" onclick="App._flagPickQuestion(this.dataset.qi)"'
+      +' style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;border:1.5px solid #E5E7EB;background:#fff;cursor:pointer;text-align:left;width:100%"'
+      +' onmouseover="this.style.borderColor=\'#EF4444\';this.style.background=\'#FFF5F5\'"'
+      +' onmouseout="this.style.borderColor=\'#E5E7EB\';this.style.background=\'#fff\'">';
+    html+='<span style="width:28px;height:28px;border-radius:50%;background:#FEE2E2;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:800;color:#EF4444;flex-shrink:0">'+(qi+1)+'</span>';
+    html+='<div style="flex:1;min-width:0">';
+    html+='<div style="font-size:14px;font-weight:600;color:#15171C">'+esc(q.text)+'</div>';
+    html+='<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+(q.answers||[]).length+' option'+(q.answers?.length!==1?'s':'')+'</div>';
+    html+='</div>';
+    html+='<span style="color:#C8C5BD">'+ic('chevR','w-4 h-4')+'</span>';
+    html+='</button>';
+  });
+
+  html+='</div>';
+  html+='<button onclick="App.closeModal()" style="width:100%;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:13px;font-weight:600;color:#6B7280;cursor:pointer">Cancel</button>';
+  html+='</div>';
   openModal(html,'max-w-sm');
 };
 
-App._selectFlagAnswer=(qi,ai)=>{
+// ── Step 2: pick ONE answer ──
+App._flagPickQuestion=(qi)=>{
+  qi=parseInt(qi);
+  const ql=(DB.questionLists||[]).find(x=>x.id===App._flagQlId);if(!ql)return;
+  const questions=_listQuestions(ql);
+  const q=questions[qi];if(!q)return;
+  App._flagSelQi=qi;
+  const answers=q.answers||[];
+  const c=clById(App._flagClId);const t=(c?.tasks||[])[App._flagTaskIdx];
+
+  let html='<div class="p-5">';
+  // Back button + header
+  html+='<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">';
+  html+='<button onclick="App._showQuestionPicker()" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;color:#6B7280;flex-shrink:0">'+ic('back','w-4 h-4')+'</button>';
+  html+='<h2 class="fd" style="font-size:16px;font-weight:800;flex:1">'+esc(q.text)+'</h2>';
+  html+='<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button>';
+  html+='</div>';
+  html+='<div style="font-size:12px;color:#9CA3AF;margin-bottom:20px">'+esc(c?.name||'')+' › '+esc(t?.name||'')+'</div>';
+
+  if(!answers.length){
+    html+='<div style="background:#FFF7ED;border:1px solid #FED7AA;border-radius:10px;padding:14px;font-size:13px;color:#92400E;margin-bottom:16px">No answer options configured for this question.</div>';
+    html+='<button onclick="App._showQuestionPicker()" style="width:100%;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:13px;font-weight:600;color:#6B7280;cursor:pointer">← Back</button>';
+  } else {
+    html+='<p style="font-size:12px;font-weight:700;color:#374151;margin-bottom:10px">Select what happened:</p>';
+    html+='<div style="display:flex;flex-direction:column;gap:8px;margin-bottom:16px">';
+    answers.forEach(function(a,ai){
+      const assignee=uById(a.assignedTo);
+      html+='<button data-qi="'+qi+'" data-ai="'+ai+'" onclick="App._flagPickAnswer(this.dataset.qi,this.dataset.ai)"'
+        +' style="display:flex;align-items:center;gap:12px;padding:13px 16px;border-radius:12px;border:1.5px solid #E5E7EB;background:#fff;cursor:pointer;text-align:left;width:100%"'
+        +' onmouseover="this.style.borderColor=\'#EF4444\';this.style.background=\'#FFF5F5\'"'
+        +' onmouseout="this.style.borderColor=\'#E5E7EB\';this.style.background=\'#fff\'">';
+      html+='<span style="width:28px;height:28px;border-radius:50%;background:#F3F4F6;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#6B7280;flex-shrink:0">'+String.fromCharCode(65+ai)+'</span>';
+      html+='<div style="flex:1;min-width:0">';
+      html+='<div style="font-size:14px;font-weight:600;color:#15171C">'+esc(a.text)+'</div>';
+      if(assignee) html+='<div style="font-size:11px;color:#9CA3AF;margin-top:2px">Ticket → '+esc(fullName(assignee))+'</div>';
+      html+='</div>';
+      if(assignee) html+=avatar(assignee,'w-7 h-7','text-[10px]');
+      html+='</button>';
+    });
+    html+='</div>';
+    html+='<button onclick="App._showQuestionPicker()" style="width:100%;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-size:13px;font-weight:600;color:#6B7280;cursor:pointer">← Back</button>';
+  }
+
+  html+='</div>';
+  openModal(html,'max-w-sm');
+};
+
+// ── Step 3: confirm + note ──
+App._flagPickAnswer=(qi,ai)=>{
+  qi=parseInt(qi);ai=parseInt(ai);
   const ql=(DB.questionLists||[]).find(x=>x.id===App._flagQlId);if(!ql)return;
   const questions=_listQuestions(ql);
   const q=questions[qi];if(!q)return;
   const a=(q.answers||[])[ai];if(!a)return;
-  if(!App._flagAnswers)App._flagAnswers=[];
-  App._flagAnswers.push({qi,ai,questionId:q.id,questionText:q.text,answerText:a.text,assignedTo:a.assignedTo||null});
-  const nextQi=qi+1;
-  if(nextQi<questions.length){App._flagQi=nextQi;App._showFlagQuestion();return;}
-  // All questions answered — show note screen
-  const c=clById(App._flagClId);const t=(c?.tasks||[])[App._flagTaskIdx];
-  let summaryHtml='';
-  (App._flagAnswers||[]).forEach(function(fa){
-    summaryHtml+='<div style="display:flex;gap:8px;padding:7px 10px;background:#F9FAFB;border-radius:8px;font-size:12px;margin-bottom:4px">'
-      +'<span style="color:#9CA3AF;flex-shrink:0">'+esc(fa.questionText)+':</span>'
-      +'<span style="font-weight:700;color:#15171C">'+esc(fa.answerText)+'</span>'
-      +'</div>';
-  });
+  const clId=App._flagClId;const taskIdx=App._flagTaskIdx;
+  const c=clById(clId);const t=(c?.tasks||[])[taskIdx];
+
+  // ── Duplicate check: same task + same question + same answer already open ──
+  const dup=(DB.tickets||[]).find(tk=>
+    tk.checklistId===clId &&
+    tk.taskIndex===taskIdx &&
+    tk.questionId===q.id &&
+    tk.answerText===a.text &&
+    tk.status==='Open'
+  );
+
+  if(dup){
+    // Flag the task normally (no new ticket)
+    const rt=RUN[clId]?.tasks?.[taskIdx];
+    if(rt){rt.issue=true;rt.response='Issue';rt.done=true;rt.issueComment='';
+      rt.selectedQuestion={qlId:ql.id,qi,text:q.text+': '+a.text,assignedTo:a.assignedTo||null,noNewTicket:true};}
+    toast('Already reported — flagged without new ticket','warn');
+    closeModal();saveDB();render();
+    return;
+  }
+
+  // Store selection
+  App._flagSelQi=qi;App._flagSelAi=ai;
+  const assignee=uById(a.assignedTo);
+
   openModal('<div class="p-5">'
-    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Add a note</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-    +'<div style="background:#F9FAFB;border-radius:10px;padding:10px 12px;margin-bottom:14px">'
-    +'<div style="font-size:11px;color:#9CA3AF">Task</div>'
-    +'<div style="font-size:13px;font-weight:700;color:#15171C">'+esc(c?.name||'')+' › '+esc(t?.name||'')+'</div>'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:4px">'
+    +'<button onclick="App._flagPickQuestion(\''+qi+'\')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;color:#6B7280;flex-shrink:0">'+ic('back','w-4 h-4')+'</button>'
+    +'<h2 class="fd" style="font-size:16px;font-weight:800;flex:1">Describe the issue</h2>'
+    +'<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button>'
     +'</div>'
-    +'<div style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Your answers</div>'
-    +summaryHtml
-    +'<label style="display:block;font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em;margin:14px 0 6px">Describe the issue *</label>'
-    +'<textarea id="flag-note" rows="3" placeholder="What happened? Add any details…" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:13px;resize:vertical;outline:none;font-family:inherit" class="rf"></textarea>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-bottom:16px">'+esc(c?.name||'')+' › '+esc(t?.name||'')+'</div>'
+    // Summary card
+    +'<div style="background:#FFF5F5;border:1.5px solid #FEE2E2;border-radius:10px;padding:12px 14px;margin-bottom:16px">'
+    +'<div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">Selected</div>'
+    +'<div style="font-size:13px;font-weight:600;color:#15171C">'+esc(q.text)+'</div>'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:4px">'
+    +'<div style="font-size:13px;color:#EF4444;font-weight:700">'+esc(a.text)+'</div>'
+    +(assignee?'<div style="display:flex;align-items:center;gap:6px">'+avatar(assignee,'w-6 h-6','text-[9px]')+'<span style="font-size:11px;font-weight:600;color:#6B7280">'+esc(fullName(assignee))+'</span></div>':'')
+    +'</div>'
+    +'</div>'
+    +'<label style="display:block;font-size:12px;font-weight:700;color:#374151;margin-bottom:6px">What happened? <span style="font-weight:400;color:#9CA3AF">(required)</span></label>'
+    +'<textarea id="flag-note" rows="3" placeholder="Describe the issue in detail…" style="width:100%;box-sizing:border-box;background:#fff;border:1.5px solid #ECEDF0;border-radius:10px;padding:10px 12px;font-size:13px;resize:vertical;outline:none;font-family:inherit" class="rf"></textarea>'
     +'<div class="flex gap-2 mt-4">'
     +'<button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
-    +'<button onclick="App._submitFlagAnswers(\''+App._flagClId+'\','+App._flagTaskIdx+')" style="flex:1;padding:11px;border-radius:11px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">'+ic('flag','w-4 h-4 inline')+' Submit</button>'
+    +'<button onclick="App._submitFlagAnswers(\''+clId+'\','+taskIdx+')" style="flex:1;padding:11px;border-radius:11px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">🚩 Submit</button>'
     +'</div></div>','max-w-sm');
   setTimeout(function(){const el=document.getElementById('flag-note');if(el)el.focus();},100);
 };
@@ -3996,34 +4102,50 @@ App._submitFlagAnswers=(clId,taskIdx)=>{
   if(!comment){toast('Please describe the issue','err');$('#flag-note')?.focus();return;}
   const c=clById(clId);const t=(c?.tasks||[])[taskIdx];
   const ql=(DB.questionLists||[]).find(x=>x.id===App._flagQlId);
-  if(!ql||!t||!c)return;
-  const answers=App._flagAnswers||[];
+  if(!c||!t||!ql)return;
+
+  const qi=App._flagSelQi;const ai=App._flagSelAi;
+  const questions=_listQuestions(ql);
+  const q=questions[qi];if(!q){closeModal();return;}
+  const a=(q.answers||[])[ai];if(!a){closeModal();return;}
+
+  // Mark task flagged
   const rt=RUN[clId]?.tasks?.[taskIdx];
   if(rt){
     rt.issue=true;rt.response='Issue';rt.done=true;rt.issueComment=comment;
-    if(answers.length){const f=answers[0];rt.selectedQuestion={qlId:ql.id,qi:f.qi,text:f.questionText+': '+f.answerText,assignedTo:f.assignedTo};}
+    rt.selectedQuestion={qlId:ql.id,qi,text:q.text+': '+a.text,assignedTo:a.assignedTo||null};
   }
+
+  // Create ONE ticket
   if(!DB.tickets)DB.tickets=[];
-  const created=[];
-  answers.forEach(function(fa){
-    const ticket={id:uid('tk'),title:c.name+' › '+t.name+' › '+fa.questionText,
-      checklistId:clId,checklistName:c.name,taskIndex:taskIdx,taskName:t.name,
-      questionListId:ql.id,questionListName:ql.name,
-      questionId:fa.questionId,questionIndex:fa.qi,questionText:fa.questionText,
-      answerText:fa.answerText,comment,
-      assignedTo:fa.assignedTo||null,createdBy:S.uid,
-      createdAt:new Date().toISOString(),status:'Open',resolvedAt:null,resolvedBy:null,notes:''};
-    DB.tickets.unshift(ticket);created.push(ticket);
-    if(fa.assignedTo&&fa.assignedTo!==S.uid){
-      DB.notifications.push({id:uid('n'),userId:fa.assignedTo,
-        text:'New ticket: '+t.name+' — '+fa.questionText+': '+fa.answerText+(comment?' — '+comment.slice(0,40):''),
-        read:false,time:new Date().toISOString()});
-      _invalidateNotifCache();
-    }
-  });
+  const ticket={
+    id:uid('tk'),
+    checklistId:clId,checklistName:c.name,
+    taskIndex:taskIdx,taskName:t.name,
+    questionListId:ql.id,questionListName:ql.name,
+    questionId:q.id,questionIndex:qi,
+    questionText:q.text,answerText:a.text,
+    comment,
+    assignedTo:a.assignedTo||null,
+    createdBy:S.uid,
+    createdAt:new Date().toISOString(),
+    status:'Open',resolvedAt:null,resolvedBy:null,notes:''
+  };
+  DB.tickets.unshift(ticket);
+
+  // Notify assignee
+  if(a.assignedTo&&a.assignedTo!==S.uid){
+    DB.notifications.push({
+      id:uid('n'),userId:a.assignedTo,
+      text:'🚩 '+esc(t.name)+' — '+esc(q.text)+': '+esc(a.text)+(comment?' · '+comment.slice(0,60):''),
+      read:false,time:new Date().toISOString()
+    });
+    _invalidateNotifCache();
+  }
+
   log(fullName(me()),'Flagged task',c.name+' › '+t.name);
-  toast(created.length+' ticket'+(created.length!==1?'s':'')+' created ✓');
-  App._flagAnswers=[];App._flagQi=0;
+  toast('Ticket created ✓');
+  App._flagSelQi=null;App._flagSelAi=null;
   closeModal();saveDB();render();
 };
 
