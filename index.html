@@ -3564,6 +3564,29 @@ App._nsSaveEmail=async()=>{
   _ns.email_reminder_minutes=Math.max(5,Math.min(120,mins));
   await _saveNS();toast('Saved ✓');
 };
+App._testEmail=async()=>{
+  if(!_ns) await _loadNS();
+  const u=me();
+  if(!u?.email){toast('Your user profile has no email address','err');return;}
+  const btn=document.getElementById('ns-test-btn');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  try{
+    const {error}=await sb.functions.invoke('send-notification',{body:{
+      to: u.email,
+      from_name: _ns.email_from_name||'Shiftly',
+      subject: '✅ Shiftly test email',
+      html: _bodyToHtml(_ns.email_from_name||'Shiftly',
+        'Hi '+esc(u.firstName||'there')+',\n\nThis is a test email from Shiftly.\n\nIf you received this, your email setup is working correctly.\n\nSMTP is connected and emails will be delivered to users based on their profile email address.'),
+    }});
+    if(error)throw new Error(error.message||'Function error');
+    toast('Test email sent to '+u.email+' ✓','ok');
+  }catch(e){
+    toast('Failed: '+e.message,'err');
+    console.error('Test email error:',e);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Send test email';}
+  }
+};
 
 function settingsPage(){
   const stab=S.filters.stab||'workflow';
@@ -3645,7 +3668,10 @@ function settingsPage(){
           <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
             style="width:120px;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
         </div>
-        <button onclick="App._nsSaveEmail()" style="width:100%;padding:10px;border-radius:11px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Save sender settings</button>
+        <div style="display:flex;gap:8px">
+          <button onclick="App._nsSaveEmail()" style="flex:1;padding:10px;border-radius:11px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Save settings</button>
+          <button id="ns-test-btn" onclick="App._testEmail()" style="padding:10px 16px;border-radius:11px;background:#fff;color:#374151;font-size:13px;font-weight:700;border:1.5px solid #E5E7EB;cursor:pointer" onmouseover="this.style.background='#F9F8F5'" onmouseout="this.style.background='#fff'">Send test email</button>
+        </div>
       </div>
       <div style="padding:4px 20px 12px">
         <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
