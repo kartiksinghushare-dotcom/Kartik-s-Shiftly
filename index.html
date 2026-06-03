@@ -466,7 +466,17 @@ function loadDB(){
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
     ['users','departments','locations','checklists','submissions','approvals','feedback','issues','folders','documents','audit','notifications','questions','questionLists','tickets'].forEach(k=>{if(!DB[k])DB[k]=[];});
-    DB.users.forEach(u=>{if(!u.rules)u.rules={past:true,future:true,edit:true};if(!u.approval)u.approval={past:false,future:false,edited:false};if(!u.phone)u.phone='';if(!u.position)u.position='';if(!u.docAccess)u.docAccess={departments:{},locations:{}};if(u.questionsAccess===undefined)u.questionsAccess=false;});
+    DB.users.forEach(u=>{
+      if(!u.rules)u.rules={past:true,future:true,edit:true};
+      // Ensure individual rule fields have proper defaults (true, not false)
+      if(u.rules.past===undefined||u.rules.past===null)u.rules.past=true;
+      if(u.rules.future===undefined||u.rules.future===null)u.rules.future=true;
+      if(u.rules.edit===undefined||u.rules.edit===null)u.rules.edit=true;
+      if(!u.approval)u.approval={past:false,future:false,edited:false};
+      if(!u.phone)u.phone='';if(!u.position)u.position='';
+      if(!u.docAccess)u.docAccess={departments:{},locations:{}};
+      if(u.questionsAccess===undefined)u.questionsAccess=false;
+    });
     S.uid=p.uid||null;return true;
   }catch(e){return false;}
 }
@@ -890,7 +900,7 @@ App.editUser=(id=null)=>{
     <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',DB.departments.map(d=>d.name),u?.department||'')}</div>
     <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',['User','Admin'],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
-    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??false,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??false,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
+    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??true,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??true,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??false,'Past entries')}${mkTog('u-af',u?.approval?.future??false,'Future entries')}${mkTog('u-ae',u?.approval?.edited??false,'Edited entries')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Tab Access</p>${mkTog('u-qa',u?.questionsAccess??false,'Access to Questions tab')}</div>
     ${_docAccessSection(u)}
@@ -1789,8 +1799,7 @@ function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEdit
   }
   if(!sub){
     if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
-    // Future dates — never allow submit before the day arrives
-    if(isFuture)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
+    if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
     const prog=total>0?((doneN+issN)+' of '+total+' complete'):'';
     const btnCls='submit-pill '+(allDone?'go':'no');
     const btnLbl=allDone?'\u2713 Submit':'Submit ('+(doneN+issN)+'/'+total+')';
@@ -1877,8 +1886,10 @@ function _taskRow(c,t,i,run,submitted,date){
   const isIssue=rt.issue===true;
   const today=todayISO();
   const isFuture=date>today;
-  // Treat future dates same as submitted — locked, no interaction
-  const locked=submitted||isFuture;
+  const isPast=date<today;
+  const u=me();
+  // Lock tasks if submitted, OR if future/past without permission
+  const locked=submitted||(isFuture&&!u?.rules?.future)||(isPast&&!u?.rules?.past);
   const overdue=!locked&&t.time&&nowHM()>hm2m(t.time)&&date<=today;
   const CRIT_C={Low:'transparent',Medium:'#F59E0B',High:'#F97316',Critical:'#EF4444'};
 
@@ -1995,11 +2006,13 @@ App._addPh=(clId,i,el)=>{
 };
 function _updateSubmitBtn(clId){
   const run=RUN[clId];if(!run)return;
-  // Don't re-enable if already submitted — find the specific button for this checklist
   const sub=subFor(clId,S.uid,run.date);
   if(sub&&sub.status!=='Editing')return; // already submitted — never re-enable
   const today=todayISO();
-  if(run.date>today)return; // future date — never enable
+  const u=me();
+  // Block only if no permission — if user has rules.future/past, allow
+  if(run.date>today&&!u?.rules?.future)return;
+  if(run.date<today&&!u?.rules?.past)return;
   const c=clById(clId);if(!c)return;
   const doneN=run.tasks.filter(t=>t.response!==null&&t.response!==undefined&&!t.issue).length;
   const issN=run.tasks.filter(t=>t.issue).length;
@@ -2008,7 +2021,6 @@ function _updateSubmitBtn(clId){
   const photoDone=!(c.tasks||[]).some((t,i)=>t.photo&&!run.tasks[i]?.photo&&!run.tasks[i]?.issue);
   const canSubmit=allDone&&photoDone;
   const isEditing=run.status==='Editing';
-  // Only update the submit button for THIS checklist, not all on the page
   const btn=document.querySelector(`.submit-pill[data-cl="${clId}"]`);
   if(btn){
     if(canSubmit){btn.disabled=false;btn.className='submit-pill go';btn.textContent=isEditing?'✓ Submit edit':'✓ Submit';}
