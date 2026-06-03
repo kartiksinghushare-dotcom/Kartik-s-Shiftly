@@ -3413,34 +3413,34 @@ const NS_LS='shiftly_ns_v2';
 // Default templates — subject + body for every event type
 // Variables: {{user_name}} {{checklist_name}} {{task_name}} {{ticket_title}} {{flagged_by}} {{resolved_by}} {{from_name}}
 const EMAIL_EVENTS=[
-  {key:'ticket_created',   label:'Ticket created',       vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{ticket_title}}'},
-  {key:'ticket_assigned',  label:'Ticket reassigned',    vars:'{{user_name}}, {{ticket_title}}'},
-  {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{resolved_by}}'},
-  {key:'issue_flagged',    label:'Issue flagged',         vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{flagged_by}}'},
-  {key:'checklist_assigned',label:'Checklist assigned',  vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'submission_late',  label:'Submission late',       vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'submission_approved',label:'Submission approved',vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'submission_rejected',label:'Submission rejected',vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'approval_requested',label:'Approval requested',  vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'approval_decided', label:'Approval decided',     vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}'},
-  {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'ticket_created',   label:'Ticket created',       vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{ticket_title}}, {{action_url}}'},
+  {key:'ticket_assigned',  label:'Ticket reassigned',    vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
+  {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{resolved_by}}, {{action_url}}'},
+  {key:'issue_flagged',    label:'Issue flagged',         vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{flagged_by}}, {{action_url}}'},
+  {key:'checklist_assigned',label:'Checklist assigned',  vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_late',  label:'Submission late',       vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_approved',label:'Submission approved',vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_rejected',label:'Submission rejected',vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'approval_requested',label:'Approval requested',  vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'approval_decided', label:'Approval decided',     vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
 ];
 
 function _defaultTemplates(){
   return{
-    ticket_created:   {subject:'🚩 New ticket assigned: {{task_name}}',        body:'Hi {{user_name}},\n\nA new ticket has been assigned to you.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\nIssue: {{ticket_title}}'},
-    ticket_assigned:  {subject:'Ticket reassigned to you: {{ticket_title}}',   body:'Hi {{user_name}},\n\nA ticket has been reassigned to you: {{ticket_title}}'},
-    ticket_resolved:  {subject:'✅ Ticket resolved: {{ticket_title}}',          body:'Hi {{user_name}},\n\nYour ticket has been resolved by {{resolved_by}}.\n\nTicket: {{ticket_title}}'},
-    issue_flagged:    {subject:'⚠️ Issue flagged: {{task_name}}',               body:'Hi {{user_name}},\n\n{{flagged_by}} flagged an issue on their checklist.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}'},
-    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}'},
-    submission_late:  {subject:'⏰ Late submission: {{checklist_name}}',        body:'Hi {{user_name}},\n\nA submission is overdue: {{checklist_name}}'},
-    submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.'},
-    submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.'},
-    approval_requested:{subject:'🔔 Approval needed: {{checklist_name}}',      body:'Hi {{user_name}},\n\nAn approval is pending for {{checklist_name}}.'},
-    approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.'},
-    feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.'},
-    deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon.'},
+    ticket_created:   {subject:'🚩 New ticket assigned: {{task_name}}',        body:'Hi {{user_name}},\n\nA new ticket has been assigned to you.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\nIssue: {{ticket_title}}\n\n{{action_url}}'},
+    ticket_assigned:  {subject:'Ticket reassigned to you: {{ticket_title}}',   body:'Hi {{user_name}},\n\nA ticket has been reassigned to you: {{ticket_title}}\n\n{{action_url}}'},
+    ticket_resolved:  {subject:'✅ Ticket resolved: {{ticket_title}}',          body:'Hi {{user_name}},\n\nYour ticket has been resolved by {{resolved_by}}.\n\nTicket: {{ticket_title}}\n\n{{action_url}}'},
+    issue_flagged:    {subject:'⚠️ Issue flagged: {{task_name}}',               body:'Hi {{user_name}},\n\n{{flagged_by}} flagged an issue on their checklist.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\n\n{{action_url}}'},
+    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Shiftly to complete it.\n\n{{action_url}}'},
+    submission_late:  {subject:'⏰ Late submission: {{checklist_name}}',        body:'Hi {{user_name}},\n\nA submission is overdue: {{checklist_name}}\n\n{{action_url}}'},
+    submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.\n\n{{action_url}}'},
+    submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.\n\n{{action_url}}'},
+    approval_requested:{subject:'🔔 Approval needed: {{checklist_name}}',      body:'Hi {{user_name}},\n\nAn approval is pending for {{checklist_name}}.\n\n{{action_url}}'},
+    approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.\n\n{{action_url}}'},
+    feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.\n\n{{action_url}}'},
+    deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
   };
 }
 
@@ -3485,10 +3485,20 @@ function _fillTemplate(str, vars){
   return str.replace(/\{\{(\w+)\}\}/g,(_,k)=>vars[k]||'');
 }
 
-// ── Render plain text body as HTML ──
-function _bodyToHtml(fromName, bodyText){
+// ── Render plain text body as HTML — {{action_url}} line becomes a CTA button ──
+function _bodyToHtml(fromName, bodyText, actionUrl=''){
   const safeName=String(fromName||'Shiftly').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
-  const lines = bodyText.split('\n').map(l=>l.trim().replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
+  const rawLines = bodyText.split('\n').map(l=>l.trim());
+  let ctaUrl = actionUrl||'';
+  const lines = rawLines
+    .filter(l=>l!=='{{action_url}}')
+    .map(l=>l.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
+  if(!ctaUrl){const urlLine=rawLines.find(l=>/^https?:\/\//.test(l));if(urlLine)ctaUrl=urlLine;}
+  const ctaLabel=ctaUrl.includes('tickets')?'View Ticket'
+    :ctaUrl.includes('approvals')?'View Approvals'
+    :ctaUrl.includes('mychecklists')?'Open Checklist'
+    :ctaUrl.includes('notifications')?'View Notifications'
+    :'Open Shiftly';
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
     <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
@@ -3500,6 +3510,10 @@ function _bodyToHtml(fromName, bodyText){
         ?`<p style="font-size:15px;color:#374151;margin:0 0 16px">${l}</p>`
         :`<p style="font-size:14px;color:#6B7280;margin:0 0 8px;line-height:1.6">${l}</p>`
       ).join('')}
+      ${ctaUrl?`<div style="margin-top:24px">
+        <a href="${ctaUrl}" style="display:inline-block;background:#15171C;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none">${ctaLabel} →</a>
+        <p style="margin:10px 0 0;font-size:11px;color:#B8B5AC">Or copy: ${ctaUrl}</p>
+      </div>`:''}
     </div>
     <div style="padding:16px 28px;background:#F9F8F5;border-top:1px solid #ECEDF0;font-size:11px;color:#9CA3AF">
       ${safeName} · Automated notification · Do not reply
@@ -3509,29 +3523,33 @@ function _bodyToHtml(fromName, bodyText){
 
 // ── sendEmail: FAST — calls edge function directly, no queue, no extra DB round trip ──
 async function sendEmail(eventType, userId, vars){
-  // 1. Look up recipient from their user profile
   const user = userId ? uById(userId) : null;
   if(!user?.email){console.warn('sendEmail: no email for user',userId);return;}
-  // 2. Check enabled
   if(!_ns) await _loadNS();
   if(!_ns.email_enabled) return;
   if(_ns['email_'+eventType]===false) return;
-  // 3. Merge vars with recipient name
-  const allVars = {user_name: fullName(user), from_name: _ns.email_from_name||'Shiftly', ...vars};
-  // 4. Get template — custom or default
+  // Build app URL from current window location
+  const appUrl = window.location.origin;
+  // Each event type links to the most relevant page
+  const routeMap = {
+    ticket_created:'tickets', ticket_assigned:'tickets', ticket_resolved:'tickets',
+    issue_flagged:'tickets', checklist_assigned:'mychecklists',
+    submission_late:'mychecklists', submission_approved:'mychecklists',
+    submission_rejected:'mychecklists', approval_requested:'approvals',
+    approval_decided:'approvals', feedback_received:'notifications',
+    deadline_reminder:'mychecklists',
+  };
+  const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
+  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Shiftly', app_url:appUrl, action_url:actionUrl, ...vars};
   const defaults = _defaultTemplates();
   const tpl = {
-    subject: (_ns.templates?.[eventType]?.subject) || defaults[eventType]?.subject || eventType,
-    body:    (_ns.templates?.[eventType]?.body)    || defaults[eventType]?.body    || '',
+    subject:(_ns.templates?.[eventType]?.subject)||defaults[eventType]?.subject||eventType,
+    body:   (_ns.templates?.[eventType]?.body)   ||defaults[eventType]?.body   ||'',
   };
   const subject  = _fillTemplate(tpl.subject, allVars);
-  const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars));
-  // 5. Call edge function directly — fire and forget, non-blocking
+  const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars), actionUrl);
   sb.functions.invoke('send-notification',{body:{
-    to: user.email,
-    from_name: _ns.email_from_name||'Shiftly',
-    subject,
-    html: bodyHtml,
+    to:user.email, from_name:_ns.email_from_name||'Shiftly', subject, html:bodyHtml,
   }}).catch(e=>console.warn('sendEmail invoke failed:',e.message));
 }
 
@@ -3571,12 +3589,14 @@ App._testEmail=async()=>{
   const btn=document.getElementById('ns-test-btn');
   if(btn){btn.disabled=true;btn.textContent='Sending…';}
   try{
+    const appUrl=window.location.origin;
     const {error}=await sb.functions.invoke('send-notification',{body:{
       to: u.email,
       from_name: _ns.email_from_name||'Shiftly',
       subject: '✅ Shiftly test email',
       html: _bodyToHtml(_ns.email_from_name||'Shiftly',
-        'Hi '+esc(u.firstName||'there')+',\n\nThis is a test email from Shiftly.\n\nIf you received this, your email setup is working correctly.\n\nSMTP is connected and emails will be delivered to users based on their profile email address.'),
+        'Hi '+u.firstName+',\n\nThis is a test email from Shiftly.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
+        appUrl+'/#mychecklists'),
     }});
     if(error)throw new Error(error.message||'Function error');
     toast('Test email sent to '+u.email+' ✓','ok');
@@ -3701,7 +3721,7 @@ function settingsPage(){
       <div style="font-size:13px;color:#9CA3AF;line-height:1.6">
         Customise the subject and body for each email. Use these variables anywhere in your text:
         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          ${['{{user_name}}','{{checklist_name}}','{{task_name}}','{{ticket_title}}','{{flagged_by}}','{{resolved_by}}','{{from_name}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
+          ${['{{user_name}}','{{checklist_name}}','{{task_name}}','{{ticket_title}}','{{flagged_by}}','{{resolved_by}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
         </div>
       </div>
     </div>
