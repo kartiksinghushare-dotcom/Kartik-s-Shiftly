@@ -52,6 +52,8 @@ input,select,textarea{outline:none}
 .sub-btn{width:100%;padding:11px 16px;font-size:13px;font-weight:700;border:none;border-radius:11px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px;transition:all .2s}
 .sub-btn.ready{background:#15171C;color:#fff}.sub-btn.ready:hover{background:#0E0F13;transform:translateY(-1px);box-shadow:0 6px 20px rgba(0,0,0,.2)}
 .sub-btn.partial{background:#F5F4F0;color:#B8B5AC;cursor:default}
+/* Nav brand logo */
+.nav-brand{width:32px;height:32px;border-radius:10px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:16px;color:#fff;flex-shrink:0}
 /* Filter dropdown */
 .fp{max-height:0;overflow:hidden;transition:max-height .22s ease}.fp.open{max-height:900px}
 /* Day/date picker chips */
@@ -236,9 +238,6 @@ input,select,textarea{outline:none}
 
 /* Button click feedback */
 button:active{opacity:.75;transform:scale(.97);transition:transform .08s,opacity .08s}
-.submit-pill{transition:all .15s}
-.submit-pill.go{cursor:pointer}
-.submit-pill.no{cursor:not-allowed;opacity:.6}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -591,6 +590,8 @@ App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
   render();window.scrollTo(0,0);};
 
 /* ===== RENDER ===== */
+let _lastUserAction=0; // timestamp of last submit/approve/etc — prevents loadFromSB overwriting fresh state
+function _touchAction(){_lastUserAction=Date.now();}
 function render(){if(!S.uid){$('#app').innerHTML=loginView();return;}$('#app').innerHTML=shell(pageContent());}
 function rr(){const c=$('#content');if(c)c.innerHTML=pageContent();}
 App.rr=rr;
@@ -764,7 +765,7 @@ App.login=async()=>{
     if(!S.route||S.route==='login')S.route=u.role==='Admin'?'dashboard':'mychecklists';
     saveDB();render();
     // Load full data in background — don't block UI
-    loadFromSB().then(()=>{saveDB();render();}).catch(()=>{});
+    loadFromSB().then(()=>{saveDB();if(Date.now()-_lastUserAction>3000)render();}).catch(()=>{});
   }catch(err){
     const msg=err.message.includes('Invalid')||err.message.includes('credentials')||err.message.includes('invalid_grant')
       ?'Incorrect email or password':err.message;
@@ -2068,13 +2069,11 @@ App._submitRun=async(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues ⚑':needsAppr?'Submitted — pending approval':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
-  // Disable submit button immediately to prevent double-submit while awaiting Supabase
-  const submitBtn=document.querySelector(`.submit-pill[data-cl="${clId}"]`);
-  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Saving…';}
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
-  // Await upsert so loadFromSB background refresh doesn't overwrite with stale state
-  await sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));
-  delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();render();
+  // Render immediately — don't wait for Supabase (double-submit prevented by existingSub guard at top)
+  delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();_touchAction();render();
+  // Save to Supabase in background
+  sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub sync:',e));
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -2402,15 +2401,15 @@ App._decide=async(id,status)=>{
   } else if(a.type==='Edit Request'){
     queueEmail('approval_decided', a.requesterId, null, null, {checklist_name:c?.name||''});
   }
-  // Await Supabase update so loadFromSB background refresh doesn't overwrite with stale Pending state
-  await Promise.all([
-    sb.from('approvals').update({status:a.status}).eq('id',a.id),
-    s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
-  ]).catch(()=>{});
   log(fullName(me()),status+' '+a.type,fullName(u));
   _invalidateNotifCache();saveDB();
   toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
-  render();
+  _touchAction();render();
+  // Save to Supabase in background — local state already updated so UI is instant
+  Promise.all([
+    sb.from('approvals').update({status:a.status}).eq('id',a.id),
+    s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
+  ]).catch(()=>{});
 };
 
 App.viewSub=(subId)=>{
@@ -3845,7 +3844,7 @@ function settingsPage(){
       else if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
       saveDB();render();
       // Snapshot local-only fields before loadFromSB overwrites DB
-      loadFromSB().then(()=>{saveDB();render();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+      loadFromSB().then(()=>{saveDB();if(Date.now()-_lastUserAction>3000)render();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
 /* ===== QUESTIONS & TICKETS =====
    DATA MODEL:
