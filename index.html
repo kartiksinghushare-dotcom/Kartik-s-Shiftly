@@ -2070,10 +2070,20 @@ App._submitRun=async(clId,date)=>{
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues ⚑':needsAppr?'Submitted — pending approval':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
-  // Render immediately — don't wait for Supabase (double-submit prevented by existingSub guard at top)
-  delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();_touchAction();render();
-  // Save to Supabase in background
-  sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub sync:',e));
+  // 1. Save to localStorage instantly (synchronous — zero delay)
+  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  // 2. Render immediately — UI updates in <50ms
+  delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();_touchAction();render();
+  // 3. Save ONLY this submission to Supabase (targeted — not full _sync of 11 tables)
+  sb.from('submissions').upsert(sr,{onConflict:'id'}).then(({error})=>{
+    if(error)console.warn('sub upsert:',error.message);
+    // After submission saved, sync notifications/approvals/issues in background
+    Promise.allSettled([
+      DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
+      (DB.issues||[]).length?sb.from('issues').upsert((DB.issues||[]).map(iss=>({id:iss.id,submission_id:iss.submissionId||null,checklist_id:iss.checklistId,user_id:iss.userId,date:iss.date,task_index:iss.taskIndex,task_name:iss.taskName,comment:iss.comment||'',photo:iss.photo||null,status:iss.status||'Open',manager_notes:iss.managerNotes||[],created_at:iss.createdAt,updated_at:iss.updatedAt||iss.createdAt})),{onConflict:'id'}):Promise.resolve(),
+      sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
+    ]).catch(()=>{});
+  }).catch(e=>console.warn('sub upsert failed:',e.message));
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -2402,13 +2412,16 @@ App._decide=async(id,status)=>{
     queueEmail('approval_decided', a.requesterId, null, null, {checklist_name:c?.name||''});
   }
   log(fullName(me()),status+' '+a.type,fullName(u));
-  _invalidateNotifCache();saveDB();
+  _invalidateNotifCache();
+  // Save to localStorage instantly
+  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
   toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
   _touchAction();render();
-  // Save to Supabase in background — local state already updated so UI is instant
-  Promise.all([
+  // Targeted Supabase save — only affected rows, not full 11-table sync
+  Promise.allSettled([
     sb.from('approvals').update({status:a.status}).eq('id',a.id),
     s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
+    sb.from('notifications').upsert(DB.notifications.slice(0,20).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
   ]).catch(()=>{});
 };
 
