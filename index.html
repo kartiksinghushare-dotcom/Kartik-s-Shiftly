@@ -3394,7 +3394,343 @@ App._clearOperational=async()=>{
   toast('Cleared ✓');saveDB();S.route='dashboard';render();
 };
 
-function settingsPage(){return`<div class="fade max-w-lg">${hdr('Settings','')}<div class="space-y-4"><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Workflow</h3>${mkTog('st-ap',true,'Enable approval flow')}${mkTog('st-if',true,'Notify manager on issue flagged')}${mkTog('st-in',true,'In-app notifications')}</div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Data</h3><div class="flex gap-3 flex-wrap">${btnG('Export CSV','App._exportCSV()','download')}<button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FED7AA;color:#C2410C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='#fff'">🧹 Clear data</button><button onclick="if(confirm('Reset ALL workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button></div></div><div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5"><h3 class="fd font-semibold text-sm mb-3">Stats</h3><div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div></div></div></div>`;}
+// ── Notification Settings (NS) — stored in workspace_settings table ──
+const NS_LS='shiftly_ns_v2';
+
+// Default templates — subject + body for every event type
+// Variables: {{user_name}} {{checklist_name}} {{task_name}} {{ticket_title}} {{flagged_by}} {{resolved_by}} {{from_name}}
+const EMAIL_EVENTS=[
+  {key:'ticket_created',   label:'Ticket created',       vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{ticket_title}}'},
+  {key:'ticket_assigned',  label:'Ticket reassigned',    vars:'{{user_name}}, {{ticket_title}}'},
+  {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{resolved_by}}'},
+  {key:'issue_flagged',    label:'Issue flagged',         vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{flagged_by}}'},
+  {key:'checklist_assigned',label:'Checklist assigned',  vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'submission_late',  label:'Submission late',       vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'submission_approved',label:'Submission approved',vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'submission_rejected',label:'Submission rejected',vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'approval_requested',label:'Approval requested',  vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'approval_decided', label:'Approval decided',     vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}'},
+  {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}'},
+];
+
+function _defaultTemplates(){
+  return{
+    ticket_created:   {subject:'🚩 New ticket assigned: {{task_name}}',        body:'Hi {{user_name}},\n\nA new ticket has been assigned to you.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\nIssue: {{ticket_title}}'},
+    ticket_assigned:  {subject:'Ticket reassigned to you: {{ticket_title}}',   body:'Hi {{user_name}},\n\nA ticket has been reassigned to you: {{ticket_title}}'},
+    ticket_resolved:  {subject:'✅ Ticket resolved: {{ticket_title}}',          body:'Hi {{user_name}},\n\nYour ticket has been resolved by {{resolved_by}}.\n\nTicket: {{ticket_title}}'},
+    issue_flagged:    {subject:'⚠️ Issue flagged: {{task_name}}',               body:'Hi {{user_name}},\n\n{{flagged_by}} flagged an issue on their checklist.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}'},
+    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}'},
+    submission_late:  {subject:'⏰ Late submission: {{checklist_name}}',        body:'Hi {{user_name}},\n\nA submission is overdue: {{checklist_name}}'},
+    submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.'},
+    submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.'},
+    approval_requested:{subject:'🔔 Approval needed: {{checklist_name}}',      body:'Hi {{user_name}},\n\nAn approval is pending for {{checklist_name}}.'},
+    approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.'},
+    feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.'},
+    deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon.'},
+  };
+}
+
+function _nsDefault(){return{
+  email_enabled:false,email_from_name:'Shiftly',email_from_address:'',email_reminder_minutes:15,
+  inapp_checklist_assigned:true,inapp_task_assigned:true,inapp_submission_submitted:true,
+  inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
+  inapp_ticket_created:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,
+  inapp_issue_flagged:true,inapp_approval_requested:true,inapp_approval_decided:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,
+  email_checklist_assigned:true,email_task_assigned:true,email_submission_submitted:false,
+  email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
+  email_ticket_created:true,email_ticket_assigned:true,email_ticket_resolved:true,
+  email_issue_flagged:true,email_approval_requested:true,email_approval_decided:true,
+  email_feedback_received:false,email_deadline_reminder:true,
+  templates:{},
+};}
+let _ns=null;
+async function _loadNS(){
+  if(_ns)return _ns;
+  try{const r=localStorage.getItem(NS_LS);if(r)_ns={..._nsDefault(),...JSON.parse(r)};}catch(e){}
+  if(!_ns)_ns=_nsDefault();
+  try{const{data}=await sb.from('workspace_settings').select('value').eq('key','notification_settings').single();
+    if(data?.value){_ns={..._nsDefault(),...data.value};if(!_ns.templates)_ns.templates={};localStorage.setItem(NS_LS,JSON.stringify(_ns));}}catch(e){}
+  return _ns;
+}
+async function _saveNS(){
+  if(!_ns)return;
+  localStorage.setItem(NS_LS,JSON.stringify(_ns));
+  try{await sb.from('workspace_settings').upsert({key:'notification_settings',value:_ns,updated_at:new Date().toISOString()},{onConflict:'key'});}catch(e){console.warn('NS sync:',e.message);}
+}
+
+// ── Resolve template variables ──
+function _fillTemplate(str, vars){
+  return str.replace(/\{\{(\w+)\}\}/g,(_,k)=>vars[k]||'');
+}
+
+// ── Render plain text body as HTML ──
+function _bodyToHtml(fromName, bodyText){
+  const lines = bodyText.split('\n').map(l=>l.trim());
+  return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
+    <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
+      <div style="width:28px;height:28px;border-radius:8px;background:#0E9F6E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">S</div>
+      <span style="font-weight:700;font-size:16px;color:#fff">${esc(fromName||'Shiftly')}</span>
+    </div>
+    <div style="padding:28px">
+      ${lines.filter(Boolean).map((l,i)=>i===0
+        ?`<p style="font-size:15px;color:#374151;margin:0 0 16px">${l}</p>`
+        :`<p style="font-size:14px;color:#6B7280;margin:0 0 8px;line-height:1.6">${l}</p>`
+      ).join('')}
+    </div>
+    <div style="padding:16px 28px;background:#F9F8F5;border-top:1px solid #ECEDF0;font-size:11px;color:#9CA3AF">
+      ${esc(fromName||'Shiftly')} · Automated notification · Do not reply
+    </div>
+  </div></body></html>`;
+}
+
+// ── sendEmail: FAST — calls edge function directly, no queue, no extra DB round trip ──
+async function sendEmail(eventType, userId, vars){
+  // 1. Look up recipient from their user profile
+  const user = userId ? uById(userId) : null;
+  if(!user?.email){console.warn('sendEmail: no email for user',userId);return;}
+  // 2. Check enabled
+  if(!_ns) await _loadNS();
+  if(!_ns.email_enabled) return;
+  if(_ns['email_'+eventType]===false) return;
+  // 3. Merge vars with recipient name
+  const allVars = {user_name: fullName(user), from_name: _ns.email_from_name||'Shiftly', ...vars};
+  // 4. Get template — custom or default
+  const defaults = _defaultTemplates();
+  const tpl = {
+    subject: (_ns.templates?.[eventType]?.subject) || defaults[eventType]?.subject || eventType,
+    body:    (_ns.templates?.[eventType]?.body)    || defaults[eventType]?.body    || '',
+  };
+  const subject  = _fillTemplate(tpl.subject, allVars);
+  const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars));
+  // 5. Call edge function directly — fire and forget, non-blocking
+  sb.functions.invoke('send-notification',{body:{
+    to: user.email,
+    from_name: _ns.email_from_name||'Shiftly',
+    subject,
+    html: bodyHtml,
+  }}).catch(e=>console.warn('sendEmail invoke failed:',e.message));
+}
+
+// Keep queueEmail as alias so existing call sites still work
+const queueEmail=(eventType,userId,_subjectIgnored,_bodyIgnored,vars={})=>sendEmail(eventType,userId,vars);
+
+function _nsTogRow(key,label,desc){
+  const on=_ns?(_ns[key]!==false):true;
+  return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>
+      ${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}
+    </div>
+    <button class="tog ${on?'on':'off'}" onclick="App._nsTog(this,'${key}')"><span></span></button>
+  </div>`;}
+App._nsTog=async(btn,key)=>{
+  if(!_ns)_ns=_nsDefault();
+  const nowOn=btn.classList.contains('off');
+  btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);
+  _ns[key]=nowOn;await _saveNS();
+};
+App._nsSaveEmail=async()=>{
+  if(!_ns)_ns=_nsDefault();
+  const name=($('#ns-from-name')?.value||'').trim();
+  const addr=($('#ns-from-addr')?.value||'').trim();
+  const mins=parseInt($('#ns-reminder-mins')?.value||'15')||15;
+  if(!addr){toast('Enter a from email address','err');return;}
+  if(!addr.includes('@')){toast('Enter a valid email address','err');return;}
+  _ns.email_from_name=name||'Shiftly';_ns.email_from_address=addr;
+  _ns.email_reminder_minutes=Math.max(5,Math.min(120,mins));
+  await _saveNS();toast('Saved ✓');
+};
+
+function settingsPage(){
+  const stab=S.filters.stab||'workflow';
+  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}<div style="padding:40px;text-align:center;color:#9CA3AF;font-size:13px">Loading…</div></div>`;}
+  const ns=_ns;
+  const TABS=[['workflow','⚙️ Workflow'],['inapp','🔔 In-App'],['email','✉️ Email'],['templates','📝 Templates'],['data','📦 Data']];
+  const tabBar=`<div style="display:flex;gap:3px;margin-bottom:20px;background:#F5F4F0;border-radius:14px;padding:4px">
+    ${TABS.map(([k,l])=>`<button onclick="S.filters.stab='${k}';rr()" style="flex:1;padding:9px 4px;border-radius:10px;font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .12s;${stab===k?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.08)':'background:transparent;color:#9CA3AF'}">${l}</button>`).join('')}
+  </div>`;
+
+  const workflowTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Approval & Submission</h3>
+      ${mkTog('st-ap',true,'Enable approval flow')}
+      ${mkTog('st-late',true,'Mark submissions late after cutoff')}
+      ${mkTog('st-edit',true,'Allow users to edit after submission')}
+      ${mkTog('st-pa',true,'Require approval for edited submissions')}
+    </div>
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Issues & Tickets</h3>
+      ${mkTog('st-if',true,'Notify manager when issue is flagged')}
+      ${mkTog('st-ta',true,'Auto-assign ticket from question answer')}
+    </div>
+  </div>`;
+
+  const inappTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
+      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
+        <div style="font-size:14px;font-weight:700">In-app notifications</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user</div>
+      </div>
+      <div style="padding:4px 20px 12px">
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        ${_nsTogRow('inapp_checklist_assigned','Checklist assigned','Sent to the user the checklist is assigned to')}
+        ${_nsTogRow('inapp_submission_submitted','Submission submitted','Sent to the manager when their team submits')}
+        ${_nsTogRow('inapp_submission_late','Submission late','Sent to the manager when a submission is overdue')}
+        ${_nsTogRow('inapp_submission_approved','Submission approved','Sent to the user whose submission was approved')}
+        ${_nsTogRow('inapp_submission_rejected','Submission rejected','Sent to the user whose submission was rejected')}
+        ${_nsTogRow('inapp_deadline_reminder','Deadline reminder','Sent to the user before their task cutoff')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
+        ${_nsTogRow('inapp_ticket_created','Ticket created','Sent to the assignee of the new ticket')}
+        ${_nsTogRow('inapp_ticket_assigned','Ticket reassigned','Sent to the new assignee when a ticket is reassigned')}
+        ${_nsTogRow('inapp_ticket_resolved','Ticket resolved','Sent to the person who created the ticket')}
+        ${_nsTogRow('inapp_issue_flagged','Issue flagged','Sent to the manager when a task is flagged')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
+        ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
+        ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
+      </div>
+    </div>
+  </div>`;
+
+  const emailOn=ns.email_enabled!==false;
+  const emailTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
+      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:700">Email notifications</div>
+          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Sends to the email address set on each user's account</div>
+        </div>
+        <button class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
+      </div>
+      <div style="padding:16px 20px;border-bottom:1px solid #F0EEE9">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
+            <input id="ns-from-name" value="${esc(ns.email_from_name||'Shiftly')}" placeholder="Shiftly"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
+            <input id="ns-from-addr" type="email" value="${esc(ns.email_from_address||'')}" placeholder="you@company.com"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
+          <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
+            style="width:120px;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+        </div>
+        <button onclick="App._nsSaveEmail()" style="width:100%;padding:10px;border-radius:11px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Save sender settings</button>
+      </div>
+      <div style="padding:4px 20px 12px">
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        ${_nsTogRow('email_checklist_assigned','Checklist assigned','Email sent to the assigned user')}
+        ${_nsTogRow('email_submission_late','Submission late','Email sent to the manager')}
+        ${_nsTogRow('email_submission_approved','Submission approved','Email sent to the user')}
+        ${_nsTogRow('email_submission_rejected','Submission rejected','Email sent to the user')}
+        ${_nsTogRow('email_deadline_reminder','Deadline reminder','Email sent to the user before cutoff')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
+        ${_nsTogRow('email_ticket_created','Ticket created','Email sent to the ticket assignee')}
+        ${_nsTogRow('email_ticket_assigned','Ticket reassigned','Email sent to the new assignee')}
+        ${_nsTogRow('email_ticket_resolved','Ticket resolved','Email sent to the ticket creator')}
+        ${_nsTogRow('email_issue_flagged','Issue flagged','Email sent to the manager')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        ${_nsTogRow('email_approval_requested','Approval requested','Email sent to admin')}
+        ${_nsTogRow('email_approval_decided','Approval decided','Email sent to the user')}
+        ${_nsTogRow('email_feedback_received','Feedback received','Email sent to the user')}
+      </div>
+    </div>
+  </div>`;
+
+  // ── TEMPLATES TAB ──
+  const defaults=_defaultTemplates();
+  const expandedTpl=S.filters.tplKey||null;
+  const templatesTab=`<div class="space-y-2">
+    <div style="padding:4px 0 10px">
+      <div style="font-size:13px;color:#9CA3AF;line-height:1.6">
+        Customise the subject and body for each email. Use these variables anywhere in your text:
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          ${['{{user_name}}','{{checklist_name}}','{{task_name}}','{{ticket_title}}','{{flagged_by}}','{{resolved_by}}','{{from_name}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${EMAIL_EVENTS.map(ev=>{
+      const tpl={...(defaults[ev.key]||{}), ...(ns.templates?.[ev.key]||{})};
+      const open=expandedTpl===ev.key;
+      return`<div style="background:#fff;border-radius:14px;border:1.5px solid ${open?'#0E9F6E':'#ECEDF0'};overflow:hidden;transition:border-color .15s">
+        <button onclick="S.filters.tplKey='${open?'':ev.key}';rr()"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:transparent;border:none;cursor:pointer;text-align:left">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#15171C">${ev.label}</div>
+            <div style="font-size:11px;color:#B8B5AC;margin-top:1px">${ev.vars}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${(ns.templates?.[ev.key])?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#065F46">Custom</span>`:''}
+            <span style="color:#B8B5AC;font-size:16px">${open?'▲':'▼'}</span>
+          </div>
+        </button>
+        ${open?`<div style="padding:0 16px 16px;border-top:1px solid #F5F4F0">
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;margin-top:12px">Subject</label>
+            <input id="tpl-subj-${ev.key}" value="${esc(tpl.subject||'')}" placeholder="Email subject…"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Body</label>
+            <textarea id="tpl-body-${ev.key}" rows="6"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
+            <div style="font-size:11px;color:#B8B5AC;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button onclick="App._resetTpl('${ev.key}')"
+              style="padding:8px 14px;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#9CA3AF">Reset to default</button>
+            <button onclick="App._saveTpl('${ev.key}')"
+              style="flex:1;padding:8px 14px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Save template</button>
+          </div>
+        </div>`:''}
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  App._saveTpl=async(key)=>{
+    if(!_ns)_ns=_nsDefault();
+    if(!_ns.templates)_ns.templates={};
+    const subj=($('#tpl-subj-'+key)?.value||'').trim();
+    const body=($('#tpl-body-'+key)?.value||'').trim();
+    if(!subj||!body){toast('Subject and body required','err');return;}
+    _ns.templates[key]={subject:subj,body};
+    await _saveNS();
+    toast('Template saved ✓');rr();
+  };
+  App._resetTpl=async(key)=>{
+    if(!_ns)_ns=_nsDefault();
+    if(_ns.templates)delete _ns.templates[key];
+    await _saveNS();
+    toast('Reset to default ✓');rr();
+  };
+
+  const dataTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Export & Reset</h3>
+      <div class="flex gap-3 flex-wrap">
+        ${btnG('Export CSV','App._exportCSV()','download')}
+        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FED7AA;color:#C2410C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='#fff'">🧹 Clear data</button>
+        <button onclick="if(confirm('Reset ALL workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Workspace stats</h3>
+      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
+    </div>
+  </div>`;
+
+  const content=stab==='workflow'?workflowTab:stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='templates'?templatesTab:dataTab;
+  return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}${content}</div>`;
+}
 
 /* ===== BOOT ===== */
 (async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();
@@ -3772,6 +4108,7 @@ App._showQuestionModal=(clId,taskIdx)=>{
         DB.notifications.push({id:uid('n'),userId:mgrId,
           text:'🚩 Issue flagged: '+esc(t.name)+' in '+esc(c.name),
           read:false,time:new Date().toISOString()});
+        queueEmail('issue_flagged', mgrId, null, null, {checklist_name:c.name, task_name:t.name, flagged_by:fullName(me())});
         _invalidateNotifCache();
         toast('Flagged — ticket sent to your manager');
         saveDB();render();
@@ -3797,13 +4134,14 @@ App._showQuestionModal=(clId,taskIdx)=>{
       if(!dupGen){
         if(!DB.tickets)DB.tickets=[];
         DB.tickets.unshift({id:uid('tk'),checklistId:clId,checklistName:c.name,
-          taskIndex:taskIdx,taskName:t.name,questionListId:ql.id,questionListName:ql.name,
+          taskIndex:taskIdx,taskName:t.name,questionListId:null,questionListName:null,
           questionId:null,questionIndex:null,questionText:'General flag',answerText:'',comment:'',
           assignedTo:mgrId,createdBy:S.uid,createdAt:new Date().toISOString(),
           status:'Open',resolvedAt:null,resolvedBy:null,notes:''});
         DB.notifications.push({id:uid('n'),userId:mgrId,
           text:'🚩 Issue flagged: '+esc(t.name)+' in '+esc(c.name),
           read:false,time:new Date().toISOString()});
+        queueEmail('issue_flagged', mgrId, null, null, {checklist_name:c.name, task_name:t.name, flagged_by:fullName(me())});
         _invalidateNotifCache();
         toast('Flagged — ticket sent to your manager');
         saveDB();render();
@@ -3812,7 +4150,8 @@ App._showQuestionModal=(clId,taskIdx)=>{
         saveDB();render();
       }
     } else {
-      toast('Flagged (no questions configured)','warn');render();
+      toast('Flagged');
+      render();
     }
     return;
   }
@@ -4001,12 +4340,18 @@ App._submitFlagAnswers=(clId,taskIdx)=>{
   };
   DB.tickets.unshift(ticket);
 
-  // Notify assignee
+  // Notify assignee (in-app + email)
   if(a.assignedTo&&a.assignedTo!==S.uid){
     DB.notifications.push({
       id:uid('n'),userId:a.assignedTo,
       text:'🚩 New ticket: '+esc(t.name)+' — '+esc(q.text)+': '+esc(a.text)+(comment?' · '+comment.slice(0,60):''),
       read:false,time:new Date().toISOString()
+    });
+    // Email the assignee — pulled from their user profile
+    queueEmail('ticket_created', a.assignedTo, null, null, {
+      checklist_name: c.name,
+      task_name: t.name,
+      ticket_title: q.text+': '+a.text,
     });
     _invalidateNotifCache();
   }
@@ -4144,9 +4489,15 @@ function ticketsPage(){
 App._resolveTicket=(id)=>{
   const tk=(DB.tickets||[]).find(x=>x.id===id);if(!tk)return;
   tk.status='Resolved';tk.resolvedBy=S.uid;tk.resolvedAt=new Date().toISOString();
-  // Notify creator
-  if(tk.createdBy&&tk.createdBy!==S.uid)
+  // Notify creator (in-app)
+  if(tk.createdBy&&tk.createdBy!==S.uid){
     DB.notifications.push({id:uid('n'),userId:tk.createdBy,text:'Ticket resolved: '+(tk.questionText||tk.title||''),read:false,time:new Date().toISOString()});
+    // Email the creator — their email is on their profile
+    queueEmail('ticket_resolved', tk.createdBy, null, null, {
+      ticket_title: tk.questionText||tk.title||'',
+      resolved_by: fullName(me()),
+    });
+  }
   _invalidateNotifCache();
   log(fullName(me()),'Resolved ticket',tk.questionText||tk.title||'');
   toast('Ticket resolved ✓');saveDB();render();
@@ -4179,6 +4530,10 @@ App._saveTicketEdit=(id)=>{
   const newAssignee=$('#tk-asgn')?.value||null;
   if(newAssignee&&newAssignee!==tk.assignedTo){
     DB.notifications.push({id:uid('n'),userId:newAssignee,text:'Ticket assigned to you: '+(tk.questionText||tk.title||''),read:false,time:new Date().toISOString()});
+    // Email the new assignee using their profile email
+    queueEmail('ticket_assigned', newAssignee, null, null, {
+      ticket_title: tk.questionText||tk.title||'',
+    });
     _invalidateNotifCache();
   }
   tk.assignedTo=newAssignee||null;
