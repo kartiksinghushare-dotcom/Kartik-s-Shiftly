@@ -2018,7 +2018,7 @@ App._issuePh=(clId,i,el)=>{const f=el.files[0];if(!f)return;const r=new FileRead
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(sub.tasks)),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');render();};
 
-App._submitRun=(clId,date)=>{
+App._submitRun=async(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
   const existingSub=subFor(clId,S.uid,date);if(existingSub&&existingSub.status!=='Editing'){toast('Already submitted for this date','warn');return;}
   for(let i=0;i<(c.tasks||[]).length;i++){
@@ -2068,7 +2068,13 @@ App._submitRun=(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(hasIssues?'Submitted with issues ⚑':needsAppr?'Submitted — pending approval':'Submitted ✓',hasIssues||late||needsAppr?'warn':'ok');
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();render();
+  // Disable submit button immediately to prevent double-submit while awaiting Supabase
+  const submitBtn=document.querySelector(`.submit-pill[data-cl="${clId}"]`);
+  if(submitBtn){submitBtn.disabled=true;submitBtn.textContent='Saving…';}
+  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
+  // Await upsert so loadFromSB background refresh doesn't overwrite with stale state
+  await sb.from('submissions').upsert(sr,{onConflict:'id'}).catch(e=>console.warn('sub:',e));
+  delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();saveDB();render();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -2366,9 +2372,11 @@ function _issuesTab(issues){
       +'</div>';
   }).join('');
 }
-App._decide=(id,status)=>{
+App._decide=async(id,status)=>{
   const a=DB.approvals.find(x=>x.id===id);if(!a)return;
   if(a.status!=='Pending'){toast('Already '+a.status.toLowerCase(),'warn');return;}
+  // Immediately disable buttons to prevent double-click
+  document.querySelectorAll(`[data-id="${id}"]`).forEach(b=>{b.disabled=true;b.style.opacity='0.5';});
   a.status=status;
   const u=uById(a.requesterId),c=clById(a.checklistId);
   const s=DB.submissions.find(x=>x.checklistId===a.checklistId&&x.userId===a.requesterId&&x.date===a.date);
@@ -2389,16 +2397,19 @@ App._decide=(id,status)=>{
       ?'✅ Submission approved — '+c?.name+' on '+fmtD(a.date)
       :'❌ Submission rejected — '+c?.name+'. '+(a.date?fmtD(a.date):''));
   DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false});
-  // Email the requester — approved or rejected
   if(a.type==='Submission'){
     queueEmail(status==='Approved'?'submission_approved':'submission_rejected', a.requesterId, null, null, {checklist_name:c?.name||''});
   } else if(a.type==='Edit Request'){
     queueEmail('approval_decided', a.requesterId, null, null, {checklist_name:c?.name||''});
   }
-  sb.from('approvals').update({status:a.status}).eq('id',a.id).catch(()=>{});
-  if(s)sb.from('submissions').update({status:s.status}).eq('id',s.id).catch(()=>{});
+  // Await Supabase update so loadFromSB background refresh doesn't overwrite with stale Pending state
+  await Promise.all([
+    sb.from('approvals').update({status:a.status}).eq('id',a.id),
+    s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
+  ]).catch(()=>{});
   log(fullName(me()),status+' '+a.type,fullName(u));
-  _invalidateNotifCache();saveDB();toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
+  _invalidateNotifCache();saveDB();
+  toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
   render();
 };
 
