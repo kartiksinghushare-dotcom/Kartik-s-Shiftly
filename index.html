@@ -1774,6 +1774,18 @@ function myClsPage(){
 
 function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved){
   const cid=c.id;
+  // Guard: never show Submit if already submitted (catches stale RUN state)
+  if(sub&&sub.status!=='Editing'){
+    const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    const eb=(sub.editCount||0)>0?'<span style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edit #'+sub.editCount+'</span>':'';
+    const left='<span style="font-size:12px;color:#B8B5AC">Submitted '+st+eb+'</span>';
+    let right='';
+    if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
+    else if(editApproved)right='<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
+    else if(sub.status==='Pending Approval'||sub.status==='Pending')right='<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>';
+    else if(u?.rules?.edit)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
+    return left+right;
+  }
   if(!sub){
     if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
     if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#3B82F6;font-weight:600">Future date</span><span></span>';
@@ -1783,24 +1795,13 @@ function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEdit
     const btn='<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="'+btnCls+'"'+(allDone?'':' disabled')+'>'+btnLbl+'</button>';
     return '<span style="font-size:12px;color:#B8B5AC">'+prog+'</span>'+btn;
   }
-  // Editing: user clicked 'Edit & Resubmit', tasks are now interactive — show submit button
-  if(sub&&sub.status==='Editing'){
+  // Editing mode
+  if(sub.status==='Editing'){
     const btnCls='submit-pill '+(allDone?'go':'no');
     const btnLbl=allDone?'\u2713 Submit edit':'Submit ('+(doneN+issN)+'/'+total+')';
     return '<span style="font-size:12px;font-weight:700;color:#0EA5E9">Editing…</span>'+'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="'+btnCls+'"'+(allDone?'':' disabled')+'>'+btnLbl+'</button>';
   }
-  if(editApproved){
-    return '<span style="font-size:12px;font-weight:700;color:#0D7A4E">Edit approved</span>'+'<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
-  }
-  const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
-  const eb=(sub.editCount||0)>0?'<span style="font-size:10px;font-weight:700;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edit #'+sub.editCount+'</span>':'';
-  const stxt=sub.status==='Editing'?'Editing...':'Submitted '+st;
-  const left='<span style="font-size:12px;color:#B8B5AC">'+stxt+eb+'</span>';
-  let right='';
-  if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
-  else if(sub&&(sub.status==='Pending Approval'||sub.status==='Pending'))right='<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>';
-  else if(u?.rules?.edit)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
-  return left+right;
+  return '';
 }
 function _clCard(c,date){
   const sub=subFor(c.id,S.uid,date);
@@ -1808,9 +1809,16 @@ function _clCard(c,date){
   const isPast=date<today;const isFuture=date>today;const u=me();
   const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':date===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))?'Late':'Pending';
   const exp=S.expandedCl===c.id;
+  // If sub exists and is not in Editing mode, tasks are locked — don't init a fresh RUN
+  const isSubmitted=!!sub&&sub.status!=='Editing';
   // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
   if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
-    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(c.tasks||[]).map(t=>({taskId:t.id,response:null,issue:false,issueComment:'',issuePhoto:null,done:false,photo:null,comment:''}))};
+    if(isSubmitted){
+      // Restore RUN from submission so task state shows correctly (green ticks etc.)
+      RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:sub.tasks||(c.tasks||[]).map(t=>({taskId:t.id,response:null,issue:false,issueComment:'',issuePhoto:null,done:false,photo:null,comment:''}))};
+    } else {
+      RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(c.tasks||[]).map(t=>({taskId:t.id,response:null,issue:false,issueComment:'',issuePhoto:null,done:false,photo:null,comment:''}))};
+    }
   }
   const run=RUN[c.id];const tasks=c.tasks||[];
   const doneN=run.tasks.filter(t=>t.response!==null&&t.response!==undefined&&!t.issue).length;
@@ -1842,7 +1850,7 @@ function _clCard(c,date){
 
     <!-- Tasks -->
     ${exp?`<div>
-      ${tasks.map((t,i)=>_taskRow(c,t,i,run,!!sub&&sub.status!=='Editing',date)).join('')}
+      ${tasks.map((t,i)=>_taskRow(c,t,i,run,isSubmitted,date)).join('')}
       <!-- Footer -->
       <div class="clc-ft">${_clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved)}</div>
       ${sub?DB.feedback.filter(fb=>fb.checklistId===c.id&&fb.userId===S.uid&&fb.date===date).map(fb=>{
