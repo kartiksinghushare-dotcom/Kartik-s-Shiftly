@@ -583,6 +583,7 @@ App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
   if(r==='analytics'){/* keep filters */}
   else if(r==='questions'){const qTab=S.filters.qTab;const eQ=S.filters.expandedQ;const eL=S.filters.expandedL;S.filters={};if(qTab)S.filters.qTab=qTab;if(eQ)S.filters.expandedQ=eQ;if(eL)S.filters.expandedL=eL;}
   else if(r==='notifications'){const ntab=S.filters.ntab;S.filters={};if(ntab)S.filters.ntab=ntab;}
+  else if(r==='settings'){const stab=S.filters.stab;const tplKey=S.filters.tplKey;S.filters={};if(stab)S.filters.stab=stab;if(tplKey)S.filters.tplKey=tplKey;}
   else{S.filters={};}
   if(r!=='teamview')S.tvUser=null;
   render();window.scrollTo(0,0);};
@@ -1646,8 +1647,16 @@ App._saveCl=async(editing)=>{
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
   if(!CLD.tasks.length||CLD.tasks.some(t=>!t.name.trim())){toast('Add at least one named task','err');return;}
+  const prevAssignees=editing?((clById(CLD.id)?.assignees)||[]):[];
   if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);DB.checklists[idx]=CLD;}
   else DB.checklists.push(CLD);
+  // Notify + email newly assigned users (skip self, skip already-assigned)
+  const newlyAssigned=(CLD.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
+  newlyAssigned.forEach(uid2=>{
+    DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false});
+    queueEmail('checklist_assigned',uid2,null,null,{checklist_name:CLD.name});
+  });
+  if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   toast(editing?'Saved':'Checklist created');closeModal();render();saveDB();
 };
@@ -2347,7 +2356,6 @@ App._decide=(id,status)=>{
   const s=DB.submissions.find(x=>x.checklistId===a.checklistId&&x.userId===a.requesterId&&x.date===a.date);
   if(s&&a.type==='Submission'){
     if(status==='Approved'){
-      // Preserve 'Late' if the submission was originally late
       s.status=s.status==='Late'?'Late':'On Time';
     } else {
       s.status='Rejected';
@@ -2355,15 +2363,20 @@ App._decide=(id,status)=>{
   }
   if(s&&a.type==='Edit Request'){
     s.editRequestStatus=status;
-    // If rejected, clear any pending edit status
     if(status==='Rejected')s.editRequestStatus='Rejected';
   }
   const msg=a.type==='Edit Request'
     ?(status==='Approved'?'✅ Edit approved for "'+c?.name+'" — you can now resubmit':'❌ Edit request rejected for "'+c?.name+'"')
     :(status==='Approved'
       ?'✅ Submission approved — '+c?.name+' on '+fmtD(a.date)
-      :'❌ Submission rejected — '+c?.name+'. '+( a.date?fmtD(a.date):''));
+      :'❌ Submission rejected — '+c?.name+'. '+(a.date?fmtD(a.date):''));
   DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:msg,time:new Date().toISOString(),read:false});
+  // Email the requester — approved or rejected
+  if(a.type==='Submission'){
+    queueEmail(status==='Approved'?'submission_approved':'submission_rejected', a.requesterId, null, null, {checklist_name:c?.name||''});
+  } else if(a.type==='Edit Request'){
+    queueEmail('approval_decided', a.requesterId, null, null, {checklist_name:c?.name||''});
+  }
   sb.from('approvals').update({status:a.status}).eq('id',a.id).catch(()=>{});
   if(s)sb.from('submissions').update({status:s.status}).eq('id',s.id).catch(()=>{});
   log(fullName(me()),status+' '+a.type,fullName(u));
@@ -2416,7 +2429,7 @@ App.viewSub=(subId)=>{
   </div>`,'max-w-lg');
 };
 App._addFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);if(!a)return;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Add feedback</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-3">This will be sent to <strong>${esc(fullName(uById(a.requesterId)))}</strong> for acknowledgement.</p><textarea id="fb-t" rows="4" placeholder="Write feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._saveFb('${aprId}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send feedback</button></div>`,'max-w-sm');};
-App._saveFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);if(!a)return;const text=$('#fb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}if(!DB.feedback)DB.feedback=[];DB.feedback.push({id:uid('fb'),checklistId:a.checklistId,userId:a.requesterId,managerId:S.uid,date:a.date,text,level:'checklist',acknowledged:false,createdAt:new Date().toISOString()});DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:'Feedback received on '+(clById(a.checklistId)?.name||'a checklist'),time:new Date().toISOString(),read:false});log(fullName(me()),'Feedback sent',fullName(uById(a.requesterId)));_invalidateNotifCache();toast('Feedback sent');closeModal();saveDB();render();};
+App._saveFb=(aprId)=>{const a=DB.approvals.find(x=>x.id===aprId);if(!a)return;const text=$('#fb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}if(!DB.feedback)DB.feedback=[];const cl=clById(a.checklistId);DB.feedback.push({id:uid('fb'),checklistId:a.checklistId,userId:a.requesterId,managerId:S.uid,date:a.date,text,level:'checklist',acknowledged:false,createdAt:new Date().toISOString()});DB.notifications.unshift({id:uid('n'),userId:a.requesterId,text:'Feedback received on '+(cl?.name||'a checklist'),time:new Date().toISOString(),read:false});queueEmail('feedback_received',a.requesterId,null,null,{checklist_name:cl?.name||''});log(fullName(me()),'Feedback sent',fullName(uById(a.requesterId)));_invalidateNotifCache();toast('Feedback sent');closeModal();saveDB();render();};
 App._setTab=(t)=>{S.filters.atab=t;rr();};
 App._decideApprove=(id)=>App._decide(id,'Approved');
 App._decideReject=(id)=>App._decide(id,'Rejected');
@@ -3451,7 +3464,14 @@ async function _loadNS(){
   try{const r=localStorage.getItem(NS_LS);if(r)_ns={..._nsDefault(),...JSON.parse(r)};}catch(e){}
   if(!_ns)_ns=_nsDefault();
   try{const{data}=await sb.from('workspace_settings').select('value').eq('key','notification_settings').single();
-    if(data?.value){_ns={..._nsDefault(),...data.value};if(!_ns.templates)_ns.templates={};localStorage.setItem(NS_LS,JSON.stringify(_ns));}}catch(e){}
+    if(data?.value){
+      const saved=data.value;
+      _ns={..._nsDefault(),...saved};
+      // Deep-merge templates — spread would overwrite entire templates obj with saved one, which is correct
+      // but if saved has no templates key at all, restore empty object
+      if(!_ns.templates)_ns.templates={};
+      localStorage.setItem(NS_LS,JSON.stringify(_ns));
+    }}catch(e){}
   return _ns;
 }
 async function _saveNS(){
@@ -3467,12 +3487,13 @@ function _fillTemplate(str, vars){
 
 // ── Render plain text body as HTML ──
 function _bodyToHtml(fromName, bodyText){
-  const lines = bodyText.split('\n').map(l=>l.trim());
+  const safeName=String(fromName||'Shiftly').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  const lines = bodyText.split('\n').map(l=>l.trim().replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
     <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
       <div style="width:28px;height:28px;border-radius:8px;background:#0E9F6E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">S</div>
-      <span style="font-weight:700;font-size:16px;color:#fff">${esc(fromName||'Shiftly')}</span>
+      <span style="font-weight:700;font-size:16px;color:#fff">${safeName}</span>
     </div>
     <div style="padding:28px">
       ${lines.filter(Boolean).map((l,i)=>i===0
@@ -3481,7 +3502,7 @@ function _bodyToHtml(fromName, bodyText){
       ).join('')}
     </div>
     <div style="padding:16px 28px;background:#F9F8F5;border-top:1px solid #ECEDF0;font-size:11px;color:#9CA3AF">
-      ${esc(fromName||'Shiftly')} · Automated notification · Do not reply
+      ${safeName} · Automated notification · Do not reply
     </div>
   </div></body></html>`;
 }
