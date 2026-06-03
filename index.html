@@ -586,6 +586,8 @@ App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
   else if(r==='settings'){const stab=S.filters.stab;const tplKey=S.filters.tplKey;S.filters={};if(stab)S.filters.stab=stab;if(tplKey)S.filters.tplKey=tplKey;}
   else{S.filters={};}
   if(r!=='teamview')S.tvUser=null;
+  // Update URL hash so email deep-links work
+  if(history.replaceState)history.replaceState(null,'','#'+r);
   render();window.scrollTo(0,0);};
 
 /* ===== RENDER ===== */
@@ -3489,15 +3491,18 @@ function _fillTemplate(str, vars){
 function _bodyToHtml(fromName, bodyText, actionUrl=''){
   const safeName=String(fromName||'Shiftly').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
   const rawLines = bodyText.split('\n').map(l=>l.trim());
+  // ctaUrl is passed in as 3rd arg — already the resolved URL
   let ctaUrl = actionUrl||'';
+  // Strip: the {{action_url}} placeholder, the resolved URL itself (already a button), and any bare https line
   const lines = rawLines
-    .filter(l=>l!=='{{action_url}}')
+    .filter(l=>l!=='{{action_url}}' && l!==ctaUrl && !/^https?:\/\//.test(l))
     .map(l=>l.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
-  if(!ctaUrl){const urlLine=rawLines.find(l=>/^https?:\/\//.test(l));if(urlLine)ctaUrl=urlLine;}
-  const ctaLabel=ctaUrl.includes('tickets')?'View Ticket'
+  const ctaLabel=ctaUrl.includes('tickets')?'View Tickets'
     :ctaUrl.includes('approvals')?'View Approvals'
-    :ctaUrl.includes('mychecklists')?'Open Checklist'
+    :ctaUrl.includes('mychecklists')?'Open My Checklists'
     :ctaUrl.includes('notifications')?'View Notifications'
+    :ctaUrl.includes('settings')?'Open Settings'
+    :ctaUrl.includes('analytics')?'View Analytics'
     :'Open Shiftly';
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
@@ -3800,7 +3805,18 @@ function settingsPage(){
 }
 
 /* ===== BOOT ===== */
-(async function boot(){try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';saveDB();render();
+(async function boot(){
+  // Read hash from URL — allows deep-linking from email buttons
+  const _hashRoute=(window.location.hash||'').replace('#','').trim();
+  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','questions',
+    'tickets','approvals','notifications','analytics','locations','departments','settings','audit',
+    'teamview','profile'];
+  const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
+  try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=_deepLink||S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;
+      // Apply deep-link from email — override default route
+      if(_deepLink)S.route=_deepLink;
+      else if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
+      saveDB();render();
       // Snapshot local-only fields before loadFromSB overwrites DB
       loadFromSB().then(()=>{saveDB();render();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
 
