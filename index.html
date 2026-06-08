@@ -338,7 +338,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],status:c.status||'Active',createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -386,7 +386,7 @@ async function _sync(){try{
   const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],schedule_time:c.scheduleTime||null,status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -544,7 +544,7 @@ function _recoverEditingSubmissions(){
     if(s.status==='Editing'&&!RUN[s.checklistId]){
       // Reset to a sensible status based on date
       const today=todayISO();
-      const late=s.date<today;
+      const cl=clById(s.checklistId);const late=s.date<today||(s.date===today&&cl?.scheduleTime&&nowHM()>hm2m(cl.scheduleTime));
       s.status=s.editCount>0?(late?'Late':'On Time'):(late?'Late':'Pending');
       console.info('Recovered stuck submission:',s.id,'→',s.status);
     }
@@ -1358,7 +1358,7 @@ let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(
       const ass=(c.assignees||[]).map(uById).filter(Boolean);
       const active=clOn(c,todayISO());
       const locs=(c.locationIds||[]).map(locById).filter(Boolean);
-      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}${c.status==='Draft'?'<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#FEF3C7;color:#92400E;margin-left:6px;vertical-align:middle">DRAFT</span>':''}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${(isAdmin()||isMgr())?`<div class="flex gap-1"><button onclick="App.editCl('${c.id}')" title="Edit" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.dupCl('${c.id}')" title="Duplicate" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#EFF6FF';this.style.color='#3B82F6'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('copy','w-3.5 h-3.5')}</button>${isAdmin()?`<button onclick="App.delCl('${c.id}')" title="Delete" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button>`:''}</div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
+      return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4"><div class="flex items-start gap-3"><div class="flex-1 min-w-0"><div class="flex items-center gap-2 flex-wrap mb-1"><span class="text-[11px] font-bold px-2 py-0.5 rounded-full ${active?'bg-brand-50 text-brand-700':'bg-ink-100 text-ink-400'}">${esc(c.frequency)}</span><span class="text-xs text-ink-400">${esc(c.department)}</span>${locs.length?`<span class="text-xs text-sky-600 flex items-center gap-1">${ic('pin','w-3 h-3')}${locs.map(l=>esc(l.name)).join(', ')}</span>`:''}</div><h3 class="fd font-bold">${esc(c.name)}${c.status==='Draft'?'<span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:#FEF3C7;color:#92400E;margin-left:6px;vertical-align:middle">DRAFT</span>':''}</h3><p class="text-xs text-ink-400 mt-0.5 line-clamp-1">${esc(c.description||'')}</p><div class="flex items-center gap-3 mt-1.5 text-xs text-ink-400"><span>${ic('clock','w-3 h-3 inline mr-0.5')}${esc(c.schedule||c.frequency)}${c.scheduleTime?' · due '+c.scheduleTime:''}</span>${c.startDate?`<span>${ic('doc','w-3 h-3 inline mr-0.5')}${fmtS(c.startDate)}${c.endDate?' → '+fmtS(c.endDate):''}</span>`:''}</div></div><div class="flex flex-col items-end gap-2 shrink-0">${(isAdmin()||isMgr())?`<div class="flex gap-1"><button onclick="App.editCl('${c.id}')" title="Edit" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App.dupCl('${c.id}')" title="Duplicate" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#EFF6FF';this.style.color='#3B82F6'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('copy','w-3.5 h-3.5')}</button>${isAdmin()?`<button onclick="App.delCl('${c.id}')" title="Delete" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-3.5 h-3.5')}</button>`:''}</div>`:''}<div class="flex -space-x-1">${ass.slice(0,4).map(u=>`<div class="ring-2 ring-white rounded-full">${avatar(u,'w-6 h-6','text-[9px]')}</div>`).join('')}</div></div></div></div>`;
     }).join('')}
     ${list.length?'':empty('list','No checklists','Create your first checklist.')}
   </div></div>`;}
@@ -1372,7 +1372,7 @@ App.editCl=(id=null)=>{
   CLD=c?JSON.parse(JSON.stringify(c)):{
     id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
     frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
-    startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],createdBy:S.uid
+    startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],scheduleTime:null,createdBy:S.uid
   };
   _renderClModal(!!c);
 };
@@ -1424,6 +1424,10 @@ function _renderClModal(editing){
             <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">End date</label>
             <input id="cn-ed" type="date" value="${esc(c.endDate||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
           </div>
+        </div>
+        <div>
+          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline time <span class="font-normal text-ink-300">(marked Late if not submitted by this time)</span></label>
+          <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
         </div>
       </div>
       <!-- Locations -->
@@ -1626,6 +1630,7 @@ App._saveCl=async(editing)=>{
   CLD.status=$('#cn-status')?.value||'Active';
   CLD.department=$('#cn-dep')?.value;CLD.frequency=$('#cn-freq')?.value;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
+  CLD.scheduleTime=$('#cn-time')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
   CLD.questionIds=CLD.questionIds||[];CLD.tasks=CLD.tasks||[];
   const prevAssignees=editing?((clById(CLD.id)?.assignees)||[]):[];
@@ -1666,7 +1671,7 @@ App.dupCl=async(id)=>{
     schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
     selected_dates:copy.selectedDates||[],custom_dates:copy.customDates||[],
     start_date:null,end_date:null,
-    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],
+    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],schedule_time:copy.scheduleTime||null,
     status:'Draft',created_by:S.uid
   }).catch(e=>console.warn('dupCl sync:',e));
 };
@@ -1692,7 +1697,7 @@ function myClsPage(){
   const sel=S.calDate;
   const dayCls=myCls(S.uid,sel);
   const doneN=dayCls.filter(c=>subFor(c.id,S.uid,sel)).length;
-  const lateN=sel>today?0:dayCls.filter(c=>!subFor(c.id,S.uid,sel)&&(sel<today||(sel===today&&(c.tasks||[]).some(t=>nowHM()>hm2m(t.time))))).length;
+  const lateN=sel>today?0:dayCls.filter(c=>!subFor(c.id,S.uid,sel)&&(sel<today||(sel===today&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)))).length;
   const pendN=dayCls.filter(c=>!subFor(c.id,S.uid,sel)).length-lateN;
 
   return`<div class="fade">
@@ -1780,7 +1785,7 @@ function _clCard(c,date){
   const sub=subFor(c.id,S.uid,date);
   const today=todayISO();
   const isPast=date<today;const isFuture=date>today;const u=me();
-  const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':'Pending';
+  const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)?'Late':'Pending';
   const exp=S.expandedCl===c.id;
   // If sub exists and is not in Editing mode, tasks are locked — don't init a fresh RUN
   const isSubmitted=!!sub&&sub.status!=='Editing';
@@ -1945,7 +1950,7 @@ App._submitRun=async(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
   const existingSub=subFor(clId,S.uid,date);if(existingSub&&existingSub.status!=='Editing'){toast('Already submitted for this date','warn');return;}
   const today=todayISO();
-  const late=date<today;
+  const late=date<today||(date===todayISO()&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime));
   const _ua=(me()?.approval)||{};
   const _isPast=date<todayISO();const _isFut=date>todayISO();
   const dateAppr=(_isPast&&_ua.past)||(_isFut&&_ua.future);
@@ -2552,7 +2557,7 @@ function _renderQModal(){
     </div>
     <div style="padding:14px 20px;border-top:1px solid #ECEDF0;display:flex;gap:8px;flex-shrink:0;background:#fff">
       <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
-      <button onclick="App._saveQuestion()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${id?'Save changes':'Create question'}</button>
+      <button onclick="App._saveQuestion()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${_QED&&_QED.createdAt?'Save changes':'Create question'}</button>
     </div>
   </div>`,'max-w-lg');
 }
@@ -2592,9 +2597,10 @@ App._saveQuestion=()=>{
   if(_QED.type==='number'&&!(_QED.options||[]).length){toast('Add at least one condition','err');return;}
   if(!DB.questions)DB.questions=[];
   const existing=DB.questions.findIndex(x=>x.id===_QED.id);
-  if(existing>-1){DB.questions[existing]=_QED;}
+  const isNew=existing===-1;
+  if(!isNew){DB.questions[existing]=_QED;}
   else{_QED.createdBy=S.uid;_QED.createdAt=new Date().toISOString();DB.questions.push(_QED);}
-  toast(_QED.createdAt?'Saved ✓':'Question created ✓');
+  toast(isNew?'Question created ✓':'Saved ✓');
   closeModal();_QED=null;saveDB();render();
 };
 
