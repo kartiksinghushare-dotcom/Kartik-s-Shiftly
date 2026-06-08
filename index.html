@@ -1214,178 +1214,18 @@ App._uploadDocIn=(t,s)=>{
 };
 
 // ── Document navigation ──
-App._docNav=(id)=>{S.filters.docFolder=id||null;rr();};
 
-App._delFolder=(id)=>{
-  const f=(DB.folders||[]).find(x=>x.id===id);
-  if(!f)return;
-  if(!confirm('Delete folder "'+f.name+'"? Files inside will also be removed.'))return;
-  const allIds=new Set();
-  function collect(fid){allIds.add(fid);(DB.folders||[]).filter(x=>x.parentId===fid).forEach(x=>collect(x.id));}
-  collect(id);
-  DB.folders=(DB.folders||[]).filter(x=>!allIds.has(x.id));
-  DB.documents=(DB.documents||[]).filter(d=>!allIds.has(d.folderId||''));
-  allIds.forEach(fid=>{
-    sb.from('doc_folders').delete().eq('id',fid).catch(()=>{});
-    sb.from('documents').delete().eq('folder_id',fid).catch(()=>{});
-  });
-  log(fullName(me()),'Deleted folder',f.name);
-  toast('Folder deleted','warn');saveDB();rr();
-};
-
-App._downloadDoc=(id)=>{
-  const d=(DB.documents||[]).find(x=>x.id===id);
-  if(!d||!d.url){toast('File not available','err');return;}
-  const a=document.createElement('a');a.href=d.url;a.download=d.name||'file';a.target='_blank';a.click();
-  log(fullName(me()),'Downloaded',d.name);
-};
-
-App._previewDoc=(id)=>{
-  const d=(DB.documents||[]).find(x=>x.id===id);
-  if(!d||!d.url){toast('File not available','err');return;}
-  window.open(d.url,'_blank');
-  log(fullName(me()),'Previewed',d.name);
-};
-
-App._delDoc=(id)=>{
-  const d=(DB.documents||[]).find(x=>x.id===id);
-  if(!d)return;
-  if(!confirm('Delete "'+d.name+'"?'))return;
-  DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
-  sb.from('documents').delete().eq('id',id).catch(()=>{});
-  // Also delete from storage if path exists
-  if(d.storagePath){
-    sb.storage.from('documents').remove([d.storagePath]).catch(()=>{});
-  }
-  log(fullName(me()),'Deleted doc',d.name);
-  toast('Deleted','warn');saveDB();rr();
-};
-
-App._uploadDoc=()=>{
-  const t=S.filters.docScope;const s=S.filters.docScopeKey;
-  if(!t||!s){toast('No upload context','err');return;}
-  openModal(`
-    <div style="padding:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h2 class="fd" style="font-size:18px;font-weight:800">Upload file</h2>
-        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
-      </div>
-      <div style="border:2px dashed #E5E7EB;border-radius:14px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer" onclick="document.getElementById('doc-file-inp').click()">
-        <div style="font-size:32px;margin-bottom:8px">⬆</div>
-        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px">Click to choose a file</div>
-        <div style="font-size:12px;color:#9CA3AF">PDF, images, Word, Excel, PowerPoint</div>
-        <input id="doc-file-inp" type="file" style="display:none" onchange="App._handleDocUpload(this)"/>
-      </div>
-      <div id="doc-upload-status" style="font-size:13px;color:#9CA3AF;text-align:center"></div>
-    </div>
-  `,'max-w-sm');
-};
-
-App._handleDocUpload=async(inp)=>{
-  const file=inp.files[0];if(!file)return;
-  const statusEl=document.getElementById('doc-upload-status');
-  if(statusEl)statusEl.textContent='Uploading…';
-  const t=S.filters.docScope;const s=S.filters.docScopeKey;
-  const folderId=S.filters.docFolder||null;
-  const ext=file.name.split('.').pop();
-  const path=`${t}/${s}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
-  // Upload to Supabase Storage
-  const{data:storageData,error:storageErr}=await sb.storage.from('documents').upload(path,file,{cacheControl:'3600',upsert:false});
-  if(storageErr){toast('Upload failed: '+storageErr.message,'err');closeModal();return;}
-  const{data:urlData}=sb.storage.from('documents').getPublicUrl(path);
-  const url=urlData?.publicUrl||'';
-  const doc={id:uid('doc'),name:file.name,folderId,type:t,scope:s,url,storagePath:path,fileType:ext,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()};
-  if(!DB.documents)DB.documents=[];
-  DB.documents.unshift(doc);
-  // Save to Supabase documents table
-  await sb.from('documents').insert({id:doc.id,name:doc.name,folder_id:doc.folderId||null,type:doc.type,scope:doc.scope,url:doc.url,storage_path:doc.storagePath,file_type:doc.fileType,file_size:doc.fileSize,uploaded_by:doc.uploadedBy,uploader_name:doc.uploaderName,uploaded_at:doc.uploadedAt}).catch(e=>console.warn('doc insert:',e));
-  log(fullName(me()),'Uploaded',file.name);
-  toast('✓ "'+file.name+'" uploaded');
-  closeModal();saveDB();render();
-};
-
-// ── Team view helpers ──
-App._userDrill=(id)=>{
-  const u=uById(id);if(!u)return;
-  const ss=DB.submissions.filter(s=>s.userId===id);
-  const total=ss.length;
-  const onTime=ss.filter(s=>s.status==='On Time'||s.status==='Submitted').length;
-  const late=ss.filter(s=>s.status==='Late').length;
-  const pct=total?Math.round(onTime/total*100):0;
-  openModal(`
-    <div style="padding:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <div style="display:flex;align-items:center;gap:10px">
-          ${avatar(u,'w-10 h-10','text-xs')}
-          <div>
-            <div class="fd" style="font-size:16px;font-weight:800">${esc(fullName(u))}</div>
-            <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department)}</div>
-          </div>
-        </div>
-        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
-      </div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
-        <div style="background:#F0FDF4;border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#16A34A">${onTime}</div>
-          <div style="font-size:11px;color:#16A34A;font-weight:600">On time</div>
-        </div>
-        <div style="background:#FFF1F2;border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#BE123C">${late}</div>
-          <div style="font-size:11px;color:#BE123C;font-weight:600">Late</div>
-        </div>
-        <div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center">
-          <div style="font-size:22px;font-weight:800;color:#1D4ED8">${pct}%</div>
-          <div style="font-size:11px;color:#1D4ED8;font-weight:600">On-time rate</div>
-        </div>
-      </div>
-      <div style="font-size:12px;color:#9CA3AF;text-align:center">${total} total submissions</div>
-    </div>
-  `,'max-w-sm');
-};
-
-App._openSendFeedback=(id)=>{
-  const u=uById(id);if(!u)return;
-  openModal(`
-    <div style="padding:20px">
-      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
-        <h2 class="fd" style="font-size:17px;font-weight:800">Send feedback to ${esc(fullName(u))}</h2>
-        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
-      </div>
-      <textarea id="fb-direct-text" rows="4" placeholder="Write your feedback…" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:12px;padding:12px;font-size:14px;outline:none;resize:none;font-family:inherit"></textarea>
-      <div style="display:flex;gap:8px;margin-top:12px">
-        <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
-        <button onclick="App._sendDirectFeedback('${id}')" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Send feedback</button>
-      </div>
-    </div>
-  `,'max-w-sm');
-};
-
-App._sendDirectFeedback=(userId)=>{
-  const text=(document.getElementById('fb-direct-text')?.value||'').trim();
-  if(!text){toast('Write something first','err');return;}
-  const u=uById(userId);
-  if(!DB.feedback)DB.feedback=[];
-  DB.feedback.push({id:uid('fb'),checklistId:null,userId,managerId:S.uid,date:todayISO(),text,type:'General',priority:'Low',level:'direct',status:'Sent',acknowledged:false,createdAt:new Date().toISOString()});
-  DB.notifications.unshift({id:uid('n'),userId,text:'📝 Feedback from '+fullName(me()),time:new Date().toISOString(),read:false});
-  _invalidateNotifCache();
-  log(fullName(me()),'Sent feedback',fullName(u));
-  toast('Feedback sent ✓');closeModal();saveDB();render();
-};
-
-// ── queueEmail stub — emails sent via Supabase edge functions or external service ──
-// Replace this with your actual email provider integration
-function queueEmail(eventKey, userId, clId, date, vars){
-  // Stub: log the email intent, implement with your email provider
-  const u=uById(userId);
-  if(!u||!u.email)return;
-  console.log('[Email queued]',eventKey,'→',u.email,vars||{});
-  // To implement: call a Supabase Edge Function or external API here
-  // sb.functions.invoke('send-email', { body: { event: eventKey, to: u.email, vars } })
-}
 
 // Stubs for removed task issue flow (dead code, never called from UI)
 App._issueCmt=()=>{};
 App._issuePh=()=>{};
+
+// queueEmail stub — wire up to your email provider (Resend, SendGrid etc.)
+function queueEmail(eventKey,userId,clId,date,vars){
+  const u=uById(userId);if(!u||!u.email)return;
+  console.log('[Email queued]',eventKey,'to',u.email,vars||{});
+  // sb.functions.invoke('send-email',{body:{event:eventKey,to:u.email,...(vars||{})}}).catch(()=>{});
+}
 
 
 function deptsPage(){
@@ -1879,6 +1719,7 @@ App.delCl=async(id)=>{
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
 let RUN={};
+let COLL={};  // Hierarchy collapse state
 
 
 
@@ -2993,6 +2834,1198 @@ function _processEscalations(checklistId,date,responses){
   });
 }
 
+
+
+function notificationsPage(){
+  const uid=S.uid;
+  const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
+  // Track which were unread BEFORE marking them (so the dot shows on this render)
+  const unreadIds=new Set(notifs.filter(n=>!n.read).map(n=>n.id));
+  const hadUnread=unreadIds.size>0;
+  // Mark as read after snapshot — do it now so next render they're read
+  notifs.forEach(n=>n.read=true);
+  if(hadUnread){_invalidateNotifCache();setTimeout(()=>saveDB(),300);}
+  // Feedback for this user
+  const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  const unackFb=myFb.filter(fb=>!fb.acknowledged);
+
+  const tab=S.filters.ntab||'All';
+  const TABS=['All','Approvals','Feedback'];
+
+  function notifType(text){
+    if(!text)return'general';
+    if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
+    if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
+    
+    if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
+    if(text.includes('Approved')||text.includes('approved'))return'approval';
+    if(text.includes('Rejected')||text.includes('rejected'))return'approval';
+    if(text.includes('pproval')||text.includes('pprove'))return'approval';
+    if(text.includes('Edit')||text.includes('edit request')||text.includes('resubmit'))return'edit';
+    if(text.includes('Re-submitted')||text.includes('Resubmit'))return'edit';
+    if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
+    return'general';
+  }
+  const TYPE_CLR={approval:'#8B5CF6',edit:'#0EA5E9',issue:'#F97316',feedback:'#3B82F6',late:'#EF4444',general:'#6B7280'};
+  const TYPE_BG={approval:'#EDE9FE',edit:'#E0F2FE',issue:'#FFF7ED',feedback:'#EFF6FF',late:'#FEF2F2',general:'#F6F7F8'};
+  const TYPE_ICON={approval:'approve',edit:'edit',issue:'flag',feedback:'msg',late:'clock',general:'bell'};
+
+  const filteredNotifs=tab==='All'?notifs
+    :tab==='Approvals'?notifs.filter(n=>['approval','edit'].includes(notifType(n.text)))
+    :tab==='Feedback'?notifs.filter(n=>notifType(n.text)==='feedback')
+    :tab==='Issues'?notifs.filter(n=>notifType(n.text)==='issue')
+    :notifs;
+
+  const counts={
+    All:notifs.length,
+    Approvals:notifs.filter(n=>['approval','edit'].includes(notifType(n.text))).length,
+    Feedback:notifs.filter(n=>notifType(n.text)==='feedback').length+myFb.filter(fb=>!fb.acknowledged).length,
+    Issues:notifs.filter(n=>notifType(n.text)==='issue').length,
+  };
+
+  return '<div class="fade">'+hdr('Notifications','')
+    // Tabs
+    +'<div style="display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap">'
+    +TABS.map(t=>{
+      const active=tab===t;
+      const badge=counts[t]?(' <span style="font-size:10px;font-weight:800;padding:1px 6px;border-radius:10px;background:'+(active?'rgba(255,255,255,0.25)':'#F3F4F6')+';color:'+(active?'#fff':'#6B7280')+'">'+counts[t]+'</span>'):'';
+      return '<button onclick="App._setNTab(this.dataset.t)" data-t="'+t+'" style="padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:'+(active?'#15171C':'transparent')+';color:'+(active?'#fff':'#6B7280')+'">'+t+badge+'</button>';
+    }).join('')
+    +'</div>'
+    // Feedback section (when tab=Feedback)
+    +(tab==='Feedback'
+      ? _feedbackTabContent(uid)
+      // Notification timeline for other tabs
+      : (filteredNotifs.length
+        ? '<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;overflow:hidden">'
+          +'<div style="display:flex;flex-direction:column">'
+          +filteredNotifs.map((n,idx)=>{
+              const type=notifType(n.text);
+              const clr=TYPE_CLR[type];const bg=TYPE_BG[type];const ico=TYPE_ICON[type];
+              const isNew=unreadIds.has(n.id);
+              // Parse deep-link target from notification text
+              return '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid #F9F8F5;cursor:pointer;'+(isNew?'background:#FAFFFE':'background:#fff')+'" onclick="App._notifClick(this.dataset.id)" data-id="'+n.id+'">'
+                +'<div style="width:36px;height:36px;border-radius:10px;background:'+bg+';display:grid;place-items:center;flex-shrink:0;margin-top:1px">'+ic(ico,'w-4 h-4 text-['+clr+']')+'</div>'
+                +'<div style="flex:1;min-width:0">'
+                +'<p style="font-size:13px;color:#111110;margin:0;line-height:1.5;font-weight:'+(isNew?'600':'400')+'">'+esc(n.text)+'</p>'
+                +'<p style="font-size:11px;color:#B8B5AC;margin-top:3px">'+(n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+' · '+type.charAt(0).toUpperCase()+type.slice(1)+'</p>'
+                +'</div>'
+                +(isNew?'<div style="width:7px;height:7px;border-radius:50%;background:#0E9F6E;flex-shrink:0;margin-top:6px"></div>':'')
+                +'</div>';
+            }).join('')
+          +'</div></div>'
+        : empty('bell','All clear','No notifications yet.')
+      )
+    )
+    +'</div>';
+}
+App._setNTab=(t)=>{S.filters.ntab=t;rr();};
+App._setFbView=(v)=>{S.filters.fbView=v;rr();};
+App._notifClick=(id)=>{
+  const n=DB.notifications.find(x=>x.id===id);if(!n)return;
+  n.read=true;_invalidateNotifCache();saveDB();
+  const t=n.text||'';
+  // Navigate first with clean filters, then set the tab
+  if(t.includes('💬')||t.includes('replied')||t.includes('Feedback')){
+    App._goNotifFeedback();return;
+  }
+  if(t.includes('Issue')||t.includes('issue')||t.includes('⚑')||t.includes('resolved')||t.includes('Resolved')||t.includes('Reopened')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Issues'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('approved')||t.includes('Approved')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Approved'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('rejected')||t.includes('Rejected')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Rejected'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('approval')||t.includes('Pending')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
+  }
+  if(t.includes('submitted')||t.includes('resubmit')||t.includes('Re-submitted')){
+    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
+    S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
+  }
+  // Ticket notification → go to tickets tab
+  if(t.includes('ticket')||t.includes('Ticket')){
+    App.go('tickets');return;
+  }
+  // Checklist removed → go to my checklists
+  if(t.includes('Checklist removed')||t.includes('no longer assigned')){
+    App.go('mychecklists');return;
+  }
+  // Default: go to notifications
+  App._setNTab('All');App.go('notifications');
+};
+function _notifTypeGlobal(text){
+  if(!text)return'general';
+  if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
+  if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
+  
+  if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
+  if(text.includes('Approved')||text.includes('approved'))return'approval';
+  if(text.includes('Rejected')||text.includes('rejected'))return'approval';
+  if(text.includes('pproval')||text.includes('pprove'))return'approval';
+  if(text.includes('Edit')||text.includes('edit request')||text.includes('resubmit'))return'edit';
+  if(text.includes('Re-submitted')||text.includes('Resubmit'))return'edit';
+  if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
+  return'general';
+}
+App._replyFb=(id)=>{
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Reply to feedback</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +'<textarea id="rfb-t" rows="4" placeholder="Write your reply…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea>'
+    +'<div class="flex gap-2 mt-4">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:10px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._saveReplyFb(this.dataset.id)" data-id="'+id+'" style="flex:1;padding:10px;border-radius:10px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Send reply</button>'
+    +'</div></div>',
+    'max-w-sm'
+  );
+};
+App._saveReplyFb=(id)=>{
+  const text=$('#rfb-t')?.value?.trim();if(!text){toast('Write something first','err');return;}
+  const fb=DB.feedback.find(x=>x.id===id);if(!fb)return;
+  fb.reply=text;fb.status='Responded';fb.repliedAt=new Date().toISOString();
+  fb.replies=fb.replies||[];
+  fb.replies.push({text,from:S.uid,at:new Date().toISOString()});
+  // Notify manager — text must contain 'Feedback reply' so notifType detects it
+  const mgr=uById(fb.managerId);
+  if(mgr)DB.notifications.unshift({id:uid('n'),userId:mgr.id,
+    text:'💬 Feedback reply from '+fullName(me())+': "'+text.slice(0,60)+(text.length>60?'...':'')+'"',
+    time:new Date().toISOString(),read:false,fbId:id});
+  _invalidateNotifCache();toast('Reply sent ✓');closeModal();saveDB();render();
+};
+
+App._openSendFeedback=(userId)=>{
+  const u=uById(userId);if(!u)return;
+  // Store userId on App object (not window) — cleared when modal closes
+  App._sfbUserId=userId;
+  App._sfbCls=DB.checklists.filter(c=>(c.assignees||[]).includes(userId));
+  const clOptions=App._sfbCls.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
+  openModal(
+    '<div class="p-6">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">'
+    +'<h2 class="fd" style="font-size:18px;font-weight:800">Send Feedback</h2>'
+    +'<button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    // User chip
+    +'<div style="display:flex;align-items:center;gap:10px;background:#F0FDF4;border:1px solid #A7F3D0;border-radius:12px;padding:10px 14px;margin-bottom:16px">'
+    +avatar(u,'w-10 h-10','text-xs')
+    +'<div><div style="font-size:14px;font-weight:700">'+esc(fullName(u))+'</div>'
+    +'<div style="font-size:12px;color:#6B7280">'+esc(u.position||u.department)+'</div></div>'
+    +'</div>'
+    // Type selector
+    +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Feedback type</label>'
+    +'<input type="hidden" id="sfb-type-val" value="General">'+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
+    +['General','Checklist','Task','Performance'].map((t,i)=>'<button type="button" onclick="App._sfbSelectType(this)" data-type="'+t+'" style="padding:8px;border-radius:9px;border:1.5px solid '+(i===0?'#15171C':'#E5E7EB')+';background:'+(i===0?'#15171C':'#fff')+';color:'+(i===0?'#fff':'#6B7280')+';font-size:13px;font-weight:600;cursor:pointer">'+t+'</button>').join('')
+    +'</div></div>'
+    // Checklist dropdown
+    +'<div id="sfb-cl-wrap" style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Checklist <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
+    +'<select id="sfb-cl" onchange="App._sfbClChange(this.value)" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select checklist…</option>'+clOptions+'</select></div>'
+    // Task dropdown (updates dynamically)
+    +'<div id="sfb-task-wrap" style="margin-bottom:14px;display:none"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Task <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
+    +'<select id="sfb-task" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select task…</option></select></div>'
+    // Priority + title in one row
+    +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Title</label>'
+    +'<input id="sfb-title" type="text" placeholder="e.g. Great work on opening" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>'
+    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Priority</label>'
+    +'<select id="sfb-pri" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option>Low</option><option>Medium</option><option>High</option></select></div>'
+    +'</div>'
+    // Comment
+    +'<div style="margin-bottom:16px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Comment</label>'
+    +'<textarea id="sfb-text" rows="4" placeholder="Write your feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea></div>'
+    +'<button onclick="App._saveSendFeedback(this.dataset.uid)" data-uid="'+userId+'" style="width:100%;background:#15171C;color:#fff;font-weight:700;padding:13px;border-radius:12px;border:none;cursor:pointer;font-size:15px">Send feedback</button>'
+    +'</div>',
+    'max-w-md'
+  );
+};
+App._sfbSelectType=(btn)=>{
+  document.querySelectorAll('[data-type]').forEach(b=>{
+    const active=b===btn;
+    b.style.background=active?'#15171C':'#fff';
+    b.style.color=active?'#fff':'#6B7280';
+    b.style.borderColor=active?'#15171C':'#E5E7EB';
+  });
+  const type=btn.dataset.type;
+  // Store in hidden input for reliable reading
+  const hid=document.getElementById('sfb-type-val');if(hid)hid.value=type;
+  // Show/hide checklist+task based on type — use explicit wrapper IDs
+  const clWrap=document.getElementById('sfb-cl-wrap');
+  const taskWrap=document.getElementById('sfb-task-wrap');
+  if(type==='Performance'||type==='General'){
+    if(clWrap)clWrap.style.display='none';
+    if(taskWrap)taskWrap.style.display='none';
+  } else if(type==='Checklist'){
+    if(clWrap)clWrap.style.display='';
+    if(taskWrap)taskWrap.style.display='none';
+  } else {
+    if(clWrap)clWrap.style.display='';
+    if(taskWrap){const clId=document.getElementById('sfb-cl')?.value;if(clId)taskWrap.style.display='';}
+  }
+};
+App._sfbClChange=(clId)=>{
+  const taskWrap=document.getElementById('sfb-task-wrap');
+  const taskSel=document.getElementById('sfb-task');
+  if(!clId||!taskWrap||!taskSel){if(taskWrap)taskWrap.style.display='none';return;}
+  const cl=(App._sfbCls||[]).find(c=>c.id===clId);
+  if(!cl||!cl.tasks?.length){taskWrap.style.display='none';return;}
+  taskSel.innerHTML='<option value="">Select task…</option>'+cl.tasks.map(t=>'<option value="'+esc(t.name)+'">'+esc(t.name)+'</option>').join('');
+  taskWrap.style.display='';
+};
+App._saveSendFeedback=(userId)=>{
+  if(!userId){toast('No user selected','err');return;}
+  const title=$('#sfb-title')?.value?.trim();
+  const text=$('#sfb-text')?.value?.trim();
+  if(!text){toast('Write a comment','err');return;}
+  const clId=$('#sfb-cl')?.value||null;
+  const type=(document.getElementById('sfb-type-val')?.value)||'General';
+  const priority=$('#sfb-pri')?.value||'Low';
+  const taskName=$('#sfb-task')?.value?.trim()||null;
+  if(!DB.feedback)DB.feedback=[];
+  DB.feedback.push({
+    id:uid('fb'),title:title||type+' Feedback',type,
+    checklistId:clId||null,userId,managerId:S.uid,
+    date:todayISO(),text,priority,taskName:taskName||null,
+    level:'direct',acknowledged:false,status:'Sent',
+    createdAt:new Date().toISOString()
+  });
+  DB.notifications.unshift({id:uid('n'),userId,text:'Feedback from '+fullName(me())+': "'+( title||text.slice(0,40))+'"',time:new Date().toISOString(),read:false});
+  _invalidateNotifCache();log(fullName(me()),'Sent feedback',fullName(uById(userId)));
+  toast('Feedback sent ✓');closeModal();saveDB();render();
+};
+/* ===== HIERARCHY ===== */
+function hierarchyPage(){const roots=isAdmin()?DB.users.filter(u=>!u.managerId):[me()].filter(Boolean);return`<div class="fade">${hdr(isAdmin()?'Organisation':'My Team','Reporting structure')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 overflow-x-auto"><div class="min-w-fit">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;}
+function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col=COLL[u.id];return`<div class="${d>0?'ml-5 pl-1 relative before:absolute before:left-[-14px] before:top-0 before:bottom-0 before:w-px before:bg-ink-100 after:absolute after:left-[-14px] after:top-6 after:w-3 after:h-px after:bg-ink-100':''}"><div class="flex items-center gap-2 py-1.5"><span class="w-5">${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" class="w-5 h-5 grid place-items-center rounded text-ink-400 hover:bg-ink-100">${ic(col?'chevR':'chevD','w-3.5 h-3.5')}</button>`:''}</span><div class="flex items-center gap-2.5 bg-paper border border-ink-100 rounded-xl pl-1.5 pr-3 py-1.5 hover:border-brand-200 transition">${avatar(u,'w-8 h-8','text-[11px]')}<div><div class="text-sm font-semibold">${esc(fullName(u))}${u.role==='Admin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#15171C;color:#fff;margin-left:4px">ADMIN</span>`:''}</div><div class="text-[11px] text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${kids.length?`<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700">${kids.length}</span>`:''}</div></div>${kids.length&&!col?`<div>${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}</div>`;}
+
+/* ===== ANALYTICS ===== */
+function _issuesAnalytics(f,fArr){
+  const filtIssues=allIssues.filter(iss=>(f.dr1?iss.date>=f.dr1:true)&&(f.dr2?iss.date<=f.dr2:true)&&(!fArr('users').length||fArr('users').includes(iss.userId)));
+  const open=filtIssues.filter(i=>i.status==='Open'||i.status==='Reopened').length;
+  const inProg=filtIssues.filter(i=>i.status==='Under Review'||i.status==='Feedback Sent').length;
+  const resolved=filtIssues.filter(i=>i.status==='Resolved').length;
+  const total=filtIssues.length;
+  if(!total)return '<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px">⚑ Team Issues</div><p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No issues flagged in this period</p></div>';
+  const pct=Math.round(resolved/total*100);
+  const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
+  let html='<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:12px">⚑ Team Issues</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:12px">'
+    +[['Open',open,'#DC2626','#FEE2E2'],['In Progress',inProg,'#D97706','#FEF3C7'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
+      '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:20px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
+    ).join('')+'</div>'
+    +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px;transition:width .5s"></div></div></div>';
+  const openIssues=filtIssues.filter(i=>i.status==='Open'||i.status==='Reopened');
+  if(openIssues.length){
+    html+='<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px">'
+      +'<div style="font-size:11px;font-weight:700;color:#DC2626;margin-bottom:8px">Requires attention</div>'
+      +openIssues.slice(0,4).map(iss=>{
+        const u2=uById(iss.userId);const c2=clById(iss.checklistId);
+        return '<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'+(u2?avatar(u2,'w-6 h-6','text-[9px]'):'')
+          +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(iss.taskName||'')+'</div>'
+          +'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(u2)||'')+(c2?' · '+esc(c2.name):'')+'</div></div>'
+          +'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+esc(iss.status)+'</span></div>';
+      }).join('')+'</div>';
+  }
+  html+='</div>';
+  return html;
+}
+
+function _ticketsAnalytics(f,fArr){
+  // Scoped to same user tree as rest of analytics
+  // Date filter
+  if(f.dr1)allTk=allTk.filter(tk=>(tk.createdAt||'').slice(0,10)>=f.dr1);
+  if(f.dr2)allTk=allTk.filter(tk=>(tk.createdAt||'').slice(0,10)<=f.dr2);
+  // User filter
+  if(fArr('users').length)allTk=allTk.filter(tk=>fArr('users').includes(tk.createdBy));
+
+  const open=allTk.filter(t=>t.status==='Open').length;
+  const resolved=allTk.filter(t=>t.status==='Resolved').length;
+  const total=allTk.length;
+  if(!total)return'<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px"><div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:8px">🎫 Tickets</div><p style="font-size:13px;color:#9CA3AF;text-align:center;padding:8px 0">No tickets in this period</p></div>';
+
+  const pct=Math.round(resolved/total*100);
+  const clr=pct>=70?'#059669':pct>=40?'#D97706':'#DC2626';
+
+  // Group by question text for breakdown
+  const byQ={};
+  allTk.forEach(tk=>{
+    const key=tk.questionText||'Unknown';
+    if(!byQ[key])byQ[key]={open:0,resolved:0,total:0,assignee:tk.assignedTo};
+    byQ[key].total++;
+    if(tk.status==='Open')byQ[key].open++;else byQ[key].resolved++;
+  });
+  const qRows=Object.entries(byQ).sort((a,b)=>b[1].total-a[1].total).slice(0,5);
+
+  let html='<div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:16px;margin-bottom:14px">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+    +'<div style="font-size:13px;font-weight:700;color:#374151">🎫 Tickets</div>'
+    +'<button onclick="App.go(&quot;tickets&quot;)" style="font-size:11px;font-weight:700;color:#0E9F6E;border:none;background:none;cursor:pointer;padding:0">View all →</button>'
+    +'</div>'
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">'
+    +[['Open',open,'#DC2626','#FEE2E2'],['Resolved',resolved,'#059669','#DCFCE7'],['Total',total,'#374151','#F6F7F8']].map(([l,v,c,bg])=>
+      '<div style="background:'+bg+';border-radius:10px;padding:10px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:10px;font-weight:700;color:'+c+';opacity:.7;margin-top:2px;text-transform:uppercase">'+l+'</div></div>'
+    ).join('')+'</div>'
+    +'<div><div style="display:flex;justify-content:space-between;font-size:12px;font-weight:600;margin-bottom:4px"><span>Resolution rate</span><span style="color:'+clr+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+clr+';border-radius:3px;transition:width .5s"></div></div></div>';
+
+  if(qRows.length){
+    html+='<div style="border-top:1px solid #F3F4F6;margin-top:12px;padding-top:12px">'
+      +'<div style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px;text-transform:uppercase;letter-spacing:.04em">Top Questions</div>'
+      +qRows.map(([q,d])=>{
+        const assignee=uById(d.assignee);
+        return'<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9FAFB">'
+          +(assignee?avatar(assignee,'w-6 h-6','text-[9px]'):'<div style="width:24px;height:24px;border-radius:50%;background:#F3F4F6"></div>')
+          +'<div style="flex:1;min-width:0"><div style="font-size:12px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(q)+'</div>'
+          +(assignee?'<div style="font-size:10px;color:#9CA3AF">'+esc(fullName(assignee))+'</div>':'')
+          +'</div>'
+          +'<div style="display:flex;gap:4px;flex-shrink:0">'
+          +(d.open?'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#FEE2E2;color:#DC2626">'+d.open+' open</span>':'')
+          +(d.resolved?'<span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#DCFCE7;color:#059669">'+d.resolved+' done</span>':'')
+          +'</div></div>';
+      }).join('')+'</div>';
+  }
+
+  html+='</div>';
+  return html;
+}
+
+
+function analyticsPage(){
+  const today=todayISO();
+  // Collect all relevant submissions
+  let subs=DB.submissions;
+  if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
+  const f=S.filters;
+  const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
+  if(fArr('users').length)  subs=subs.filter(s=>fArr('users').includes(s.userId));
+  if(fArr('deps').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('deps').includes(c?.department);});
+  if(fArr('locs').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('locs').some(l=>(c?.locationIds||[]).includes(l));});
+  if(fArr('stats').length)  subs=subs.filter(s=>fArr('stats').includes(s.status));
+  if(f.dr1) subs=subs.filter(s=>s.date>=f.dr1);
+  if(f.dr2) subs=subs.filter(s=>s.date<=f.dr2);
+  if(f.issue==='yes') subs=subs.filter(s=>(s.tasks||[]).some(t=>t.issue));
+
+  const tot=Math.max(subs.length,1);
+  const byS={'On Time':0,'Late':0,'Pending Approval':0,'Rejected':0,'Pending (not submitted)':0};
+  subs.forEach(s=>{if(byS[s.status]!==undefined)byS[s.status]++;else byS['Pending (not submitted)']++;});
+
+  // Count missed (assigned but no submission for past dates)
+  const relevantUsers=isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean);
+  const dateRange=[];
+  const dr1=f.dr1||(new Date(Date.now()-30*86400000).toISOString().slice(0,10));
+  const dr2=f.dr2||today;
+  let d=new Date(dr1+'T00:00:00');const dEnd=new Date(dr2+'T00:00:00');
+  while(d<=dEnd&&dateRange.length<60){dateRange.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}
+  let totalAssigned=0,totalMissed=0;
+  relevantUsers.forEach(u=>{
+    if(fArr('users').length&&!fArr('users').includes(u.id))return;
+    dateRange.forEach(dt=>{
+      const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt));
+      cls.forEach(c=>{
+        totalAssigned++;
+        if(!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt)&&dt<today){
+          totalMissed++;
+        }
+      });
+    });
+  });
+
+  const flagged=subs.reduce((n,s)=>n+(s.tasks||[]).filter(t=>t.issue).length,0);
+  const topU=relevantUsers.map(u=>({u,n:subs.filter(s=>s.userId===u.id).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,50);
+  const activeCount=fArr('users').length+fArr('deps').length+fArr('locs').length+fArr('stats').length+(f.dr1?1:0)+(f.dr2?1:0)+(f.issue==='yes'?1:0);
+
+  function msDropdown(label,key,items,getId,getLabel){
+    const sel=fArr(key);const isOpen=S.afOpen===key;
+    const txt=sel.length===0?'All':sel.length===1?getLabel(items.find(x=>getId(x)===sel[0])||items[0])||'?':sel.length+' selected';
+    return`<div data-af="1" style="position:relative;flex:1;min-width:120px">
+      <button data-af="1" type="button" onclick="S.afOpen=S.afOpen==='${key}'?null:'${key}';rr()"
+        style="width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:#fff;border:1.5px solid ${isOpen?'#10B981':sel.length?'#15171C':'#E5E7EB'};border-radius:10px;padding:7px 12px;font-size:13px;font-weight:${sel.length?600:400};color:${sel.length?'#15171C':'#9CA3AF'};cursor:pointer">
+        <span style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(label+(sel.length?': '+txt:''))}</span>
+        <span style="color:#9CA3AF;transform:rotate(${isOpen?180:0}deg);transition:transform .15s;flex-shrink:0">${ic('chevD','w-4 h-4')}</span>
+      </button>
+      ${isOpen?`<div data-af="1" style="position:absolute;top:calc(100%+4px);left:0;right:0;background:#fff;border:1.5px solid #E5E7EB;border-radius:12px;box-shadow:0 8px 32px rgba(0,0,0,.12);z-index:100;max-height:220px;overflow-y:auto;padding:6px">
+        ${sel.length?`<button data-af="1" onclick="delete S.filters['${key}'];rr()" style="width:100%;text-align:left;padding:6px 10px;font-size:12px;font-weight:600;color:#E11D48;background:none;border:none;cursor:pointer;border-radius:8px">Clear selection</button><div style="height:1px;background:#F3F4F6;margin:4px 0"></div>`:''}
+        ${items.map(item=>{const id=getId(item);const nm=getLabel(item)||'?';const on=sel.includes(id);return`<button data-af="1" type="button" onclick="App._togF('${key}','${id}')"
+          style="width:100%;display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;border:none;cursor:pointer;background:${on?'#F0FDF9':'transparent'};text-align:left">
+          <div style="width:16px;height:16px;border-radius:4px;border:1.5px solid ${on?'#10B981':'#D1D5DB'};background:${on?'#10B981':'#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
+            ${on?`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>`:''}
+          </div>
+          <span style="font-size:13px;font-weight:${on?600:400};color:${on?'#15171C':'#6B7280'}">${esc(nm)}</span>
+        </button>`;}).join('')}
+      </div>`:''}
+    </div>`;
+  }
+  
+
+  return`<div class="fade" onclick="(function(e){if(S.afOpen&&!e.target.closest('[data-af]')){S.afOpen=null;rr();}})(event)">
+  ${hdr('Analytics','')}
+  <!-- Filter bar -->
+  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
+      ${msDropdown('Status','stats',['On Time','Late','Pending Approval','Rejected'],s=>s,s=>s)}
+      ${msDropdown('Department','deps',DB.departments,d=>d.name,d=>d.name)}
+      ${msDropdown('Team member','users',relevantUsers,u=>u.id,u=>fullName(u))}
+      ${DB.locations.length?msDropdown('Location','locs',DB.locations,l=>l.id,l=>l.name):''}
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:6px;flex:1;min-width:220px">
+        <input type="date" value="${f.dr1||''}" onchange="S.filters.dr1=this.value;rr()" style="flex:1;background:#F6F7F8;border:1.5px solid #E5E7EB;border-radius:8px;padding:6px 10px;font-size:13px;outline:none"/>
+        <span style="color:#9CA3AF">to</span>
+        <input type="date" value="${f.dr2||''}" onchange="S.filters.dr2=this.value;rr()" style="flex:1;background:#F6F7F8;border:1.5px solid #E5E7EB;border-radius:8px;padding:6px 10px;font-size:13px;outline:none"/>
+      </div>
+      <button onclick="S.filters.issue=f.issue==='yes'?'':'yes';rr()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1.5px solid ${f.issue==='yes'?'#FED7AA':'#E5E7EB'};background:${f.issue==='yes'?'#FFF7ED':'#fff'};font-size:13px;font-weight:${f.issue==='yes'?600:400};color:${f.issue==='yes'?'#C2410C':'#9CA3AF'};cursor:pointer">${ic('flag','w-3.5 h-3.5')} Issues only</button>
+      ${activeCount?`<button onclick="S.filters={};S.afOpen=null;rr()" style="padding:6px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:13px;font-weight:600;color:#9CA3AF;background:#fff;cursor:pointer">Clear (${activeCount})</button>`:''}
+      ${btnG('Export','App._exportCSV()','download')}
+    </div>
+  </div>
+
+  <!-- Stats: 5 cards now including missed -->
+  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
+    ${statCard('Submitted',subs.length,'sky')}
+    ${statCard('On time',byS['On Time']||0,'brand')}
+    ${statCard('Late',byS['Late']||0,'rose')}
+    ${statCard('Missed',totalMissed,'orange')}
+    ${statCard('Issues',flagged,'orange')}
+  </div>
+
+  ${_issuesAnalytics(f,fArr)}
+  ${_ticketsAnalytics(f,fArr)}
+
+  <!-- Charts -->
+
+  
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+    <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:18px">
+      <div class="fd" style="font-size:14px;font-weight:700;margin-bottom:14px">Status breakdown</div>
+      ${[['On Time','#10B981'],['Late','#EF4444'],['Pending Approval','#F97316'],['Rejected','#9F1239']].map(([k,c])=>{const v=byS[k]||0;const pct=Math.round(v/tot*100);return`<div style="margin-bottom:10px"><div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:4px"><span style="font-weight:600">${k}</span><span style="color:#9CA3AF">${v} · ${pct}%</span></div><div style="height:5px;background:#F3F4F6;border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct}%;background:${c};border-radius:3px"></div></div></div>`;}).join('')}
+      <div style="margin-top:12px;padding-top:12px;border-top:1px solid #F3F4F6">
+        <div style="font-size:12px;font-weight:600;color:#9CA3AF;margin-bottom:6px">MISSED (past, no submission)</div>
+        <div style="display:flex;justify-content:space-between;font-size:13px"><span style="font-weight:600;color:#F97316">${totalMissed} missed</span><span style="color:#9CA3AF">of ${totalAssigned} assigned in period</span></div>
+      </div>
+    </div>
+    <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:18px">
+      <div class="fd" style="font-size:14px;font-weight:700;margin-bottom:14px">Top contributors</div>
+      ${topU.slice(0,7).map(({u,n})=>`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px;cursor:pointer" onclick="App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<div style="flex:1;font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(fullName(u))}</div><span class="fd" style="font-size:15px;font-weight:800">${n}</span><span style="font-size:11px;color:#9CA3AF">&rsaquo;</span></div>`).join('')||'<p style="font-size:13px;color:#9CA3AF">No data yet</p>'}
+    </div>
+  </div>
+
+  <!-- Table -->
+  <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;overflow:hidden">
+    <div style="padding:14px 18px;border-bottom:1px solid #F3F4F6;display:flex;justify-content:space-between;align-items:center">
+      <span class="fd" style="font-size:14px;font-weight:700">Submissions (${subs.length})</span>
+      ${btnG('Export CSV','App._exportCSV()','download')}
+    </div>
+    <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <thead><tr style="border-bottom:1px solid #F3F4F6">
+        ${['User','Checklist','Dept','Date','Status','Issues','Photos'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
+      </tr></thead>
+      <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return'';const iss=(s.tasks||[]).filter(t=>t.issue).length;const imgs=(s.tasks||[]).filter(t=>t.photo||t.issuePhoto).length;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
+        <td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer" onclick="event.stopPropagation();App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;text-decoration:underline;text-decoration-color:#E5E7EB">${esc(fullName(u))}</span></div></td>
+        <td style="padding:9px 16px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(c.name)}</td>
+        <td style="padding:9px 16px;color:#9CA3AF;font-size:12px">${esc(c.department)}</td>
+        <td style="padding:9px 16px;color:#9CA3AF;font-size:12px;white-space:nowrap">${fmtS(s.date)}</td>
+        <td style="padding:9px 16px">${chip(s.status)}</td>
+        <td style="padding:9px 16px">${iss?`<span style="font-size:12px;font-weight:700;color:#F97316">${iss}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
+        <td style="padding:9px 16px">${imgs?`<span style="font-size:12px;font-weight:700;color:#0284C7">📷 ${imgs}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
+      </tr>`;}).join('')}</tbody>
+    </table>${recent.length?'':empty('chart','No submissions match','Adjust filters or date range')}</div>
+  </div></div>`;
+}
+
+
+App._viewSubById=(id)=>App.viewSub(id);
+App._userDrill=(uid)=>{
+  const u=uById(uid);if(!u)return;
+  let subs=DB.submissions.filter(s=>s.userId===uid);
+  const today=todayISO();
+  const dr1=new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  subs=subs.filter(s=>s.date>=dr1);
+  const tot=subs.length;
+  const onTime=subs.filter(s=>s.status==='On Time').length;
+  const late=subs.filter(s=>s.status==='Late').length;
+  const pending=subs.filter(s=>s.status==='Pending Approval').length;
+  const rejected=subs.filter(s=>s.status==='Rejected').length;
+  const issues=subs.reduce((n,s)=>n+(s.tasks||[]).filter(t=>t.issue).length,0);
+  const pct=tot?Math.round(onTime/tot*100):0;
+  const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,10);
+  openModal(
+    '<div class="p-5" style="max-height:80vh;overflow-y:auto">'
+    +'<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">'
+    +avatar(u,'w-12 h-12','text-sm')
+    +'<div><div class="fd" style="font-size:18px;font-weight:800">'+esc(fullName(u))+'</div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">'+esc(u.position)+' · '+esc(u.department)+'</div></div>'
+    +'<button onclick="App.closeModal()" style="margin-left:auto;background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>'
+    +'</div>'
+    // Score
+    +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
+    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Rejected',rejected,'#7C3AED'],['Issues',issues,'#EA580C']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
+    +'</div>'
+    // Completion rate bar
+    +'<div style="background:#F9FAFB;border-radius:12px;padding:12px;margin-bottom:16px">'
+    +'<div style="display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:6px"><span>On-time rate (last 30d)</span><span style="color:'+(pct>=80?'#059669':pct>=60?'#F97316':'#DC2626')+'">'+pct+'%</span></div>'
+    +'<div style="height:6px;background:#E5E7EB;border-radius:3px;overflow:hidden"><div style="height:100%;width:'+pct+'%;background:'+(pct>=80?'#059669':pct>=60?'#F97316':'#DC2626')+';border-radius:3px;transition:width .5s"></div></div>'
+    +'</div>'
+    // Recent submissions
+    +'<div class="fd" style="font-size:13px;font-weight:700;margin-bottom:8px">Recent submissions</div>'
+    +(recent.length
+      ? recent.map(s=>{const c=clById(s.checklistId);const iss=(s.tasks||[]).filter(t=>t.issue).length;return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+chip(s.status)+(iss?'<span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 7px;border-radius:20px">⚑'+iss+'</span>':'')+'</div>';}).join('')
+      : '<p style="font-size:13px;color:#9CA3AF">No submissions in last 30 days</p>'
+    )
+    +'</div>',
+    'max-w-md'
+  );
+};
+App._togF=(key,val)=>{
+  if(!S.filters)S.filters={};
+  if(!S.filters[key])S.filters[key]=[];
+  if(!Array.isArray(S.filters[key]))S.filters[key]=[S.filters[key]];
+  const idx=S.filters[key].indexOf(val);
+  if(idx>-1)S.filters[key].splice(idx,1);
+  else S.filters[key].push(val);
+  if(!S.filters[key].length)delete S.filters[key];
+  S.afOpen=key; // keep dropdown open
+  rr();
+};
+
+/* ===== AUDIT / NOTIF / PROFILE / SETTINGS ===== */
+
+function auditPage(){return`<div class="fade">${hdr('Audit Logs','')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden"><div class="divide-y divide-ink-50 max-h-[70vh] overflow-y-auto">${DB.audit.map(l=>`<div class="px-4 py-3 flex items-center gap-2.5 text-sm"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0"></span><div class="flex-1 min-w-0"><span class="font-semibold">${esc(l.actor)}</span> <span class="text-ink-500">${esc(l.action.toLowerCase())}</span>${l.target?` <span class="font-medium">${esc(l.target)}</span>`:''}</div><span class="text-[11px] text-ink-300 shrink-0">${new Date(l.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')||empty('audit','No logs yet','')}</div></div></div>`;}
+App._goNotifFeedback=()=>{S.route="notifications";S.search="";S.expandedCl=null;S.afOpen=null;S.tvUser=null;S.filters={ntab:"Feedback"};render();window.scrollTo(0,0);};
+
+function profilePage(){
+  const u=me();
+  return`<div class="fade max-w-xl">
+  ${hdr('Profile','')}
+  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">
+    <div class="flex items-center gap-4 mb-5">
+      ${avatar(u,'w-14 h-14','text-xl')}
+      <div>
+        <h2 class="fd text-xl font-bold">${esc(fullName(u))}</h2>
+        <p class="text-ink-400 text-sm">${isAdmin()?'Admin':isMgr()?'Manager':'Member'} · ${esc(u.department||'')}</p>
+        <div class="mt-1.5">${chip(u.status)}</div>
+      </div>
+    </div>
+    <div class="grid sm:grid-cols-2 gap-x-6 gap-y-3 border-t border-ink-100 pt-4 mb-4">
+      ${[['Email',u.email],['Phone',u.phone||'—'],['Department',u.department||'—'],['Role',u.role],
+         ['Reports to',u.managerId?fullName(uById(u.managerId)):'—'],
+         ['Direct reports',subTree(u.id).length]].map(([k,v])=>`
+        <div><div class="text-[10px] font-bold text-ink-400 uppercase tracking-wide">${k}</div>
+        <div class="font-medium text-sm mt-0.5">${esc(String(v))}</div></div>`).join('')}
+    </div>
+    <!-- Edit form -->
+    <div class="border-t border-ink-100 pt-4">
+      <h3 class="fd font-semibold text-sm mb-3">Edit profile</h3>
+      <div class="grid sm:grid-cols-2 gap-3 mb-3">
+        ${fld('First name','ep-fn',u.firstName||'')}
+        ${fld('Last name','ep-ln',u.lastName||'')}
+        ${fld('Phone','ep-ph',u.phone||'','tel')}
+        ${fld('Position','ep-pos',u.position||'')}
+      </div>
+      <button onclick="App.saveProfile()" style="padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
+    </div>
+  </div>
+  <!-- Change password -->
+  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">
+    <h3 class="fd font-semibold text-sm mb-3">Change password</h3>
+    <div class="space-y-2">
+      ${fld('Current password','pw-cur','','password','')}
+      ${fld('New password','pw-new','','password','min 6 characters')}
+      <button onclick="App.changePw()" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
+    </div>
+  </div>
+  <!-- Feedback history -->
+  ${(()=>{
+    const myFb=DB.feedback.filter(fb=>fb.userId===S.uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||'')).slice(0,5);
+    if(!myFb.length)return '';
+    return '<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
+      +'<h3 class="fd font-semibold text-sm">Recent Feedback</h3>'
+      +'<button onclick="App._goNotifFeedback()" style="font-size:12px;font-weight:600;color:#0E9F6E;background:none;border:none;cursor:pointer">View all</button>'
+      +'</div>'
+      +myFb.map(fb=>{
+        const mgr=uById(fb.managerId);
+        const stClr=fb.status==='Responded'?'#059669':fb.status==='Acknowledged'?'#0EA5E9':'#3B82F6';
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F3F4F6">'
+          +'<div style="flex:1;min-width:0">'
+          +'<div style="font-size:13px;font-weight:600">'+(fb.title||fb.type+' Feedback')+'</div>'
+          +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))+'</div>'
+          +'</div>'
+          +'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#F6F7F8;color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
+          +'</div>';
+      }).join('')
+      +'</div>';
+  })()}
+  </div>`;
+}
+
+
+function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return(b/1048576).toFixed(1)+'MB';}
+
+App._docNav=(id)=>{S.filters.docFolder=id;rr();};  // alias kept for compatibility
+App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
+
+App._delFolder=(id)=>{
+  const f=(DB.folders||[]).find(x=>x.id===id);
+  if(!confirm('Delete folder "'+f?.name+'" and all its files?'))return;
+  // Collect all folder IDs to delete (recursive)
+  const toDelete=[];
+  function collectRec(fid){
+    toDelete.push(fid);
+    (DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));
+  }
+  collectRec(id);
+  // Remove locally first — instant UI
+  DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
+  DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId));
+  log(fullName(me()),'Deleted folder',f?.name||'');
+  toast('Deleted','warn');saveDB();render();
+  // Delete from Supabase in background
+  // Delete documents from Supabase (those in deleted folders)
+  const docIds=(DB.documents||[]).filter(x=>toDelete.includes(x.folderId)).map(x=>x.id);
+  const delOps=toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid));
+  if(docIds.length)delOps.push(sb.from('documents').delete().in('id',docIds));
+  Promise.all(delOps).catch(e=>console.warn('delFolder sync:',e));
+};
+
+// ── Upload file ──
+App._uploadDoc=()=>{
+  const scopeTab=S.filters.docScope||'dept';
+  // Read scope key from the right filter key based on scope tab
+  const scopeKey=S.filters.docScopeKey||(scopeTab==='dept'?S.filters.docDeptKey:S.filters.docLocKey)||null;
+  const folderId=S.filters.docFolder||null;
+  if(!scopeKey){toast('Select a department or location first','warn');return;}
+  openModal(
+    '<div class="p-6">'
+    +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Upload file</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
+    +'<div id="ud-dropzone" style="border:2px dashed #D1D5DB;border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px" onclick="document.getElementById(\'ud-file\').click()" ondragover="event.preventDefault();this.style.borderColor=\'#0E9F6E\';this.style.background=\'#F0FDF4\'" ondragleave="this.style.borderColor=\'#D1D5DB\';this.style.background=\'transparent\'" ondrop="App._handleFileDrop(event)">'
+    +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
+    +'<div style="font-size:14px;font-weight:600;color:#374151">Click to browse or drag & drop</div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:4px">PDF, Word, Excel, PowerPoint, Images — max 50MB</div>'
+    +'<input type="file" id="ud-file" style="display:none" onchange="App._previewUpload(this)" multiple>'
+    +'</div>'
+    +'<div id="ud-preview" style="display:none;margin-bottom:14px"></div>'
+    +'<div id="ud-progress" style="display:none;margin-bottom:14px">'
+    +'<div style="font-size:13px;font-weight:600;color:#374151;margin-bottom:6px">Uploading…</div>'
+    +'<div style="height:6px;background:#F3F4F6;border-radius:3px;overflow:hidden"><div id="ud-bar" style="height:100%;background:#0E9F6E;border-radius:3px;width:0%;transition:width .3s"></div></div>'
+    +'</div>'
+    +'<button id="ud-btn" onclick="App._doUpload()" style="width:100%;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:700;font-size:15px;border:none;cursor:pointer;display:none">Upload</button>'
+    +'</div>',
+    'max-w-md'
+  );
+  App._pendingFiles=null;
+};
+
+App._handleFileDrop=(e)=>{
+  e.preventDefault();
+  document.getElementById('ud-dropzone').style.borderColor='#D1D5DB';
+  document.getElementById('ud-dropzone').style.background='transparent';
+  App._previewUpload({files:e.dataTransfer.files});
+};
+
+App._previewUpload=(input)=>{
+  const files=Array.from(input.files||[]);if(!files.length)return;
+  App._pendingFiles=files;
+  const preview=document.getElementById('ud-preview');
+  const btn=document.getElementById('ud-btn');
+  if(preview){
+    preview.style.display='block';
+    preview.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+files.map(f=>{
+      const ext=(f.name.split('.').pop()||'').toLowerCase();
+      const icon=ext==='pdf'?'📄':ext.match(/xlsx?|csv/)?'📊':ext.match(/docx?/)?'📝':'📎';
+      return'<div style="display:flex;align-items:center;gap:10px;background:#F6F7F8;border-radius:10px;padding:10px">'
+        +'<span style="font-size:20px">'+icon+'</span>'
+        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(f.name)+'</div>'
+        +'<div style="font-size:11px;color:#9CA3AF">'+_fmtSize(f.size)+'</div></div>'
+        +'</div>';
+    }).join('')+'</div>';
+  }
+  if(btn)btn.style.display='block';
+};
+
+App._doUpload=async()=>{
+  const files=App._pendingFiles;if(!files?.length){toast('Select a file','err');return;}
+  const btn=document.getElementById('ud-btn');
+  const prog=document.getElementById('ud-progress');
+  const bar=document.getElementById('ud-bar');
+  if(btn)btn.style.display='none';
+  if(prog)prog.style.display='block';
+  const scopeTab=S.filters.docScope||'dept';
+  const scopeKey=S.filters.docScopeKey;
+  const folderId=S.filters.docFolder||null;
+  let done=0;
+  for(const file of files){
+    const path=scopeTab+'/'+scopeKey+'/'+(folderId||'root')+'/'+Date.now()+'_'+file.name.replace(/[^a-zA-Z0-9._-]/g,'_');
+    const{data,error}=await sb.storage.from('documents').upload(path,file,{cacheControl:'3600',upsert:false});
+    if(error){toast('Upload failed: '+error.message,'err');if(btn)btn.style.display='block';if(prog)prog.style.display='none';return;}
+    const{data:urlData}=sb.storage.from('documents').getPublicUrl(path);
+    if(!DB.documents)DB.documents=[];
+    DB.documents.push({id:uid('doc'),name:file.name,folderId,type:scopeTab,scope:scopeKey,url:urlData?.publicUrl||path,storagePath:path,fileType:file.type,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()});
+    done++;
+    if(bar)bar.style.width=Math.round(done/files.length*100)+'%';
+  }
+  log(fullName(me()),'Uploaded '+done+' file(s)',scopeKey);
+  toast('Uploaded '+done+' file'+(done>1?'s':''));
+  saveDB();closeModal();render();
+};
+
+App._downloadDoc=async(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
+  if(doc.url&&doc.url.startsWith('http')){
+    const a=document.createElement('a');a.href=doc.url;a.download=doc.name;a.target='_blank';a.click();return;
+  }
+  // Signed URL
+  const{data,error}=await sb.storage.from('documents').createSignedUrl(doc.storagePath||doc.url,300);
+  if(error){toast('Download failed','err');return;}
+  const a=document.createElement('a');a.href=data.signedUrl;a.download=doc.name;a.click();
+};
+
+App._previewDoc=async(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
+  let url=doc.url;
+  if(!url?.startsWith('http')){
+    const{data,error}=await sb.storage.from('documents').createSignedUrl(doc.storagePath||doc.url,300);
+    if(error){toast('Preview failed','err');return;}
+    url=data.signedUrl;
+  }
+  const ext=(doc.name.split('.').pop()||'').toLowerCase();
+  if(ext.match(/jpe?g|png|gif|webp/)){
+    openModal('<div class="p-4"><div class="flex justify-between mb-3"><h3 class="fd font-bold">'+esc(doc.name)+'</h3><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div><img src="'+url+'" style="width:100%;border-radius:12px;max-height:70vh;object-fit:contain"/></div>','max-w-2xl');
+  } else if(ext==='pdf'){
+    window.open(url,'_blank');
+  } else {
+    window.open(url,'_blank');
+  }
+};
+
+App._delDoc=(id)=>{
+  const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc||!confirm('Delete "'+doc.name+'"?'))return;
+  sb.storage.from('documents').remove([doc.storagePath||doc.url]).catch(()=>{});
+  DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
+  log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();render();
+};
+
+App._clearOperational=async()=>{
+  if(!confirm('Clear checklists, submissions, approvals, notifications and audit log?\n\nUsers, departments, locations, and questions will be kept.'))return;
+  // Clear locally
+  DB.checklists=[];
+  DB.submissions=[];
+  DB.approvals=[];
+  DB.notifications=[];
+  DB.audit=[];
+  // Clear RUN cache
+  Object.keys(RUN).forEach(k=>delete RUN[k]);
+  _invalidateNotifCache();
+  // Clear from Supabase in background
+  Promise.allSettled([
+    sb.from('checklists').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('submissions').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('approvals').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('notifications').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+    sb.from('audit_logs').delete().neq('id','00000000-0000-0000-0000-000000000000'),
+  ]).catch(e=>console.warn('clear sync:',e));
+  log(fullName(me()),'Cleared operational data','checklists, submissions, approvals, notifications, audit');
+  toast('Cleared ✓');saveDB();S.route='dashboard';render();
+};
+
+// ── Notification Settings (NS) — stored in workspace_settings table ──
+const NS_LS='shiftly_ns_v2';
+
+// Default templates — subject + body for every event type
+// Variables: {{user_name}} {{checklist_name}} {{task_name}} {{ticket_title}} {{flagged_by}} {{resolved_by}} {{from_name}}
+const EMAIL_EVENTS=[
+  {key:'ticket_created',   label:'Ticket created',       vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{ticket_title}}, {{action_url}}'},
+  {key:'ticket_assigned',  label:'Ticket reassigned',    vars:'{{user_name}}, {{ticket_title}}, {{action_url}}'},
+  {key:'ticket_resolved',  label:'Ticket resolved',      vars:'{{user_name}}, {{ticket_title}}, {{resolved_by}}, {{action_url}}'},
+  {key:'issue_flagged',    label:'Issue flagged',         vars:'{{user_name}}, {{checklist_name}}, {{task_name}}, {{flagged_by}}, {{action_url}}'},
+  {key:'checklist_assigned',label:'Checklist assigned',  vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_late',  label:'Submission late',       vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_approved',label:'Submission approved',vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'submission_rejected',label:'Submission rejected',vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'approval_requested',label:'Approval requested',  vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'approval_decided', label:'Approval decided',     vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+  {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
+];
+
+function _defaultTemplates(){
+  return{
+    ticket_created:   {subject:'🚩 New ticket assigned: {{task_name}}',        body:'Hi {{user_name}},\n\nA new ticket has been assigned to you.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\nIssue: {{ticket_title}}\n\n{{action_url}}'},
+    ticket_assigned:  {subject:'Ticket reassigned to you: {{ticket_title}}',   body:'Hi {{user_name}},\n\nA ticket has been reassigned to you: {{ticket_title}}\n\n{{action_url}}'},
+    ticket_resolved:  {subject:'✅ Ticket resolved: {{ticket_title}}',          body:'Hi {{user_name}},\n\nYour ticket has been resolved by {{resolved_by}}.\n\nTicket: {{ticket_title}}\n\n{{action_url}}'},
+    issue_flagged:    {subject:'⚠️ Issue flagged: {{task_name}}',               body:'Hi {{user_name}},\n\n{{flagged_by}} flagged an issue on their checklist.\n\nChecklist: {{checklist_name}}\nTask: {{task_name}}\n\n{{action_url}}'},
+    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Shiftly to complete it.\n\n{{action_url}}'},
+    submission_late:  {subject:'⏰ Late submission: {{checklist_name}}',        body:'Hi {{user_name}},\n\nA submission is overdue: {{checklist_name}}\n\n{{action_url}}'},
+    submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.\n\n{{action_url}}'},
+    submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.\n\n{{action_url}}'},
+    approval_requested:{subject:'🔔 Approval needed: {{checklist_name}}',      body:'Hi {{user_name}},\n\nAn approval is pending for {{checklist_name}}.\n\n{{action_url}}'},
+    approval_decided: {subject:'Approval update: {{checklist_name}}',          body:'Hi {{user_name}},\n\nYour approval request for {{checklist_name}} has been decided.\n\n{{action_url}}'},
+    feedback_received:{subject:'💬 New feedback received',                      body:'Hi {{user_name}},\n\nYou have received new feedback on {{checklist_name}}.\n\n{{action_url}}'},
+    deadline_reminder:{subject:'⏳ Reminder: {{checklist_name}} deadline soon', body:'Hi {{user_name}},\n\nYour checklist {{checklist_name}} deadline is approaching soon. Please complete it before the cutoff.\n\n{{action_url}}'},
+  };
+}
+
+function _nsDefault(){return{
+  email_enabled:false,email_from_name:'Shiftly',email_from_address:'',email_reminder_minutes:15,
+  inapp_checklist_assigned:true,inapp_task_assigned:true,inapp_submission_submitted:true,
+  inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
+  inapp_ticket_created:true,inapp_ticket_assigned:true,inapp_ticket_resolved:true,
+  inapp_issue_flagged:true,inapp_approval_requested:true,inapp_approval_decided:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,
+  email_checklist_assigned:true,email_task_assigned:true,email_submission_submitted:false,
+  email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
+  email_ticket_created:true,email_ticket_assigned:true,email_ticket_resolved:true,
+  email_issue_flagged:true,email_approval_requested:true,email_approval_decided:true,
+  email_feedback_received:false,email_deadline_reminder:true,
+  templates:{},
+};}
+let _ns=null;
+async function _loadNS(){
+  if(_ns)return _ns;
+  try{const r=localStorage.getItem(NS_LS);if(r)_ns={..._nsDefault(),...JSON.parse(r)};}catch(e){}
+  if(!_ns)_ns=_nsDefault();
+  try{const{data}=await sb.from('workspace_settings').select('value').eq('key','notification_settings').single();
+    if(data?.value){
+      const saved=data.value;
+      _ns={..._nsDefault(),...saved};
+      // Deep-merge templates — spread would overwrite entire templates obj with saved one, which is correct
+      // but if saved has no templates key at all, restore empty object
+      if(!_ns.templates)_ns.templates={};
+      localStorage.setItem(NS_LS,JSON.stringify(_ns));
+    }}catch(e){}
+  return _ns;
+}
+async function _saveNS(){
+  if(!_ns)return;
+  localStorage.setItem(NS_LS,JSON.stringify(_ns));
+  try{await sb.from('workspace_settings').upsert({key:'notification_settings',value:_ns,updated_at:new Date().toISOString()},{onConflict:'key'});}catch(e){console.warn('NS sync:',e.message);}
+}
+
+// ── Resolve template variables ──
+function _fillTemplate(str, vars){
+  return str.replace(/\{\{(\w+)\}\}/g,(_,k)=>vars[k]||'');
+}
+
+// ── Render plain text body as HTML — {{action_url}} line becomes a CTA button ──
+function _bodyToHtml(fromName, bodyText, actionUrl=''){
+  const safeName=String(fromName||'Shiftly').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  const rawLines = bodyText.split('\n').map(l=>l.trim());
+  // ctaUrl is passed in as 3rd arg — already the resolved URL
+  let ctaUrl = actionUrl||'';
+  // Strip: the {{action_url}} placeholder, the resolved URL itself (already a button), and any bare https line
+  const lines = rawLines
+    .filter(l=>l!=='{{action_url}}' && l!==ctaUrl && !/^https?:\/\//.test(l))
+    .map(l=>l.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
+  const ctaLabel=ctaUrl.includes('tickets')?'View Tickets'
+    :ctaUrl.includes('approvals')?'View Approvals'
+    :ctaUrl.includes('mychecklists')?'Open My Checklists'
+    :ctaUrl.includes('notifications')?'View Notifications'
+    :ctaUrl.includes('settings')?'Open Settings'
+    :ctaUrl.includes('analytics')?'View Analytics'
+    :'Open Shiftly';
+  return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
+    <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
+      <div style="width:28px;height:28px;border-radius:8px;background:#0E9F6E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">S</div>
+      <span style="font-weight:700;font-size:16px;color:#fff">${safeName}</span>
+    </div>
+    <div style="padding:28px">
+      ${lines.filter(Boolean).map((l,i)=>i===0
+        ?`<p style="font-size:15px;color:#374151;margin:0 0 16px">${l}</p>`
+        :`<p style="font-size:14px;color:#6B7280;margin:0 0 8px;line-height:1.6">${l}</p>`
+      ).join('')}
+      ${ctaUrl?`<div style="margin-top:24px">
+        <a href="${ctaUrl}" style="display:inline-block;background:#15171C;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none">${ctaLabel} →</a>
+        <p style="margin:10px 0 0;font-size:11px;color:#B8B5AC">Or copy: ${ctaUrl}</p>
+      </div>`:''}
+    </div>
+    <div style="padding:16px 28px;background:#F9F8F5;border-top:1px solid #ECEDF0;font-size:11px;color:#9CA3AF">
+      ${safeName} · Automated notification · Do not reply
+    </div>
+  </div></body></html>`;
+}
+
+// ── sendEmail: FAST — calls edge function directly, no queue, no extra DB round trip ──
+async function sendEmail(eventType, userId, vars){
+  const user = userId ? uById(userId) : null;
+  if(!user?.email){console.warn('sendEmail: no email for user',userId);return;}
+  if(!_ns) await _loadNS();
+  if(!_ns.email_enabled) return;
+  if(_ns['email_'+eventType]===false) return;
+  // Build app URL from current window location
+  const appUrl = window.location.origin;
+  // Each event type links to the most relevant page
+  const routeMap = {
+    ticket_created:'tickets', ticket_assigned:'tickets', ticket_resolved:'tickets',
+    issue_flagged:'tickets', checklist_assigned:'mychecklists',
+    submission_late:'mychecklists', submission_approved:'mychecklists',
+    submission_rejected:'mychecklists', approval_requested:'approvals',
+    approval_decided:'approvals', feedback_received:'notifications',
+    deadline_reminder:'mychecklists',
+  };
+  const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
+  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Shiftly', app_url:appUrl, action_url:actionUrl, ...vars};
+  const defaults = _defaultTemplates();
+  const tpl = {
+    subject:(_ns.templates?.[eventType]?.subject)||defaults[eventType]?.subject||eventType,
+    body:   (_ns.templates?.[eventType]?.body)   ||defaults[eventType]?.body   ||'',
+  };
+  const subject  = _fillTemplate(tpl.subject, allVars);
+  const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars), actionUrl);
+  sb.functions.invoke('send-notification',{body:{
+    to:user.email, from_name:_ns.email_from_name||'Shiftly', subject, html:bodyHtml,
+  }}).catch(e=>console.warn('sendEmail invoke failed:',e.message));
+}
+
+
+function _nsTogRow(key,label,desc){
+  const on=_ns?(_ns[key]!==false):true;
+  return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F5F4F0">
+    <div style="flex:1;min-width:0">
+      <div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>
+      ${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}
+    </div>
+    <button class="tog ${on?'on':'off'}" onclick="App._nsTog(this,'${key}')"><span></span></button>
+  </div>`;}
+App._nsTog=async(btn,key)=>{
+  if(!_ns)_ns=_nsDefault();
+  const nowOn=btn.classList.contains('off');
+  btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);
+  _ns[key]=nowOn;await _saveNS();
+};
+App._nsSaveEmail=async()=>{
+  if(!_ns)_ns=_nsDefault();
+  const name=($('#ns-from-name')?.value||'').trim();
+  const addr=($('#ns-from-addr')?.value||'').trim();
+  const mins=parseInt($('#ns-reminder-mins')?.value||'15')||15;
+  if(!addr){toast('Enter a from email address','err');return;}
+  if(!addr.includes('@')){toast('Enter a valid email address','err');return;}
+  _ns.email_from_name=name||'Shiftly';_ns.email_from_address=addr;
+  _ns.email_reminder_minutes=Math.max(5,Math.min(120,mins));
+  await _saveNS();toast('Saved ✓');
+};
+App._testEmail=async()=>{
+  if(!_ns) await _loadNS();
+  const u=me();
+  if(!u?.email){toast('Your user profile has no email address','err');return;}
+  const btn=document.getElementById('ns-test-btn');
+  if(btn){btn.disabled=true;btn.textContent='Sending…';}
+  try{
+    const appUrl=window.location.origin;
+    const {error}=await sb.functions.invoke('send-notification',{body:{
+      to: u.email,
+      from_name: _ns.email_from_name||'Shiftly',
+      subject: '✅ Shiftly test email',
+      html: _bodyToHtml(_ns.email_from_name||'Shiftly',
+        'Hi '+u.firstName+',\n\nThis is a test email from Shiftly.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
+        appUrl+'/#mychecklists'),
+    }});
+    if(error)throw new Error(error.message||'Function error');
+    toast('Test email sent to '+u.email+' ✓','ok');
+  }catch(e){
+    toast('Failed: '+e.message,'err');
+    console.error('Test email error:',e);
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='Send test email';}
+  }
+};
+
+
+function settingsPage(){
+  const stab=S.filters.stab||'workflow';
+  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}<div style="padding:40px;text-align:center;color:#9CA3AF;font-size:13px">Loading…</div></div>`;}
+  const ns=_ns;
+  const TABS=[['workflow','⚙️ Workflow'],['inapp','🔔 In-App'],['email','✉️ Email'],['templates','📝 Templates'],['data','📦 Data']];
+  const tabBar=`<div style="display:flex;gap:3px;margin-bottom:20px;background:#F5F4F0;border-radius:14px;padding:4px">
+    ${TABS.map(([k,l])=>`<button onclick="S.filters.stab='${k}';rr()" style="flex:1;padding:9px 4px;border-radius:10px;font-size:12px;font-weight:700;border:none;cursor:pointer;transition:all .12s;${stab===k?'background:#fff;color:#15171C;box-shadow:0 1px 4px rgba(0,0,0,.08)':'background:transparent;color:#9CA3AF'}">${l}</button>`).join('')}
+  </div>`;
+
+  const workflowTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Approval & Submission</h3>
+      ${mkTog('st-ap',true,'Enable approval flow')}
+      ${mkTog('st-late',true,'Mark submissions late after cutoff')}
+      ${mkTog('st-edit',true,'Allow users to edit after submission')}
+      ${mkTog('st-pa',true,'Require approval for edited submissions')}
+    </div>
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Issues & Tickets</h3>
+      ${mkTog('st-if',true,'Notify manager when issue is flagged')}
+      ${mkTog('st-ta',true,'Auto-assign ticket from question answer')}
+    </div>
+  </div>`;
+
+  const inappTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
+      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9">
+        <div style="font-size:14px;font-weight:700">In-app notifications</div>
+        <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Bell icon — shown only to the relevant user</div>
+      </div>
+      <div style="padding:4px 20px 12px">
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        ${_nsTogRow('inapp_checklist_assigned','Checklist assigned','Sent to the user the checklist is assigned to')}
+        ${_nsTogRow('inapp_submission_submitted','Submission submitted','Sent to the manager when their team submits')}
+        ${_nsTogRow('inapp_submission_late','Submission late','Sent to the manager when a submission is overdue')}
+        ${_nsTogRow('inapp_submission_approved','Submission approved','Sent to the user whose submission was approved')}
+        ${_nsTogRow('inapp_submission_rejected','Submission rejected','Sent to the user whose submission was rejected')}
+        ${_nsTogRow('inapp_deadline_reminder','Deadline reminder','Sent to the user before their task cutoff')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
+        ${_nsTogRow('inapp_ticket_created','Ticket created','Sent to the assignee of the new ticket')}
+        ${_nsTogRow('inapp_ticket_assigned','Ticket reassigned','Sent to the new assignee when a ticket is reassigned')}
+        ${_nsTogRow('inapp_ticket_resolved','Ticket resolved','Sent to the person who created the ticket')}
+        ${_nsTogRow('inapp_issue_flagged','Issue flagged','Sent to the manager when a task is flagged')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
+        ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
+        ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
+      </div>
+    </div>
+  </div>`;
+
+  const emailOn=ns.email_enabled!==false;
+  const emailTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
+      <div style="padding:14px 20px;background:#F9F8F5;border-bottom:1px solid #F0EEE9;display:flex;align-items:center;justify-content:space-between">
+        <div>
+          <div style="font-size:14px;font-weight:700">Email notifications</div>
+          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Sends to the email address set on each user's account</div>
+        </div>
+        <button class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
+      </div>
+      <div style="padding:16px 20px;border-bottom:1px solid #F0EEE9">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
+            <input id="ns-from-name" value="${esc(ns.email_from_name||'Shiftly')}" placeholder="Shiftly"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
+            <input id="ns-from-addr" type="email" value="${esc(ns.email_from_address||'')}" placeholder="you@company.com"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+        </div>
+        <div style="margin-bottom:12px">
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
+          <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
+            style="width:120px;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+        </div>
+        <div style="display:flex;gap:8px">
+          <button onclick="App._nsSaveEmail()" style="flex:1;padding:10px;border-radius:11px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#15171C'">Save settings</button>
+          <button id="ns-test-btn" onclick="App._testEmail()" style="padding:10px 16px;border-radius:11px;background:#fff;color:#374151;font-size:13px;font-weight:700;border:1.5px solid #E5E7EB;cursor:pointer" onmouseover="this.style.background='#F9F8F5'" onmouseout="this.style.background='#fff'">Send test email</button>
+        </div>
+      </div>
+      <div style="padding:4px 20px 12px">
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        ${_nsTogRow('email_checklist_assigned','Checklist assigned','Email sent to the assigned user')}
+        ${_nsTogRow('email_submission_late','Submission late','Email sent to the manager')}
+        ${_nsTogRow('email_submission_approved','Submission approved','Email sent to the user')}
+        ${_nsTogRow('email_submission_rejected','Submission rejected','Email sent to the user')}
+        ${_nsTogRow('email_deadline_reminder','Deadline reminder','Email sent to the user before cutoff')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
+        ${_nsTogRow('email_ticket_created','Ticket created','Email sent to the ticket assignee')}
+        ${_nsTogRow('email_ticket_assigned','Ticket reassigned','Email sent to the new assignee')}
+        ${_nsTogRow('email_ticket_resolved','Ticket resolved','Email sent to the ticket creator')}
+        ${_nsTogRow('email_issue_flagged','Issue flagged','Email sent to the manager')}
+        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        ${_nsTogRow('email_approval_requested','Approval requested','Email sent to admin')}
+        ${_nsTogRow('email_approval_decided','Approval decided','Email sent to the user')}
+        ${_nsTogRow('email_feedback_received','Feedback received','Email sent to the user')}
+      </div>
+    </div>
+  </div>`;
+
+  // ── TEMPLATES TAB ──
+  const defaults=_defaultTemplates();
+  const expandedTpl=S.filters.tplKey||null;
+  const templatesTab=`<div class="space-y-2">
+    <div style="padding:4px 0 10px">
+      <div style="font-size:13px;color:#9CA3AF;line-height:1.6">
+        Customise the subject and body for each email. Use these variables anywhere in your text:
+        <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
+          ${['{{user_name}}','{{checklist_name}}','{{task_name}}','{{ticket_title}}','{{flagged_by}}','{{resolved_by}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
+        </div>
+      </div>
+    </div>
+    ${EMAIL_EVENTS.map(ev=>{
+      const tpl={...(defaults[ev.key]||{}), ...(ns.templates?.[ev.key]||{})};
+      const open=expandedTpl===ev.key;
+      return`<div style="background:#fff;border-radius:14px;border:1.5px solid ${open?'#0E9F6E':'#ECEDF0'};overflow:hidden;transition:border-color .15s">
+        <button onclick="S.filters.tplKey='${open?'':ev.key}';rr()"
+          style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:transparent;border:none;cursor:pointer;text-align:left">
+          <div>
+            <div style="font-size:13px;font-weight:700;color:#15171C">${ev.label}</div>
+            <div style="font-size:11px;color:#B8B5AC;margin-top:1px">${ev.vars}</div>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px">
+            ${(ns.templates?.[ev.key])?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#065F46">Custom</span>`:''}
+            <span style="color:#B8B5AC;font-size:16px">${open?'▲':'▼'}</span>
+          </div>
+        </button>
+        ${open?`<div style="padding:0 16px 16px;border-top:1px solid #F5F4F0">
+          <div style="margin-bottom:10px">
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;margin-top:12px">Subject</label>
+            <input id="tpl-subj-${ev.key}" value="${esc(tpl.subject||'')}" placeholder="Email subject…"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+          </div>
+          <div>
+            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Body</label>
+            <textarea id="tpl-body-${ev.key}" rows="6"
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
+            <div style="font-size:11px;color:#B8B5AC;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
+          </div>
+          <div style="display:flex;gap:8px;margin-top:12px">
+            <button onclick="App._resetTpl('${ev.key}')"
+              style="padding:8px 14px;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#9CA3AF">Reset to default</button>
+            <button onclick="App._saveTpl('${ev.key}')"
+              style="flex:1;padding:8px 14px;border-radius:9px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Save template</button>
+          </div>
+        </div>`:''}
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  App._saveTpl=async(key)=>{
+    if(!_ns)_ns=_nsDefault();
+    if(!_ns.templates)_ns.templates={};
+    const subj=($('#tpl-subj-'+key)?.value||'').trim();
+    const body=($('#tpl-body-'+key)?.value||'').trim();
+    if(!subj||!body){toast('Subject and body required','err');return;}
+    _ns.templates[key]={subject:subj,body};
+    await _saveNS();
+    toast('Template saved ✓');rr();
+  };
+  App._resetTpl=async(key)=>{
+    if(!_ns)_ns=_nsDefault();
+    if(_ns.templates)delete _ns.templates[key];
+    await _saveNS();
+    toast('Reset to default ✓');rr();
+  };
+
+  const dataTab=`<div class="space-y-4">
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Export & Reset</h3>
+      <div class="flex gap-3 flex-wrap">
+        ${btnG('Export CSV','App._exportCSV()','download')}
+        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FED7AA;color:#C2410C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF7ED'" onmouseout="this.style.background='#fff'">🧹 Clear data</button>
+        <button onclick="if(confirm('Reset ALL workspace data?')){localStorage.removeItem(window.LS_KEY||'shiftly_v3');location.reload();}" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FECACA;color:#BE123C;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FFF1F2'" onmouseout="this.style.background='#fff'">Reset workspace</button>
+      </div>
+    </div>
+    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
+      <h3 class="fd font-semibold text-sm mb-3">Workspace stats</h3>
+      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
+    </div>
+  </div>`;
+
+  const content=stab==='workflow'?workflowTab:stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='templates'?templatesTab:dataTab;
+  return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}${content}</div>`;
+}
 
 App._exportCSV=()=>{
   let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
