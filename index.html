@@ -434,8 +434,8 @@ function log(a,b,c){
   if(DB.audit.length>200)DB.audit.length=200;
   const entry={id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()};
   DB.audit.unshift(entry);
-  // Write audit log directly to Supabase immediately
-  sb.from('audit_logs').insert({id:entry.id,actor:entry.actor,action:entry.action,target:entry.target,created_at:entry.time}).catch(()=>{});
+  // Write audit log directly to Supabase — use Promise chain not .catch() directly
+  sb.from('audit_logs').insert({id:entry.id,actor:entry.actor,action:entry.action,target:entry.target,created_at:entry.time}).then(()=>{}).catch(()=>{});
 }
 function seed(){
   DB.feedback=[];
