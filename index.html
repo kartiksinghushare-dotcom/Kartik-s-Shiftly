@@ -422,23 +422,8 @@ async function _sync(){try{
 function skCards(n=3){return Array(n).fill(0).map(()=>'<div class="sk-card"><div class="sk sk-line lg"></div><div class="sk sk-line sm"></div><div style="display:flex;gap:8px;margin-top:12px"><div class="sk" style="height:28px;width:70px;border-radius:6px"></div><div class="sk" style="height:28px;width:70px;border-radius:6px"></div></div></div>').join('');}
 function skRows(n=4){return '<div style="background:#fff;border-radius:16px;border:1px solid #EEECE8;overflow:hidden;margin-bottom:10px">'+Array(n).fill(0).map((_,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F3F2EF"><div class="sk" style="width:40px;height:40px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="sk sk-line"></div><div class="sk sk-line sm"></div></div></div>').join('')+'</div>';}
 /* ===== STATUS CHIPS ===== */
-const CHIP_CLS={
-  'On Time':   'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  'Submitted': 'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  'Pending':   'bg-amber-50 text-amber-700 ring-amber-200',
-  'Late':      'bg-rose-50 text-rose-700 ring-rose-200',
-  'Pending Approval':'bg-orange-50 text-orange-700 ring-orange-200',
-  'Rejected':  'bg-rose-100 text-rose-900 ring-rose-300',
-  'Active':    'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  'Inactive':  'bg-ink-100 text-ink-400 ring-ink-200',
-  'Approved':  'bg-emerald-50 text-emerald-700 ring-emerald-200',
-  'Editing':   'bg-sky-50 text-sky-700 ring-sky-200',
-  'Upcoming':  'bg-purple-50 text-purple-700 ring-purple-200',
-  'Draft':     'bg-ink-50 text-ink-400 ring-ink-200',
-};
-const CHIP_DOT={'On Time':'bg-emerald-500','Submitted':'bg-emerald-500','Pending':'bg-amber-400','Late':'bg-rose-500','Pending Approval':'bg-orange-500','Rejected':'bg-rose-800','Active':'bg-emerald-500','Inactive':'bg-ink-300','Approved':'bg-emerald-500'};
-const CHIP_STYLE={"On Time": "background:#ECFDF5;color:#047857", "Submitted": "background:#ECFDF5;color:#047857", "Pending": "background:#FFFBEB;color:#B45309", "Late": "background:#FFF1F2;color:#BE123C", "Pending Approval": "background:#FFF7ED;color:#C2410C", "Rejected": "background:#FFF1F2;color:#9F1239", "Active": "background:#ECFDF5;color:#047857", "Inactive": "background:#F6F7F8;color:#9CA3AF", "Approved": "background:#ECFDF5;color:#047857"};
-const CHIP_DOT_C={"On Time": "#10B981", "Submitted": "#10B981", "Pending": "#F59E0B", "Late": "#F43F5E", "Pending Approval": "#F97316", "Rejected": "#9F1239", "Active": "#10B981", "Inactive": "#D1D5DB", "Approved": "#10B981"};
+const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF"};
+const CHIP_DOT_C={"On Time":"#10B981","Submitted":"#10B981","Pending":"#F59E0B","Late":"#F43F5E","Pending Approval":"#F97316","Rejected":"#9F1239","Active":"#10B981","Inactive":"#D1D5DB","Approved":"#10B981","Editing":"#3B82F6","Upcoming":"#A855F7","Draft":"#9CA3AF"};
 const chip=s=>{const st=CHIP_STYLE[s]||'background:#FFFBEB;color:#B45309';const dot=CHIP_DOT_C[s]||'#F59E0B';return`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;${st}"><span style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0"></span>${esc(s)}</span>`;};
 
 const CRIT_ST={Low:'background:#DCFCE7;color:#15803D',Medium:'background:#FEF9C3;color:#A16207',High:'background:#FED7AA;color:#C2410C',Critical:'background:#FEE2E2;color:#B91C1C'};
@@ -446,9 +431,8 @@ const BORDER_ST={'On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','
 const critBadge=c=>`<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;display:inline-block;${CRIT_ST[c]||CRIT_ST['Low']}">${esc(c||'Low')}</span>`;
 
 /* ===== DATA MODEL ===== */
-const DEPTS=['Operations','Housekeeping','Front Office','Maintenance','Food & Beverage','Security'];
 let DB={
-  departments:DEPTS.map(n=>({id:uid('d'),name:n})),
+  departments:[],
   users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[]
 };
 function log(a,b,c){
@@ -607,7 +591,7 @@ const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Chec
 const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
 const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','notifications','more'];
-const MOB_USR=['mychecklists','notifications'];
+const MOB_USR=['mychecklists','notifications','more'];
 const MOB_MGR=['dashboard','mychecklists','questions','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
@@ -1265,10 +1249,6 @@ App._uploadDocIn=(t,s)=>{
 // ── Document navigation ──
 
 
-// Stubs for removed task issue flow (dead code, never called from UI)
-App._issueCmt=()=>{};
-App._issuePh=()=>{};
-
 // queueEmail stub — wire up to your email provider (Resend, SendGrid etc.)
 function queueEmail(eventKey,userId,clId,date,vars){
   const u=uById(userId);if(!u||!u.email)return;
@@ -1458,8 +1438,6 @@ let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(
   </div></div>`;}
 /* ===== CHECKLIST CREATE / EDIT ===== */
 let CLD=null;
-const CRIT_OPTS=['Low','Medium','High','Critical'];
-const RESP_TYPES=[['tick','✓ / ✗ Tick & cross'],['yesno','Yes / No'],['passfail','Pass / Fail'],['dropdown','Dropdown (custom options)'],['text','Text input'],['numeric','Numeric input']];
 
 App.editCl=(id=null)=>{
   try{
@@ -1978,26 +1956,6 @@ function _clCard(c,date){
 
 
 
-function _respBtns(rType,rt,i,clId,t){
-  const r=rt.response;
-  const b=(val,lbl,pos)=>`<button class="rc-btn ${r===val?(pos?'rca':'rcb'):''}" onclick="App._setR('${clId}',${i},'${val}')">${lbl}</button>`;
-  if(rType==='tick')    return`<div class="rc">${b('ok','✓ Done',1)}${b('x','✕ No',0)}</div>`;
-  if(rType==='yesno')   return`<div class="rc">${b('Yes','Yes',1)}${b('No','No',0)}</div>`;
-  if(rType==='passfail')return`<div class="rc">${b('Pass','Pass',1)}${b('Fail','Fail',0)}</div>`;
-  if(rType==='dropdown')return`<select onchange="App._setR('${clId}',${i},this.value)" style="height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:700;outline:none;cursor:pointer;color:${r?'#111110':'#9CA3AF'};appearance:none"><option value="">Choose…</option>${(t.dropdownOptions||[]).map(o=>`<option ${r===o?'selected':''}>${esc(o)}</option>`).join('')}</select>`;
-  if(rType==='text')    return`<input type="text" value="${esc(r||'')}" oninput="App._setR('${clId}',${i},this.value,true)" onchange="App._setR('${clId}',${i},this.value)" placeholder="Type here…" style="width:100px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:600;outline:none;color:#111110"/>`;
-  if(rType==='numeric') return`<input type="number" value="${esc(r||'')}" oninput="App._setR('${clId}',${i},this.value,true)" onchange="App._setR('${clId}',${i},this.value)" placeholder="0" style="width:64px;height:28px;background:#fff;border:1.5px solid #E8E6E1;border-radius:14px;padding:0 10px;font-size:11px;font-weight:700;outline:none;color:#111110"/>`;
-  return'';
-}
-
-App._setR=(clId,i,val,skipRr)=>{
-  if(!RUN[clId])return;
-  if(!RUN[clId].tasks[i])RUN[clId].tasks[i]={};
-  RUN[clId].tasks[i].response=val;RUN[clId].tasks[i].done=!!val;
-  if(!skipRr)rr();
-  _updateSubmitBtn(clId);
-  clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
-};
 App._setQR=(clId,qId,val,skipRr)=>{
   if(!RUN[clId])return;
   if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
@@ -2031,30 +1989,6 @@ App._setQRComment=(clId,qId,val)=>{
   else{RUN[clId].questionResponses.push({questionId:qId,response:null,comment:val});}
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
 };
-App._getR=(clId,i)=>{return RUN[clId]?.tasks?.[i]?.response??null;};
-App._setCmt=(clId,i,v)=>{if(RUN[clId]?.tasks?.[i])RUN[clId].tasks[i].comment=v;};
-App._addPh=(clId,i,el)=>{
-  const f=el.files[0];if(!f)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    if(!RUN[clId])return;
-    RUN[clId].tasks[i].photo=e.target.result;
-    // Targeted update — just update the camera button state, no full re-render
-    const btn=el.previousElementSibling;
-    if(btn)btn.classList.add('ph-on');
-    // Recalculate allDone and update submit button only
-    _updateSubmitBtn(clId);
-    saveDB();
-  };
-  reader.readAsDataURL(f);
-};
-function _updateSubmitBtn(clId){
-  const run=RUN[clId];if(!run)return;
-  const sub=subFor(clId,S.uid,run.date);
-  if(sub&&sub.status!=='Editing')return;
-  const btn=document.querySelector(`.submit-pill[data-cl="${clId}"]`);
-  if(btn){btn.disabled=false;btn.className='submit-pill go';}
-}
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(sub.questionResponses||[])),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');render();};
 
@@ -2229,12 +2163,12 @@ function teamViewPage(){
               <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''} · ${esc(c.department)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${photos?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EFF6FF;color:#1D4ED8">📷 ${photos}</span>`:''}
+              ${sub&&(sub.questionResponses||[]).length?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">${(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length}/${(c.questionIds||[]).length} ans</span>`:''}
               ${chip(st)}
               <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
             </div>
           </button>
-          <!-- Expanded task list (read-only) -->
+          <!-- Expanded question responses (read-only) -->
           ${exp?`<div style="border-top:1px solid #F3F4F6">
             ${(()=>{
               if(!sub)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(selDate)}</div>`;
@@ -2941,7 +2875,7 @@ function _feedbackTabContent(uid){
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
       +'<div>'
       +'<div style="font-size:14px;font-weight:700">'+(cl?esc(cl.name):'General feedback')+'</div>'
-      +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' &middot; '+fmtD((fb.date||fb.createdAt||'').slice(0,10))+'</div>'
+      +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+(fb.date||fb.createdAt?' &middot; '+fmtD((fb.date||fb.createdAt||'').slice(0,10)):'')+'</div>'
       +'</div>'
       +(fb.priority&&fb.priority!=='Low'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+priBg+';color:'+priClr+'">'+fb.priority+'</span>':'')
       +'</div>'
@@ -3171,7 +3105,6 @@ App._sfbSelectType=(btn)=>{
     if(taskWrap)taskWrap.style.display='none';
   } else {
     if(clWrap)clWrap.style.display='';
-    if(taskWrap){const clId=document.getElementById('sfb-cl')?.value;if(clId)taskWrap.style.display='';}
   }
 };
 App._sfbClChange=(clId)=>{
@@ -3187,7 +3120,6 @@ App._saveSendFeedback=(userId)=>{
   const clId=$('#sfb-cl')?.value||null;
   const type=(document.getElementById('sfb-type-val')?.value)||'General';
   const priority=$('#sfb-pri')?.value||'Low';
-  const taskName=$('#sfb-task')?.value?.trim()||null;
   if(!DB.feedback)DB.feedback=[];
   DB.feedback.push({
     id:uid('fb'),title:title||type+' Feedback',type,
@@ -3474,7 +3406,6 @@ function profilePage(){
 function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return(b/1048576).toFixed(1)+'MB';}
 
 App._docNav=(id)=>{S.filters.docFolder=id;rr();};  // alias kept for compatibility
-App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
 
 App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
@@ -3682,14 +3613,12 @@ function _defaultTemplates(){
 
 function _nsDefault(){return{
   email_enabled:false,email_from_name:'Shiftly',email_from_address:'',email_reminder_minutes:15,
-  inapp_checklist_assigned:true,inapp_task_assigned:true,inapp_submission_submitted:true,
+  inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
-  
   inapp_approval_requested:true,inapp_approval_decided:true,
   inapp_feedback_received:true,inapp_deadline_reminder:true,
-  email_checklist_assigned:true,email_task_assigned:true,email_submission_submitted:false,
+  email_checklist_assigned:true,email_submission_submitted:false,
   email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
-  
   email_approval_requested:true,email_approval_decided:true,
   email_feedback_received:false,email_deadline_reminder:true,
   templates:{},
@@ -3732,8 +3661,7 @@ function _bodyToHtml(fromName, bodyText, actionUrl=''){
   const lines = rawLines
     .filter(l=>l!=='{{action_url}}' && l!==ctaUrl && !/^https?:\/\//.test(l))
     .map(l=>l.replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c])));
-  const ctaLabel=ctaUrl.includes('tickets')?'View Tickets'
-    :ctaUrl.includes('approvals')?'View Approvals'
+  const ctaLabel=ctaUrl.includes('approvals')?'View Approvals'
     :ctaUrl.includes('mychecklists')?'Open My Checklists'
     :ctaUrl.includes('notifications')?'View Notifications'
     :ctaUrl.includes('settings')?'Open Settings'
@@ -3772,7 +3700,6 @@ async function sendEmail(eventType, userId, vars){
   const appUrl = window.location.origin;
   // Each event type links to the most relevant page
   const routeMap = {
-    ticket_created:'tickets', ticket_assigned:'tickets', ticket_resolved:'tickets',
     checklist_assigned:'mychecklists',
     submission_late:'mychecklists', submission_approved:'mychecklists',
     submission_rejected:'mychecklists', approval_requested:'approvals',
