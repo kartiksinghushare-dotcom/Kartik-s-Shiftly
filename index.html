@@ -1618,7 +1618,7 @@ App._togLoc=(id,on,el)=>{if(!CLD.locationIds)CLD.locationIds=[];if(on&&!CLD.loca
 App._togAsgn=(id,on,el)=>{if(!CLD.assignees)CLD.assignees=[];if(on&&!CLD.assignees.includes(id))CLD.assignees.push(id);if(!on)CLD.assignees=CLD.assignees.filter(a=>a!==id);el.closest('label').className=`flex items-center gap-2 p-2 rounded-xl border cursor-pointer transition text-xs ${on?'border-brand-300 bg-brand-50':'border-ink-100'}`;};
 
 
-App._saveCl=async(editing)=>{
+App._saveCl=(editing)=>{
   CLD.name=$('#cn-name')?.value.trim();CLD.description=$('#cn-desc')?.value.trim();
   CLD.status=$('#cn-status')?.value||'Active';
   CLD.department=$('#cn-dep')?.value;CLD.frequency=$('#cn-freq')?.value;
@@ -1632,9 +1632,8 @@ App._saveCl=async(editing)=>{
     const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
     return;}
   const prevAssignees=editing?((clById(CLD.id)?.assignees)||[]):[];
-  if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);DB.checklists[idx]=CLD;}
+  if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);if(idx>-1)DB.checklists[idx]=CLD;else DB.checklists.push(CLD);}
   else DB.checklists.push(CLD);
-  // Notify + email newly assigned users (skip self, skip already-assigned)
   const newlyAssigned=(CLD.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
   newlyAssigned.forEach(uid2=>{
     DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false});
@@ -1642,25 +1641,17 @@ App._saveCl=async(editing)=>{
   });
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
-  // Write to Supabase and WAIT — prevents refresh losing the checklist
-  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
-  let clSbErr=null;
-  try{
-    const res=await sb.from('checklists').upsert(clRow,{onConflict:'id'});
-    if(res.error)clSbErr=res.error;
-  }catch(e){clSbErr=e;}
-  if(clSbErr){
-    console.error('Checklist Supabase error:',clSbErr);
-    // Undo local change
-    if(editing){const oidx=DB.checklists.findIndex(x=>x.id===CLD.id);if(oidx>-1)DB.checklists[oidx]=clById(CLD.id)||CLD;}
-    else{DB.checklists=DB.checklists.filter(x=>x.id!==CLD.id);}
-    const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
-    toast('Save failed: '+(clSbErr.message||clSbErr.toString()).slice(0,80),'err');
-    return;
-  }
-  toast(editing?'Saved':'Checklist created');closeModal();
+  // ── Save locally and close IMMEDIATELY — no waiting for Supabase ──
+  toast(editing?'Saved ✓':'Checklist created ✓');
+  closeModal();
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
   render();
+  // ── Sync to Supabase in background ──
+  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
+  sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
+    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Checklist saved locally but not synced: '+error.message.slice(0,60),'warn');}
+  }).catch(e=>console.error('Checklist sync:',e));
+  CLD=null;
 };
 App.dupCl=async(id)=>{
   const src=clById(id);if(!src)return;
@@ -1692,24 +1683,20 @@ App.dupCl=async(id)=>{
   }).catch(e=>console.warn('dupCl sync:',e));
 };
 
-App.delCl=async(id)=>{
+App.delCl=(id)=>{
   const c=clById(id);if(!c)return;
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
-  let sbError=null;
-  try{
-    const res=await sb.from('checklists').delete().eq('id',id);
-    if(res.error)sbError=res.error;
-  }catch(e){sbError=e;}
-  if(sbError){
-    console.error('Delete checklist error:',sbError);
-    toast('Delete failed: '+(sbError.message||sbError.toString()).slice(0,80),'err');
-    return;
-  }
-  const clAssignees=c.assignees||[];
+  // ── Remove locally immediately ──
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
+  const clAssignees=c.assignees||[];
   clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});
-  _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();
+  _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
+  toast('Deleted','warn');saveDB();render();
+  // ── Sync to Supabase in background ──
+  sb.from('checklists').delete().eq('id',id).then(({error})=>{
+    if(error)console.error('delCl sync error:',error.message);
+  }).catch(e=>console.error('delCl:',e));
 };
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
@@ -2378,14 +2365,11 @@ App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr()
 
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
-  if(!confirm('Delete "'+q.text+'"?\n\nIt will be removed from checklists but past responses will be preserved.'))return;
-  // Soft delete — mark archived, remove from active checklists
-  q.archived=true;q.archivedAt=new Date().toISOString();
-  DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);});
-  // Hard delete from Supabase questions table, but submissions with responses are kept
-  sb.from('questions').delete().eq('id',id).catch(()=>{});
+  if(!confirm('Delete "'+q.text+'"?'))return;
   DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
+  DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);if(c.questionConfigs)delete c.questionConfigs[id];});
   toast('Deleted','warn');saveDB();render();
+  sb.from('questions').delete().eq('id',id).catch(e=>console.error('delQuestion:',e));
 };
 
 App._editQuestion=(id)=>{
@@ -2501,7 +2485,7 @@ App._renderQModal=()=>{
 
 };
 
-App._saveQuestion=async()=>{
+App._saveQuestion=()=>{
   if(!_QED)return;
   const textEl=document.getElementById('qed-text');
   if(textEl)_QED.text=textEl.value.trim();
@@ -2517,24 +2501,17 @@ App._saveQuestion=async()=>{
   const isNew=existIdx===-1;
   if(!isNew){DB.questions[existIdx]=_QED;}
   else{_QED.createdBy=S.uid;_QED.createdAt=new Date().toISOString();DB.questions.push(_QED);}
-  const qRow={id:_QED.id,text:_QED.text||'',type:_QED.type||'answer',options:_QED.options||[],photo:_QED.photo||false,approval:_QED.approval||false,comment:_QED.comment||false,created_by:_QED.createdBy||null,created_at:_QED.createdAt||new Date().toISOString()};
-  let sbError=null;
-  try{
-    const res=await sb.from('questions').upsert(qRow,{onConflict:'id'});
-    if(res.error)sbError=res.error;
-  }catch(e){sbError=e;}
-  if(sbError){
-    console.error('Question Supabase error:',sbError);
-    toast('Save failed: '+(sbError.message||sbError.toString()).slice(0,80),'err');
-    // Undo local change so DB stays consistent with server
-    if(isNew)DB.questions=DB.questions.filter(q=>q.id!==_QED.id);
-    else if(existIdx>-1)DB.questions[existIdx]=DB.questions[existIdx]; // keep old
-    return;
-  }
+  // ── Save locally and close IMMEDIATELY ──
   toast(isNew?'Question created ✓':'Saved ✓');
-  closeModal();_QED=null;
+  closeModal();
+  const savedQ=_QED;_QED=null;
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
   render();
+  // ── Sync to Supabase in background ──
+  const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString()};
+  sb.from('questions').upsert(qRow,{onConflict:'id'}).then(({error})=>{
+    if(error){console.error('Question sync error:',error.message);toast('⚠ Question saved locally but not synced: '+error.message.slice(0,60),'warn');}
+  }).catch(e=>console.error('Question sync:',e));
 };
 
 // ── Checklist question picker ──
