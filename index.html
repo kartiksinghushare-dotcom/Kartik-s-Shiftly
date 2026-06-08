@@ -452,7 +452,7 @@ async function _sync(){try{
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
     sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
-    (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||''})),{onConflict:'id'}):Promise.resolve()),
+    (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
   const failed=results.filter(r=>r.status==='rejected');
   if(failed.length)console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',failed.map(r=>r.reason?.message).join(', '));
@@ -586,6 +586,9 @@ function _notifCount(){
     count+=DB.approvals.filter(a=>a.status==='Pending'&&(isAdmin()||myTree.includes(a.requesterId))).length;
   }
   count+=DB.notifications.filter(n=>n.userId===uid&&!n.read).length;
+  // Count unviewed tickets assigned to me
+  const unviewedTickets=(DB.tickets||[]).filter(t=>t.assignedTo===uid&&!(t.viewedBy||[]).includes(uid)).length;
+  count+=unviewedTickets;
   _notifCache={uid,count,ts:now};
   return count;
 }
@@ -668,6 +671,7 @@ function shell(content){
     let badge='';
     if(r==='notifications'&&notifBadge)badge=`<span style="font-size:10px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${notifBadge}</span>`;
     if(r==='approvals'){const ab=DB.approvals.filter(a=>a.status==='Pending').length;if(ab)badge=`<span style="font-size:10px;font-weight:800;background:#F97316;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${ab}</span>`;}
+    if(r==='tickets'){const tkB=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;if(tkB)badge=`<span style="font-size:10px;font-weight:800;background:#E11D48;color:#fff;border-radius:99px;padding:1px 6px;min-width:18px;text-align:center">${tkB}</span>`;}
     return`<button onclick="App.go('${r}')"
     style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 12px;border-radius:10px;border:none;cursor:pointer;transition:all .12s;text-align:left;font-size:13px;font-weight:600;${act?'background:rgba(255,255,255,.12);color:#fff':'background:transparent;color:rgba(255,255,255,.55)'}"
     onmouseover="if('${S.route}'!=='${r}')this.style.background='rgba(255,255,255,.07)';this.style.color='#fff'"
@@ -718,6 +722,7 @@ function shell(content){
         const act=S.route===r;
         let nb=0;
         if(r==='notifications')nb=_notifCount();
+        if(r==='tickets')nb=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;
         return`<button onclick="App.go('${r}')" style="position:relative;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;border:none;background:transparent;cursor:pointer;color:${act?'#0E9F6E':'#9CA3AF'}">${ic(m[1],'w-5 h-5')}${nb?`<span style="position:absolute;top:4px;right:calc(50% - 18px);font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:16px;text-align:center">${nb}</span>`:''}<span style="font-size:10px;font-weight:600">${m[2].split(' ')[0]}</span></button>`;
       }).join('')}
     </div>
@@ -728,7 +733,7 @@ App.moreMenu=()=>{
   const nav=navFor();
   const nb=_notifCount();
   const ab=DB.approvals.filter(a=>a.status==='Pending').length;
-  openModal(`<div class="p-5"><div class="flex justify-between mb-4"><h2 class="fd text-lg font-bold">Menu</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="grid grid-cols-3 gap-2">${nav.map(([r,i,l])=>{let badge='';if(r==='notifications'&&nb)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${nb}</span>`;if(r==='approvals'&&ab)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#F97316;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${ab}</span>`;return`<button onclick="App.closeModal();App.go('${r}')" style="position:relative" class="flex flex-col items-center gap-1.5 p-3 rounded-2xl border border-ink-100 hover:bg-ink-50 ${S.route===r?'bg-brand-50 border-brand-200 text-brand-700':'text-ink-600'}">${ic(i,'w-5 h-5')}${badge}<span class="text-[11px] font-semibold text-center">${l}</span></button>`;}).join('')}</div><button onclick="App.logout()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ink-50 text-ink-600 font-semibold text-sm">${ic('logout','w-4 h-4')}Sign out</button></div>`);
+  openModal(`<div class="p-5"><div class="flex justify-between mb-4"><h2 class="fd text-lg font-bold">Menu</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="grid grid-cols-3 gap-2">${nav.map(([r,i,l])=>{let badge='';if(r==='notifications'&&nb)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${nb}</span>`;if(r==='approvals'&&ab)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#F97316;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${ab}</span>`;const tkBM=(DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)).length;if(r==='tickets'&&tkBM)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#E11D48;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${tkBM}</span>`;return`<button onclick="App.closeModal();App.go('${r}')" style="position:relative" class="flex flex-col items-center gap-1.5 p-3 rounded-2xl border border-ink-100 hover:bg-ink-50 ${S.route===r?'bg-brand-50 border-brand-200 text-brand-700':'text-ink-600'}">${ic(i,'w-5 h-5')}${badge}<span class="text-[11px] font-semibold text-center">${l}</span></button>`;}).join('')}</div><button onclick="App.logout()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ink-50 text-ink-600 font-semibold text-sm">${ic('logout','w-4 h-4')}Sign out</button></div>`);
 };
 App.saveProfile=async()=>{
   const u=me();if(!u)return;
@@ -1942,29 +1947,30 @@ function _clCard(c,date){
           } else if(q.type==='tick'){
             inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✓</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✕</button></div>`;
           }
-          const flags=[];if(q.photo)flags.push('📷 Photo');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Comment');
-          // Photo upload if required and not locked
-          if(q.photo&&!locked){
+          const flags=[];if(q.photo)flags.push('📷 Required');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Required');
+          // Photo upload — always shown; q.photo flag only makes it mandatory at submit
+          if(!locked){
             const existingPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
-            inputHtml+='<div style="margin-top:8px">'
-              +(existingPhoto?'<div style="margin-bottom:6px"><img src="'+existingPhoto+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>':'')
-              +'<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#F3F4F6;color:#374151;font-size:12px;font-weight:600;cursor:pointer">'
-              +ic('cam','w-4 h-4')+'Upload photo'
+            inputHtml+='<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
+              +(existingPhoto&&existingPhoto!=='[photo]'?'<div style="position:relative;display:inline-block"><img src="'+existingPhoto+'" onclick="App._bigImg(\''+existingPhoto+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>':'')
+              +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(existingPhoto&&existingPhoto!=='[photo]'?'#F0FDF4':'#F3F4F6')+';color:'+(existingPhoto&&existingPhoto!=='[photo]'?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(existingPhoto&&existingPhoto!=='[photo]'?'#BBF7D0':'#E5E7EB')+'">'
+              +ic('cam','w-3.5 h-3.5')+(existingPhoto&&existingPhoto!=='[photo]'?'Change':'Add photo')+(q.photo?' <span style="color:#EF4444">*</span>':'')
               +'<input type="file" accept="image/*" capture="environment" style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
-              +'</label></div>';
-          } else if(q.photo&&locked){
+              +'</label>'
+              +'</div>';
+          } else {
             const existingPhoto2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
-            if(existingPhoto2)inputHtml+='<div style="margin-top:6px"><img src="'+existingPhoto2+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>';
+            if(existingPhoto2&&existingPhoto2!=='[photo]')inputHtml+='<div style="margin-top:6px"><img src="'+existingPhoto2+'" onclick="App._bigImg(\''+existingPhoto2+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/></div>';
           }
           return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
               <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${Q_TYPE_BG[q.type]||'#F6F7F8'};color:${Q_TYPE_CLR[q.type]||'#6B7280'}">${TYPE_LABELS[q.type]||q.type}</span>
               <span style="font-size:13px;font-weight:600;color:#15171C">${esc(q.text)}</span>
-              ${flags.length?`<span style="margin-left:auto;font-size:11px;color:#9CA3AF">${flags.join(' ')}</span>`:''}
+              ${flags.length?`<span style="margin-left:auto;font-size:11px;color:#9CA3AF">${flags.join(' · ')}</span>`:''}
             </div>
             ${inputHtml}
-            ${q.comment&&!locked?`<textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="Comment…" style="width:100%;box-sizing:border-box;margin-top:8px;padding:6px 10px;border:1px solid #E5E7EB;border-radius:8px;font-size:12px;resize:none;outline:none;font-family:inherit" rows="2">${esc(qr.comment||'')}</textarea>`:''}
-            ${q.comment&&locked&&qr.comment?`<div style="margin-top:6px;font-size:12px;color:#6B7280;font-style:italic">${esc(qr.comment)}</div>`:''}
+            ${!locked?`<textarea oninput="App._setQRComment('${c.id}','${q.id}',this.value)" placeholder="${q.comment?'Comment (required)…':'Add a comment (optional)…'}" style="width:100%;box-sizing:border-box;margin-top:8px;padding:8px 10px;border:1.5px solid ${q.comment?'#FCA5A5':'#E5E7EB'};border-radius:9px;font-size:12px;resize:none;outline:none;font-family:inherit;background:#fff" rows="2">${esc(qr.comment||'')}</textarea>`:''}
+            ${locked&&qr.comment?`<div style="margin-top:6px;font-size:12px;color:#6B7280;font-style:italic;padding:5px 8px;background:#F9FAFB;border-radius:7px">"${esc(qr.comment)}"</div>`:''}
           </div>`;
         }).join('')+'</div>';
       })()}
@@ -1994,6 +2000,14 @@ App._setQR=(clId,qId,val,skipRr)=>{
   else{RUN[clId].questionResponses.push({questionId:qId,response:val,comment:''});}
   if(!skipRr)rr();
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+};
+App._clearQRPhoto=(clId,qId)=>{
+  if(!RUN[clId])return;
+  if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
+  const existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
+  if(existing){existing.photo=null;}
+  clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+  rr();
 };
 App._setQRPhoto=(clId,qId,input)=>{
   const file=input?.files?.[0];if(!file)return;
@@ -2127,7 +2141,7 @@ function teamViewPage(){
               <div><div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div><div style="font-size:12px;color:#9CA3AF;margin-top:1px">${esc(u.position||u.department)}</div></div>
             </div>
             <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;text-align:center">
-              ${[['assigned',asgn,'#15171C','#F6F7F8'],['late',late,late?'#BE123C':'#15171C',late?'#FFF1F2':'#F6F7F8'],['issues',issues,issues?'#C2410C':'#15171C',issues?'#FFF7ED':'#F6F7F8']].map(([l,v,c,bg])=>`<div style="background:${bg};border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:${c}">${v}</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">${l}</div></div>`).join('')}
+              ${(()=>{const tkCount=(DB.tickets||[]).filter(t=>t.submitterId===u.id&&t.status==='Open').length;return[['assigned',asgn,'#15171C','#F6F7F8'],['late',late,late?'#BE123C':'#15171C',late?'#FFF1F2':'#F6F7F8'],['tickets',tkCount,tkCount?'#C2410C':'#15171C',tkCount?'#FFF7ED':'#F6F7F8']].map(([l,v,c,bg])=>`<div style="background:${bg};border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:${c}">${v}</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">${l}</div></div>`).join('')})}())}
             </div>
             <div style="font-size:12px;font-weight:600;color:#0E9F6E;display:flex;align-items:center;gap:4px">${ic('chevR','w-3.5 h-3.5')}View submissions</div>
           </button>`;
@@ -2234,6 +2248,7 @@ function teamViewPage(){
                     <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}</div>
                     ${hasR?`<div style="font-size:11px;font-weight:700;color:#0E9F6E;margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
                     ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
+                    ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
                   </div>
                 </div>`;
               }).join('');
@@ -2609,9 +2624,9 @@ App._renderQModal=()=>{
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Options</label>
-        ${togRow('photo','📷 Photo mandatory','Require a photo with this question')}
+        ${togRow('photo','📷 Photo mandatory','Upload button always shown — this makes it required')}
         ${togRow('approval','✓ Approval required','Response needs manager approval')}
-        ${togRow('comment','💬 Comment required','Require a written comment')}
+        ${togRow('comment','💬 Comment mandatory','Comment box always shown — this makes it required')}
       </div>
       <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px">
         <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Preview</div>
@@ -2921,7 +2936,8 @@ function _processEscalations(checklistId,date,responses){
         date:date,
         createdAt:new Date().toISOString(),
         resolvedAt:null,
-        resolveNote:''
+        resolveNote:'',
+        viewedBy:[]
       };
       DB.tickets.unshift(ticket);
       // In-app notification to assignee
@@ -3217,6 +3233,16 @@ function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col
 
 /* ===== TICKETS PAGE ===== */
 function ticketsPage(){
+  // Mark assigned tickets as viewed when page opens
+  let _dirty=false;
+  (DB.tickets||[]).forEach(t=>{
+    if(t.assignedTo===S.uid&&!(t.viewedBy||[]).includes(S.uid)){
+      if(!t.viewedBy)t.viewedBy=[];
+      t.viewedBy.push(S.uid);
+      _dirty=true;
+    }
+  });
+  if(_dirty){saveDB();sb.from('tickets').select('id').then(()=>{(DB.tickets||[]).filter(t=>t.assignedTo===S.uid).forEach(t=>sb.from('tickets').update({viewed_by:t.viewedBy||[]}).eq('id',t.id).catch(()=>{}));}).catch(()=>{});}
   // Visibility: admin sees all, manager sees team's, user sees only assigned to them
   let tickets=(DB.tickets||[]).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(isAdmin()){
@@ -3257,6 +3283,15 @@ function ticketsPage(){
           '</div>'+
           '<div style="font-size:14px;font-weight:700;color:#15171C;margin-bottom:4px">'+esc(t.title)+'</div>'+
           '<div style="font-size:12px;color:#6B7280;line-height:1.5;white-space:pre-wrap">'+esc(t.description)+'</div>'+
+          // Show photo from the linked submission's question response
+          (()=>{
+            if(!t.questionId||!t.submitterId||!t.date)return'';
+            const sub=(DB.submissions||[]).find(s=>s.checklistId===t.checklistId&&s.userId===t.submitterId&&s.date===t.date);
+            if(!sub)return'';
+            const qr=(sub.questionResponses||[]).find(r=>r.questionId===t.questionId);
+            if(!qr||!qr.photo||qr.photo==='[photo]')return'';
+            return'<div style="margin-top:8px"><img src="'+qr.photo+'" onclick="App._bigImg(this.src)" style="max-width:160px;max-height:110px;border-radius:10px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Response photo"/></div>';
+          })()+
         '</div>'+
         (canDelete?'<button onclick="App._delTicket(\''+t.id+'\')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:#FEF2F2;cursor:pointer;color:#DC2626;flex-shrink:0">'+ic('x','w-3.5 h-3.5')+'</button>':'')+
       '</div>'+
