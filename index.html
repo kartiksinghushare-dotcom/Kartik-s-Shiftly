@@ -348,13 +348,12 @@ function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.des
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
-  let depts,locs,cls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows;
+  let depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows;
   try{
     const res=await Promise.all([
       sb.from('departments').select('*').order('name'),
       sb.from('locations').select('*').order('name'),
-      // Filter by assignee for non-admin users so RLS doesn't block them
-      (isAdmin()||isMgr()?sb.from('checklists').select('*').order('created_at',{ascending:false}):sb.from('checklists').select('*').contains('assignees',[S.uid]).order('created_at',{ascending:false})),
+      sb.from('checklists').select('*').order('created_at',{ascending:false}),
       sb.from('submissions').select('*').order('submitted_at',{ascending:false}),
       sb.from('approvals').select('*').order('created_at',{ascending:false}),
       sb.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(300),
@@ -365,7 +364,7 @@ async function loadFromSB(){
       sb.from('documents').select('*').order('uploaded_at',{ascending:false}),
       sb.from('questions').select('*').order('created_at',{ascending:false}),
     ]);
-  [depts,locs,cls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows]=res.map(r=>r.data||[]);
+  [depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows]=res.map(r=>r.data||[]);
   }catch(e){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
@@ -374,21 +373,23 @@ async function loadFromSB(){
   DB.departments=(depts||[]).filter(d=>!_delDepts.has(d.id)).map(d=>({id:d.id,name:d.name}));
   const _delLocs=new Set(DB.locations_deleted||[]);
   DB.locations=(locs||[]).filter(l=>!_delLocs.has(l.id)).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
-  if(cls){
-    const mapped=_mC(cls);
-    // Preserve local deletes — don't restore items that were deleted locally
+  {
     const locallyDeletedCls=new Set((DB.checklists_deleted||[]));
-    const filtered=mapped.filter(c=>!locallyDeletedCls.has(c.id));
-    // Only replace if we got data back — if Supabase RLS returned nothing but local
-    // has checklists (e.g. user is assigned), keep local data to avoid blank screen
-    if(filtered.length>0||DB.checklists.length===0){
-      DB.checklists=filtered;
-    } else if(filtered.length===0&&mapped.length===0&&cls.length===0){
-      // Truly empty from server — could be RLS or no checklists assigned
-      // Keep local cache so assigned checklists remain visible
-      // Admin/manager always refreshes; for users rely on local cache
-      if(isAdmin()||isMgr())DB.checklists=filtered;
-      // else: keep DB.checklists as-is (local cache)
+    const mapped=_mC(allCls||[]).filter(c=>!locallyDeletedCls.has(c.id));
+    if(allCls.length===0&&DB.checklists.length>0){
+      // Supabase returned nothing — RLS is blocking SELECT. Keep local cache.
+      // ACTION NEEDED: in Supabase run:
+      //   ALTER TABLE checklists ENABLE ROW LEVEL SECURITY;
+      //   CREATE POLICY "auth read" ON checklists FOR SELECT TO authenticated USING (true);
+      console.warn('[Shiftly] checklists: Supabase returned 0 rows. Check RLS — add SELECT policy for authenticated users.');
+    } else {
+      // Supabase gave us rows — for regular users filter to only their assigned ones
+      if(isAdmin()||isMgr()){
+        DB.checklists=mapped;
+      } else {
+        // Client-side filter: only show checklists where this user is in assignees
+        DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(S.uid));
+      }
     }
   }
   if(subs)DB.submissions=_mS(subs);
