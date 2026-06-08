@@ -410,6 +410,20 @@ async function loadFromSB(){
       }
     }
   }
+  // For managers: also fetch team members' submissions (RLS may block cross-user reads)
+  if(isMgr()&&!isAdmin()){
+    const teamIds=subTree(S.uid).map(u=>u.id);
+    if(teamIds.length){
+      sb.from('submissions').select('*').in('user_id',teamIds).order('submitted_at',{ascending:false})
+        .then(({data})=>{
+          if(data&&data.length){
+            const existing=new Set(DB.submissions.map(s=>s.id));
+            const extra=_mS(data).filter(s=>!existing.has(s.id));
+            if(extra.length){DB.submissions.push(...extra);saveDB();}
+          }
+        }).catch(()=>{});
+    }
+  }
   if(subs)DB.submissions=_mS(subs);
   if(appr&&appr.length>=0)DB.approvals=_mA(appr);
   DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
@@ -2157,6 +2171,20 @@ function teamViewPage(){
   if(!tvU){S.tvUser=null;return teamViewPage();}
   if(!S.tvCalDate)S.tvCalDate=todayISO();
   if(!S.tvCalWk)S.tvCalWk=0;
+  // Supabase RLS typically only returns the current user's own submissions.
+  // When a manager views a team member, fetch their submissions explicitly.
+  const _hasTvSubs=DB.submissions.some(s=>s.userId===S.tvUser);
+  if(!_hasTvSubs){
+    sb.from('submissions').select('*').eq('user_id',S.tvUser).order('submitted_at',{ascending:false})
+      .then(({data,error})=>{
+        if(error){console.warn('[teamView] subs fetch:',error.message);return;}
+        if(data&&data.length){
+          const existing=new Set(DB.submissions.map(s=>s.id));
+          const newRows=_mS(data).filter(s=>!existing.has(s.id));
+          if(newRows.length){DB.submissions.push(...newRows);saveDB();rr();}
+        }
+      });
+  }
 
   const today=todayISO();
   const ref=new Date(today+'T00:00:00');
