@@ -93,6 +93,10 @@ input,select,textarea{outline:none}
 .dept-card:hover{border-color:#0E9F6E!important;box-shadow:0 4px 16px rgba(14,159,110,.1)}
 .loc-card:hover{border-color:#3B82F6!important;box-shadow:0 4px 16px rgba(59,130,246,.1)}
 .shadow-pop{box-shadow:0 24px 64px rgba(0,0,0,.22),0 8px 24px rgba(0,0,0,.14),0 0 0 1px rgba(0,0,0,.06)!important}.shadow-soft{box-shadow:0 1px 4px rgba(0,0,0,.06),0 1px 2px rgba(0,0,0,.04)}
+/* Progress bar — used in admin dashboard department performance */
+.pg{height:6px;background:#ECEDF0;border-radius:3px;overflow:hidden}
+.pgf{height:100%;background:#0E9F6E;border-radius:3px;transition:width .3s}
+
 .text-ink-300{color:#A9ADB8!important}.text-ink-400{color:#6B7280!important}.text-ink-500{color:#3A3E48!important}
 .text-ink-600{color:#262A33!important}.text-ink-700{color:#1C1F26!important}.text-ink-800{color:#15171C!important}
 .border-ink-100{border-color:#ECEDF0!important}.border-ink-200{border-color:#D6D8DE!important}
@@ -419,16 +423,11 @@ async function _sync(){try{
   if(failed.length)console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',failed.map(r=>r.reason?.message).join(', '));
 }catch(e){console.warn('[Shiftly sync error]',e.message);}}
 
-function skCards(n=3){return Array(n).fill(0).map(()=>'<div class="sk-card"><div class="sk sk-line lg"></div><div class="sk sk-line sm"></div><div style="display:flex;gap:8px;margin-top:12px"><div class="sk" style="height:28px;width:70px;border-radius:6px"></div><div class="sk" style="height:28px;width:70px;border-radius:6px"></div></div></div>').join('');}
-function skRows(n=4){return '<div style="background:#fff;border-radius:16px;border:1px solid #EEECE8;overflow:hidden;margin-bottom:10px">'+Array(n).fill(0).map((_,i)=>'<div style="display:flex;align-items:center;gap:12px;padding:14px 16px;border-bottom:1px solid #F3F2EF"><div class="sk" style="width:40px;height:40px;border-radius:50%;flex-shrink:0"></div><div style="flex:1"><div class="sk sk-line"></div><div class="sk sk-line sm"></div></div></div>').join('')+'</div>';}
 /* ===== STATUS CHIPS ===== */
 const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF"};
 const CHIP_DOT_C={"On Time":"#10B981","Submitted":"#10B981","Pending":"#F59E0B","Late":"#F43F5E","Pending Approval":"#F97316","Rejected":"#9F1239","Active":"#10B981","Inactive":"#D1D5DB","Approved":"#10B981","Editing":"#3B82F6","Upcoming":"#A855F7","Draft":"#9CA3AF"};
 const chip=s=>{const st=CHIP_STYLE[s]||'background:#FFFBEB;color:#B45309';const dot=CHIP_DOT_C[s]||'#F59E0B';return`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;${st}"><span style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0"></span>${esc(s)}</span>`;};
 
-const CRIT_ST={Low:'background:#DCFCE7;color:#15803D',Medium:'background:#FEF9C3;color:#A16207',High:'background:#FED7AA;color:#C2410C',Critical:'background:#FEE2E2;color:#B91C1C'};
-const BORDER_ST={'On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','Late':'#F43F5E','Pending Approval':'#F97316','Rejected':'#9F1239'};
-const critBadge=c=>`<span style="font-size:10px;font-weight:700;padding:1px 6px;border-radius:4px;display:inline-block;${CRIT_ST[c]||CRIT_ST['Low']}">${esc(c||'Low')}</span>`;
 
 /* ===== DATA MODEL ===== */
 let DB={
@@ -442,16 +441,6 @@ function log(a,b,c){
   DB.audit.unshift(entry);
   // Write audit log directly to Supabase — use Promise chain not .catch() directly
   sb.from('audit_logs').insert({id:entry.id,actor:entry.actor,action:entry.action,target:entry.target,created_at:entry.time}).then(()=>{}).catch(()=>{});
-}
-function seed(){
-  DB.users=[];DB.departments=[];DB.locations=[];
-  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];
-  DB.notifications=[];DB.questions=[];DB.folders=[];DB.documents=[];
-  DB.audit=[];
-  DB.checklists_deleted=[];DB.questions_deleted=[];
-  DB.folders_deleted=[];DB.documents_deleted=[];
-  DB.departments_deleted=[];DB.locations_deleted=[];DB.users_deleted=[];
-  log('System','Workspace initialised','');
 }
 
 /* ===== LOCALSTORAGE ===== */
@@ -3045,7 +3034,6 @@ App._saveReplyFb=(id)=>{
 App._openSendFeedback=(userId)=>{
   const u=uById(userId);if(!u)return;
   // Store userId on App object (not window) — cleared when modal closes
-  App._sfbUserId=userId;
   App._sfbCls=DB.checklists.filter(c=>(c.assignees||[]).includes(userId));
   const clOptions=App._sfbCls.map(c=>'<option value="'+c.id+'">'+esc(c.name)+'</option>').join('');
   openModal(
