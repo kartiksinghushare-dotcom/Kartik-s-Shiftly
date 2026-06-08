@@ -366,7 +366,7 @@ async function loadFromSB(){
   DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
   DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
   if(cls&&cls.length>0)DB.checklists=_mC(cls);
-  if(subs&&subs.length>=0)DB.submissions=_mS(subs);
+  if(subs)DB.submissions=_mS(subs);
   if(appr&&appr.length>=0)DB.approvals=_mA(appr);
   DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
   DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
@@ -387,7 +387,7 @@ async function _sync(){try{
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
     sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
-    sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
+    sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
     sb.from('notifications').upsert(DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
@@ -429,7 +429,14 @@ let DB={
   departments:DEPTS.map(n=>({id:uid('d'),name:n})),
   users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[]
 };
-function log(a,b,c){if(!a||!b)return;if(DB.audit.length>200)DB.audit.length=200;DB.audit.unshift({id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()});}
+function log(a,b,c){
+  if(!a||!b)return;
+  if(DB.audit.length>200)DB.audit.length=200;
+  const entry={id:uid('lg'),actor:a,action:b,target:c||'',time:new Date().toISOString()};
+  DB.audit.unshift(entry);
+  // Write audit log directly to Supabase immediately
+  sb.from('audit_logs').insert({id:entry.id,actor:entry.actor,action:entry.action,target:entry.target,created_at:entry.time}).catch(()=>{});
+}
 function seed(){
   DB.feedback=[];
   DB.users=[{id:uid('u'),firstName:'Kartiksingh',lastName:'Hushare',email:'kartiksinghushare@gmail.com',phone:'+971509660624',password:'***',position:'Business Process & System Analyst',department:'Operations',role:'Admin',status:'Active',managerId:null,rules:{past:true,future:true,edit:true},approval:{past:false,future:false,edited:false},questionsAccess:true,docAccess:{departments:{},locations:{}}}];
@@ -444,15 +451,17 @@ function seed(){
 
 /* ===== LOCALSTORAGE ===== */
 const LS_KEY=window.LS_KEY='shiftly_v3';
+let _syncTimer=null;
 function saveDB(){
+  // Always save to localStorage immediately
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
-  _sync().catch(e=>{
-    console.warn('Supabase sync error:',e.message);
-    if(!saveDB._errTs||Date.now()-saveDB._errTs>30000){
-      saveDB._errTs=Date.now();
-      console.error('[Shiftly] Changes saved locally but not synced to server.');
-    }
-  });
+  // Debounce Supabase sync — batch rapid changes into one request every 1.5s
+  clearTimeout(_syncTimer);
+  _syncTimer=setTimeout(()=>{
+    _sync().catch(e=>{
+      console.warn('[Shiftly] Sync error:',e.message);
+    });
+  },1500);
 }
 function loadDB(){
   try{
@@ -1644,7 +1653,12 @@ App._saveCl=async(editing)=>{
   });
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
-  toast(editing?'Saved':'Checklist created');closeModal();render();saveDB();
+  // Write directly to Supabase immediately
+  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
+  sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{if(error)console.warn('Checklist sync error:',error.message);}).catch(e=>console.warn('Checklist sync:',e.message));
+  toast(editing?'Saved':'Checklist created');closeModal();
+  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  render();
 };
 App.dupCl=async(id)=>{
   const src=clById(id);if(!src)return;
@@ -1676,7 +1690,17 @@ App.dupCl=async(id)=>{
   }).catch(e=>console.warn('dupCl sync:',e));
 };
 
-App.delCl=async(id)=>{const c=clById(id);if(!confirm('Delete "'+c.name+'"?'))return;await Promise.all([sb.from('checklists').delete().eq('id',id),sb.from('submissions').delete().eq('checklist_id',id),sb.from('approvals').delete().eq('checklist_id',id)]);const clAssignees=c.assignees||[];DB.checklists=DB.checklists.filter(x=>x.id!==id);DB.submissions=DB.submissions.filter(s=>s.checklistId!==id);DB.approvals=DB.approvals.filter(a=>a.checklistId!==id);DB.feedback=(DB.feedback||[]).filter(f=>f.checklistId!==id);clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});_invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();};
+App.delCl=async(id)=>{
+  const c=clById(id);if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved in records.'))return;
+  // Only delete the checklist — keep submissions and approvals as permanent history
+  await sb.from('checklists').delete().eq('id',id);
+  const clAssignees=c.assignees||[];
+  DB.checklists=DB.checklists.filter(x=>x.id!==id);
+  // Mark submissions as archived (keep data, just flag the checklist as deleted)
+  DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
+  clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});
+  _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);toast('Deleted','warn');saveDB();render();
+};
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
 let RUN={};
@@ -2330,12 +2354,30 @@ App._viewSubFor=async(btn)=>{
   const _hashRoute=(window.location.hash||'').replace('#','').trim();
   const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile'];
   const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
-  try{const{data:{session}}=await sb.auth.getSession();if(session){loadDB();if(S.uid){S.route=_deepLink||S.route||'dashboard';_recoverEditingSubmissions();render();}const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();if(profile&&profile.status==='Active'){const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);S.uid=mapped.id;
-      if(_deepLink)S.route=_deepLink;
-      else if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
-      saveDB();render();
-      // Load all shared data from Supabase (questions, lists now included)
-      loadFromSB().then(()=>{saveDB();if(Date.now()-_lastUserAction>3000)render();}).catch(()=>{});return;}await sb.auth.signOut();}loadDB();S.uid=null;render();}catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}})();
+  try{const{data:{session}}=await sb.auth.getSession();if(session){
+      // Load local cache first for instant UI
+      const hadLocal=loadDB();
+      if(S.uid){S.route=_deepLink||S.route||'dashboard';_recoverEditingSubmissions();render();}
+      const{data:profile}=await sb.from('profiles').select('*').eq('id',session.user.id).single();
+      if(profile&&profile.status==='Active'){
+        const mapped={id:profile.id,firstName:profile.first_name||'',lastName:profile.last_name||'',email:profile.email||'',phone:profile.phone||'',position:profile.position||'',department:profile.department||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};
+        const idx=DB.users.findIndex(x=>x.id===mapped.id);if(idx>-1)DB.users[idx]=mapped;else DB.users.push(mapped);
+        S.uid=mapped.id;
+        if(_deepLink)S.route=_deepLink;
+        else if(!S.route||S.route==='login')S.route=mapped.role==='Admin'?'dashboard':'mychecklists';
+        // CRITICAL: Always load from Supabase FIRST before any sync
+        // This prevents empty local state from overwriting real server data
+        await loadFromSB();
+        // Only save to localStorage after pulling from server (never push before pulling)
+        try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+        render();
+        return;
+      }
+      await sb.auth.signOut();
+    }
+    loadDB();S.uid=null;render();
+  }catch(e){try{loadDB();}catch(e2){}render();console.error('Boot error:',e);}
+})();
 
 /* ===== QUESTIONS PAGE ===== */
 const Q_TYPES=[
@@ -2408,9 +2450,13 @@ App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr()
 
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
-  if(!confirm('Delete "'+q.text+'"? It will be removed from any checklists.'))return;
-  DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
+  if(!confirm('Delete "'+q.text+'"?\n\nIt will be removed from checklists but past responses will be preserved.'))return;
+  // Soft delete — mark archived, remove from active checklists
+  q.archived=true;q.archivedAt=new Date().toISOString();
   DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);});
+  // Hard delete from Supabase questions table, but submissions with responses are kept
+  sb.from('questions').delete().eq('id',id).catch(()=>{});
+  DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
   toast('Deleted','warn');saveDB();render();
 };
 
@@ -2543,8 +2589,13 @@ App._saveQuestion=()=>{
   const isNew=existIdx===-1;
   if(!isNew){DB.questions[existIdx]=_QED;}
   else{_QED.createdBy=S.uid;_QED.createdAt=new Date().toISOString();DB.questions.push(_QED);}
+  // Write directly to Supabase immediately (don't wait for debounced sync)
+  const qRow={id:_QED.id,text:_QED.text||'',type:_QED.type||'answer',options:_QED.options||[],photo:_QED.photo||false,approval:_QED.approval||false,comment:_QED.comment||false,created_by:_QED.createdBy||null,created_at:_QED.createdAt||new Date().toISOString()};
+  sb.from('questions').upsert(qRow,{onConflict:'id'}).then(({error})=>{if(error)console.warn('Question sync error:',error.message);}).catch(e=>console.warn('Question sync:',e.message));
   toast(isNew?'Question created ✓':'Saved ✓');
-  closeModal();_QED=null;saveDB();render();
+  closeModal();_QED=null;
+  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  render();
 };
 
 // ── Checklist question picker ──
