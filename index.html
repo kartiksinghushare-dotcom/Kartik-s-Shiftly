@@ -376,19 +376,35 @@ async function loadFromSB(){
   {
     const locallyDeletedCls=new Set((DB.checklists_deleted||[]));
     const mapped=_mC(allCls||[]).filter(c=>!locallyDeletedCls.has(c.id));
+    const _isAdminOrMgr=isAdmin()||isMgr();
+    // Full diagnostic log — visible in browser console (F12)
+    console.group('[Shiftly] loadFromSB checklists debug');
+    console.log('S.uid:', S.uid);
+    console.log('role:', me()?.role, '| isAdmin:', isAdmin(), '| isMgr:', isMgr());
+    console.log('allCls from Supabase:', allCls.length, 'rows');
+    console.log('mapped (after deleted filter):', mapped.length, 'rows');
+    if(allCls.length>0){
+      console.log('First checklist assignees sample:', allCls.slice(0,3).map(c=>({name:c.name,assignees:c.assignees,status:c.status})));
+    }
+    console.log('DB.checklists before update:', DB.checklists.length, 'rows');
+    console.groupEnd();
     if(allCls.length===0&&DB.checklists.length>0){
-      // Supabase returned nothing — RLS is blocking SELECT. Keep local cache.
-      // ACTION NEEDED: in Supabase run:
-      //   ALTER TABLE checklists ENABLE ROW LEVEL SECURITY;
-      //   CREATE POLICY "auth read" ON checklists FOR SELECT TO authenticated USING (true);
-      console.warn('[Shiftly] checklists: Supabase returned 0 rows. Check RLS — add SELECT policy for authenticated users.');
+      // Supabase returned nothing — RLS is blocking all reads. Keep local cache.
+      console.error('[Shiftly] CHECKLIST BUG: Supabase returned 0 checklists but local cache has',DB.checklists.length,'. RLS is blocking SELECT. Run in Supabase SQL Editor: CREATE POLICY "read_all" ON checklists FOR SELECT TO authenticated USING (true);');
     } else {
-      // Supabase gave us rows — for regular users filter to only their assigned ones
-      if(isAdmin()||isMgr()){
+      if(_isAdminOrMgr){
         DB.checklists=mapped;
+        console.log('[Shiftly] Admin/Mgr: set',mapped.length,'checklists');
       } else {
-        // Client-side filter: only show checklists where this user is in assignees
-        DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(S.uid));
+        const mine=mapped.filter(c=>(c.assignees||[]).includes(S.uid));
+        console.log('[Shiftly] User',S.uid,': filtered to',mine.length,'of',mapped.length,'checklists');
+        if(mine.length===0&&mapped.length>0){
+          // Have checklists from Supabase but none assigned to this user
+          // Log each one so we can see the assignees vs S.uid
+          console.warn('[Shiftly] User not found in any checklist assignees. S.uid=',S.uid);
+          mapped.forEach(c=>console.log(' -',c.name,'assignees:',c.assignees,'includes uid?',(c.assignees||[]).includes(S.uid)));
+        }
+        DB.checklists=mine;
       }
     }
   }
