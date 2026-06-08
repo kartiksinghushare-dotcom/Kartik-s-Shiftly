@@ -283,7 +283,7 @@ function clOn(c,date){if(c.status&&c.status!=='Active')return false;
 
 let _toast;
 function toast(msg,type='ok'){
-  let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;z-index:500;left:50%;transform:translateX(-50%);bottom:78px;pointer-events:none';document.body.appendChild(t);}
+  let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;z-index:500;left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom));pointer-events:none';document.body.appendChild(t);}
   const bg=type==='ok'?'#15171C':type==='warn'?'#D97706':'#DC2626';
   t.innerHTML=`<div class="pop" style="background:${bg};color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25)">${type==='ok'?'✓':'⚠'} ${esc(msg)}</div>`;
   clearTimeout(_toast);_toast=setTimeout(()=>{if(t)t.innerHTML='';},2800);
@@ -339,7 +339,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:c.question_configs||{},scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
-function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
+function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
   let depts,locs,cls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows;
@@ -439,7 +439,7 @@ function log(a,b,c){
 }
 function seed(){
   DB.feedback=[];
-  DB.users=[{id:uid('u'),firstName:'Kartiksingh',lastName:'Hushare',email:'kartiksinghushare@gmail.com',phone:'+971509660624',password:'***',position:'Business Process & System Analyst',department:'Operations',role:'Admin',status:'Active',managerId:null,rules:{past:true,future:true,edit:true},approval:{past:false,future:false,edited:false},questionsAccess:true,docAccess:{departments:{},locations:{}}}];
+  DB.users=[]; // Users are loaded from Supabase profiles
   DB.locations=[
     {id:uid('loc'),name:'Main Building',address:'Floor 1, Main Block',department:'',status:'Active'},
     {id:uid('loc'),name:'Housekeeping Depot',address:'Ground Floor, East Wing',department:'Housekeeping',status:'Active'},
@@ -453,8 +453,18 @@ function seed(){
 const LS_KEY=window.LS_KEY='shiftly_v3';
 let _syncTimer=null;
 function saveDB(){
-  // Always save to localStorage immediately
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  // Always save to localStorage — strip large base64 photos to avoid 5MB limit
+  try{
+    const dbCopy=JSON.parse(JSON.stringify({DB,uid:S.uid}));
+    // Strip base64 photos from submissions (re-uploaded on edit if needed)
+    (dbCopy.DB.submissions||[]).forEach(s=>{
+      (s.tasks||[]).forEach(t=>{if(t.photo&&t.photo.startsWith('data:'))t.photo='[photo]';});
+    });
+    localStorage.setItem(LS_KEY,JSON.stringify(dbCopy));
+  }catch(e){
+    // If still too large, save without submissions
+    try{const slim={DB:{...DB,submissions:[]},uid:S.uid};localStorage.setItem(LS_KEY,JSON.stringify(slim));}catch(e2){}
+  }
   // Debounce Supabase sync — batch rapid changes into one request every 1.5s
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(()=>{
@@ -550,12 +560,18 @@ function _invalidateNotifCache(){_notifCache.ts=0;}
 function _recoverEditingSubmissions(){
   if(!DB.submissions)return;
   DB.submissions.forEach(s=>{
-    if(s.status==='Editing'&&!RUN[s.checklistId]){
-      // Reset to a sensible status based on date
-      const today=todayISO();
-      const cl=clById(s.checklistId);const late=s.date<today||(s.date===today&&cl?.scheduleTime&&nowHM()>hm2m(cl.scheduleTime));
-      s.status=s.editCount>0?(late?'Late':'On Time'):(late?'Late':'Pending');
-      console.info('Recovered stuck submission:',s.id,'→',s.status);
+    if(s.status==='Editing'){
+      if(RUN[s.checklistId]){
+        // Already has an active RUN — restore questionResponses into it
+        if(!RUN[s.checklistId].questionResponses&&s.questionResponses)
+          RUN[s.checklistId].questionResponses=JSON.parse(JSON.stringify(s.questionResponses||[]));
+      } else {
+        // No active RUN — reset status
+        const today=todayISO();
+        const cl=clById(s.checklistId);const late=s.date<today||(s.date===today&&cl?.scheduleTime&&nowHM()>hm2m(cl.scheduleTime));
+        s.status=s.editCount>0?(late?'Late':'On Time'):(late?'Late':'Pending');
+        console.info('Recovered stuck submission:',s.id,'→',s.status);
+      }
     }
   });
 }
@@ -565,7 +581,7 @@ const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell',
 const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','notifications','more'];
 const MOB_USR=['mychecklists','notifications'];
-const MOB_MGR=['dashboard','mychecklists','notifications','more'];
+const MOB_MGR=['dashboard','mychecklists','questions','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
@@ -810,7 +826,7 @@ function mgrDash(){
   <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
     <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Team performance</h3></div>
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${rows.map(({u,asgn,total,late,pend,flags,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
+    <tbody class="divide-y divide-ink-50">${rows.map(({u,asgn,total,late,pend,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
   </div></div>`;}
 
 /* ===== USERS ===== */
@@ -999,15 +1015,13 @@ App._doResetPw=async(uid)=>{
   log(fullName(me()),'Reset password',fullName(uById(uid)));
   toast('Password reset');closeModal();
 };
-App.togUser=async(id)=>{
+App.togUser=(id)=>{
   const u=uById(id);if(!u)return;
   const enabling=u.status!=='Active';
   u.status=enabling?'Active':'Inactive';
-  // Optimistic render
-  render();
+  saveDB();render();
   toast(fullName(u)+' '+(enabling?'enabled ✓':'disabled'),enabling?'ok':'warn');
-  await sb.from('profiles').update({status:u.status}).eq('id',id).catch(()=>{});
-  saveDB();
+  sb.from('profiles').update({status:u.status}).eq('id',id).catch(e=>console.warn('togUser:',e));
 };
 App.delUser=async(id)=>{
   const u=uById(id);if(!u)return;
@@ -1021,8 +1035,7 @@ App.delUser=async(id)=>{
   DB.approvals=DB.approvals.filter(a=>a.requesterId!==id);
   DB.notifications=DB.notifications.filter(n=>n.userId!==id);
   DB.feedback=(DB.feedback||[]).filter(f=>f.userId!==id&&f.managerId!==id);
-  // Unassign tickets (don't delete — ticket data is still valid)
-  // FIX3: If ex-manager now has 0 direct reports, downgrade to User
+  // FIX: If ex-manager now has 0 direct reports, downgrade to User
   if(u.managerId){
     const exMgr=uById(u.managerId);
     if(exMgr&&exMgr.role==='Manager'){
@@ -1619,9 +1632,11 @@ App._togAsgn=(id,on,el)=>{if(!CLD.assignees)CLD.assignees=[];if(on&&!CLD.assigne
 
 
 App._saveCl=(editing)=>{
-  CLD.name=$('#cn-name')?.value.trim();CLD.description=$('#cn-desc')?.value.trim();
+  // Read all form values — also call _snapshotCLD for safety
+  _snapshotCLD();
+  CLD.name=$('#cn-name')?.value.trim()||CLD.name;CLD.description=$('#cn-desc')?.value.trim()||'';
   CLD.status=$('#cn-status')?.value||'Active';
-  CLD.department=$('#cn-dep')?.value;CLD.frequency=$('#cn-freq')?.value;
+  CLD.department=$('#cn-dep')?.value||CLD.department;CLD.frequency=$('#cn-freq')?.value||CLD.frequency;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
   if(!CLD.name){toast('Name required','err');
@@ -1843,7 +1858,7 @@ function _clCard(c,date){
       ${(()=>{
         const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
         if(!qs.length)return'';
-        const locked=isSubmitted&&run.status!=='Editing';
+        const locked=isSubmitted&&(!run||run.status!=='Editing');
         return'<div style="padding:12px 16px;border-top:1px solid #F5F4F0;display:flex;flex-direction:column;gap:10px">'+qs.map((q,qi)=>{
           const qr=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
           const resp=qr.response??null;
@@ -1977,9 +1992,7 @@ App._submitRun=async(clId,date)=>{
   toast(needsAppr?'Submitted — pending approval':'Submitted ✓',late||needsAppr?'warn':'ok');
   // Process escalations based on question responses
   _processEscalations(clId,date,run.questionResponses||[]);
-  // Save questionResponses into the submission record
-  const subIdx=DB.submissions.findIndex(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);
-  if(subIdx>-1)DB.submissions[subIdx].questionResponses=run.questionResponses||[];
+  // questionResponses already in run — will be included in push/update below
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:run.questionResponses||[],edit_count:run.editCount||0,edit_history:run.editHistory||[]};
   // 1. Save to localStorage instantly (synchronous — zero delay)
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
@@ -2512,7 +2525,7 @@ App._renderQModal=()=>{
     <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:70vh">
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Question text *</label>
-        <input id="qed-text" type="text" value="${q.text||''}" oninput="_QED.text=this.value" placeholder="e.g. Is the area clean?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none"/>
+        <input id="qed-text" type="text" value="${q.text||''}" oninput="_QED.text=this.value" placeholder="e.g. Is the area clean?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none" />
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Response type</label>
@@ -2600,7 +2613,7 @@ App._showClQPicker=()=>{
           const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
           const clr=Q_TYPE_CLR[q.type]||'#6B7280';
           const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
-          return`<label id="qpick-${q.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#F9FAFB':'#fff'};cursor:pointer" onclick="App._togClQ('${q.id}',this)">
+          return`<label id="qpick-${q.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#F9FAFB':'#fff'};cursor:pointer" onclick="App._togClQ('${q.id}',this,event)">
             <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on?'#15171C':'#D1D5DB'};background:${on?'#15171C':'#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
               ${on?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:''}
             </div>
@@ -2619,7 +2632,7 @@ App._showClQPicker=()=>{
   `,'max-w-md');
 };
 
-App._togClQ=(qid,el)=>{
+App._togClQ=(qid,el,e)=>{if(e&&e.preventDefault)e.preventDefault();
   if(!App._clQSel)App._clQSel=new Set();
   const on=App._clQSel.has(qid);
   if(on)App._clQSel.delete(qid);else App._clQSel.add(qid);
@@ -2635,7 +2648,8 @@ App._togClQ=(qid,el)=>{
 };
 
 App._showClQEscalation=()=>{
-  if(!CLD||!App._clQSel)return;
+  if(!CLD){toast('Checklist context lost — please reopen','err');return;}
+  if(!App._clQSel)App._clQSel=new Set(CLD.questionIds||[]);
   const selectedIds=[...App._clQSel];
   if(!selectedIds.length){toast('Select at least one question','warn');return;}
   const au=DB.users.filter(u=>u.status==='Active');
@@ -2725,9 +2739,30 @@ App._showClQEscalation=()=>{
   `,'max-w-lg');
 };
 
+// Read all checklist modal form values into CLD (prevents data loss on re-render)
+function _snapshotCLD(){
+  if(!CLD)return;
+  const v=id=>document.getElementById(id)?.value;
+  if(v('cn-name')!==undefined)CLD.name=v('cn-name')?.trim()||CLD.name;
+  if(v('cn-desc')!==undefined)CLD.description=v('cn-desc')?.trim()||'';
+  if(v('cn-status'))CLD.status=v('cn-status');
+  if(v('cn-dep'))CLD.department=v('cn-dep');
+  if(v('cn-freq'))CLD.frequency=v('cn-freq');
+  if(v('cn-sd')!==undefined)CLD.startDate=v('cn-sd')||null;
+  if(v('cn-ed')!==undefined)CLD.endDate=v('cn-ed')||null;
+  if(v('cn-time')!==undefined)CLD.scheduleTime=v('cn-time')||null;
+}
+
+
 App._confirmClQs=()=>{
   if(!CLD||!App._clQSel)return;
-  CLD.questionIds=[...App._clQSel];
+  // Snapshot all current form values before re-rendering (prevents data loss)
+  _snapshotCLD();
+  // Preserve existing order, then add new ones at end
+  const existing=CLD.questionIds||[];
+  const newIds=[...App._clQSel];
+  // Keep existing order for already-selected, add new ones at end
+  CLD.questionIds=[...existing.filter(id=>newIds.includes(id)),...newIds.filter(id=>!existing.includes(id))];
   CLD.questionConfigs=CLD.questionConfigs||{};
   // Remove configs for deselected questions
   Object.keys(CLD.questionConfigs).forEach(qid=>{
@@ -2739,6 +2774,7 @@ App._confirmClQs=()=>{
 
 App._removeClQuestion=(qid)=>{
   if(!CLD)return;
+  _snapshotCLD();
   CLD.questionIds=(CLD.questionIds||[]).filter(x=>x!==qid);
   if(CLD.questionConfigs)delete CLD.questionConfigs[qid];
   _renderClModal(!!(DB.checklists.find(c=>c.id===CLD.id)));
@@ -2761,7 +2797,7 @@ function _processEscalations(checklistId,date,responses){
     let escalateTo=null;
     // Find which option index matched the response
     if(q.type==='answer'){
-      const optIdx=(q.options||[]).findIndex(o=>o.text===resp.response);
+      const _respStr=String(resp.response||'').trim();const optIdx=(q.options||[]).findIndex(o=>String(o.text||'').trim()===_respStr);
       if(optIdx>-1)escalateTo=qCfg['opt_'+optIdx]||null;
     } else if(q.type==='number'){
       const val=parseFloat(resp.response);
@@ -2781,12 +2817,18 @@ function _processEscalations(checklistId,date,responses){
       // passfail, yesno, tick — match by label index
       const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
       const lbs=labels[q.type]||[];
-      const optIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response).toLowerCase());
+      const optIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response||'').trim().toLowerCase());
       if(optIdx>-1)escalateTo=qCfg['opt_'+optIdx]||null;
     }
     if(escalateTo&&escalateTo!==S.uid){
       if(!DB.notifications)DB.notifications=[];
-      DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:`\u26a0\ufe0f Escalation: "${q.text}" answered "${resp.response}" by ${fullName(u)} on ${c.name} (${date})`,time:new Date().toISOString(),read:false});
+      const escMsg='⚠️ Escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" by '+fullName(u)+' on '+c.name+' ('+date+')';
+      DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
+      // Also notify admin if escalation target is not admin
+      const adminU=DB.users.find(x=>x.role==='Admin');
+      if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid){
+        DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
+      }
       _invalidateNotifCache();
     }
   });
@@ -2815,7 +2857,7 @@ function notificationsPage(){
     if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
     if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
     
-    if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
+    if(text.includes('Escalation')||text.includes('escalation'))return'escalation';
     if(text.includes('Approved')||text.includes('approved'))return'approval';
     if(text.includes('Rejected')||text.includes('rejected'))return'approval';
     if(text.includes('pproval')||text.includes('pprove'))return'approval';
@@ -2824,9 +2866,9 @@ function notificationsPage(){
     if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
     return'general';
   }
-  const TYPE_CLR={approval:'#8B5CF6',edit:'#0EA5E9',issue:'#F97316',feedback:'#3B82F6',late:'#EF4444',general:'#6B7280'};
-  const TYPE_BG={approval:'#EDE9FE',edit:'#E0F2FE',issue:'#FFF7ED',feedback:'#EFF6FF',late:'#FEF2F2',general:'#F6F7F8'};
-  const TYPE_ICON={approval:'approve',edit:'edit',issue:'flag',feedback:'msg',late:'clock',general:'bell'};
+  const TYPE_CLR={approval:'#8B5CF6',edit:'#0EA5E9',escalation:'#F97316',feedback:'#3B82F6',late:'#EF4444',general:'#6B7280'};
+  const TYPE_BG={approval:'#EDE9FE',edit:'#E0F2FE',escalation:'#FFF7ED',feedback:'#EFF6FF',late:'#FEF2F2',general:'#F6F7F8'};
+  const TYPE_ICON={approval:'approve',edit:'edit',escalation:'alert',feedback:'msg',late:'clock',general:'bell'};
 
   const filteredNotifs=tab==='All'?notifs
     :tab==='Approvals'?notifs.filter(n=>['approval','edit'].includes(notifType(n.text)))
