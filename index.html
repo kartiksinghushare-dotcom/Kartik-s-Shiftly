@@ -353,7 +353,8 @@ async function loadFromSB(){
     const res=await Promise.all([
       sb.from('departments').select('*').order('name'),
       sb.from('locations').select('*').order('name'),
-      sb.from('checklists').select('*').order('created_at',{ascending:false}),
+      // Filter by assignee for non-admin users so RLS doesn't block them
+      (isAdmin()||isMgr()?sb.from('checklists').select('*').order('created_at',{ascending:false}):sb.from('checklists').select('*').contains('assignees',[S.uid]).order('created_at',{ascending:false})),
       sb.from('submissions').select('*').order('submitted_at',{ascending:false}),
       sb.from('approvals').select('*').order('created_at',{ascending:false}),
       sb.from('audit_logs').select('*').order('created_at',{ascending:false}).limit(300),
@@ -377,7 +378,18 @@ async function loadFromSB(){
     const mapped=_mC(cls);
     // Preserve local deletes — don't restore items that were deleted locally
     const locallyDeletedCls=new Set((DB.checklists_deleted||[]));
-    DB.checklists=mapped.filter(c=>!locallyDeletedCls.has(c.id));
+    const filtered=mapped.filter(c=>!locallyDeletedCls.has(c.id));
+    // Only replace if we got data back — if Supabase RLS returned nothing but local
+    // has checklists (e.g. user is assigned), keep local data to avoid blank screen
+    if(filtered.length>0||DB.checklists.length===0){
+      DB.checklists=filtered;
+    } else if(filtered.length===0&&mapped.length===0&&cls.length===0){
+      // Truly empty from server — could be RLS or no checklists assigned
+      // Keep local cache so assigned checklists remain visible
+      // Admin/manager always refreshes; for users rely on local cache
+      if(isAdmin()||isMgr())DB.checklists=filtered;
+      // else: keep DB.checklists as-is (local cache)
+    }
   }
   if(subs)DB.submissions=_mS(subs);
   if(appr&&appr.length>=0)DB.approvals=_mA(appr);
@@ -1240,9 +1252,10 @@ App._uploadDocIn=(t,s)=>{
 
 // queueEmail stub — wire up to your email provider (Resend, SendGrid etc.)
 function queueEmail(eventKey,userId,clId,date,vars){
-  const u=uById(userId);if(!u||!u.email)return;
-  console.log('[Email queued]',eventKey,'to',u.email,vars||{});
-  // sb.functions.invoke('send-email',{body:{event:eventKey,to:u.email,...(vars||{})}}).catch(()=>{});
+  // sendEmail is defined later in the file but called here — JS hoisting handles async functions
+  if(typeof sendEmail==='function'){
+    sendEmail(eventKey,userId,vars||{}).catch(e=>console.warn('[queueEmail] sendEmail failed:',e.message));
+  }
 }
 
 
@@ -1984,6 +1997,26 @@ App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=tr
 App._submitRun=async(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
   const existingSub=subFor(clId,S.uid,date);if(existingSub&&existingSub.status!=='Editing'){toast('Already submitted for this date','warn');return;}
+  // ── Validate mandatory photo and comment fields before submitting ──
+  const _qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+  for(const _q of _qs){
+    const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};
+    // Must have a response first (or be non-mandatory type where null is acceptable)
+    const _hasResp=_qr.response!==null&&_qr.response!==undefined&&_qr.response!=='';
+    if(_hasResp&&_q.photo&&(!_qr.photo||_qr.photo==='[photo]')){
+      toast('📷 Photo required for: "'+_q.text.slice(0,40)+'"','err');return;
+    }
+    if(_hasResp&&_q.comment&&(!_qr.comment||!_qr.comment.trim())){
+      toast('💬 Comment required for: "'+_q.text.slice(0,40)+'"','err');return;
+    }
+    // Also block submit if answer was never given and it's the only question or any question
+    if(!_hasResp&&_q.photo&&false){}  // photo-only questions without answer: skip photo check
+  }
+  // Block if any question has no response at all
+  if(_qs.length){
+    const _unanswered=_qs.filter(_q=>{const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};return _qr.response===null||_qr.response===undefined||_qr.response==='';});
+    if(_unanswered.length){toast('Please answer all '+_qs.length+' question'+((_qs.length>1)?'s':'')+' before submitting','err');return;}
+  }
   const today=todayISO();
   const late=date<today||(date===todayISO()&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime));
   const _ua=(me()?.approval)||{};
@@ -2689,7 +2722,7 @@ App._showClQEscalation=()=>{
         optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
           <span style="width:20px;height:20px;border-radius:50%;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#4338CA;flex-shrink:0">${String.fromCharCode(65+i)}</span>
           <span style="flex:1;font-size:13px;color:#374151">${o.text||''}</span>
-          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})['${qid}']=(CLD.questionConfigs['${qid}']||{});CLD.questionConfigs['${qid}']['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
         </div>`;
       });
     } else if(q.type==='number'){
@@ -2701,7 +2734,7 @@ App._showClQEscalation=()=>{
         optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
           <span style="width:20px;height:20px;border-radius:50%;background:#E0F2FE;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#0369A1;flex-shrink:0">${i+1}</span>
           <span style="flex:1;font-size:13px;color:#374151">${condText}</span>
-          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})['${qid}']=(CLD.questionConfigs['${qid}']||{});CLD.questionConfigs['${qid}']['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
         </div>`;
       });
     } else {
@@ -2715,7 +2748,7 @@ App._showClQEscalation=()=>{
         optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
           <span style="font-size:12px;font-weight:700;color:${isGood?'#16A34A':'#DC2626'};min-width:50px">${lbl}</span>
           <div style="flex:1"></div>
-          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})['${qid}']=(CLD.questionConfigs['${qid}']||{});CLD.questionConfigs['${qid}']['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
         </div>`;
       });
     }
