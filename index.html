@@ -2197,10 +2197,11 @@ function teamViewPage(){
         ${team.map(u=>{
           const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
           const subs=DB.submissions.filter(s=>s.userId===u.id);
-          const late=subs.filter(s=>s.status==='Late').length;
+          const late=subs.filter(s=>s.status==='Late'&&!!clById(s.checklistId)).length;
           const tkCount=(DB.tickets||[]).filter(t=>t.submitterId===u.id&&t.status==='Open').length;
-          const _lateUid=u.id;
-          const _sc='<div style="background:#F6F7F8;border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:#15171C">'+asgn+'</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">assigned</div></div>'            +'<div '+(late?'onclick="event.stopPropagation();App._showLateDetail(this.dataset.uid)" data-uid="'+_lateUid+'" style="cursor:pointer;background:#FFF1F2;':'style="background:#F6F7F8;')+'border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:'+(late?'#BE123C':'#15171C')+'">'+late+'</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">late</div></div>'            +'<div style="background:'+(tkCount?'#FFF7ED':'#F6F7F8')+';border-radius:8px;padding:8px 4px"><div style="font-size:18px;font-weight:800;color:'+(tkCount?'#C2410C':'#15171C')+'">'+tkCount+'</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">tickets</div></div>';
+          const _uid2=u.id;
+          const _statCell=(val,label,bg,color,type)=>'<div onclick="event.stopPropagation();App._showTeamStat(this.dataset.uid,this.dataset.type)" data-uid="'+_uid2+'" data-type="'+type+'" style="background:'+bg+';border-radius:8px;padding:8px 4px;cursor:pointer" title="Click to see details"><div style="font-size:18px;font-weight:800;color:'+color+'">'+val+'</div><div style="font-size:9px;font-weight:700;color:#9CA3AF;text-transform:uppercase">'+label+'</div></div>';
+          const _sc=_statCell(asgn,'assigned','#F6F7F8','#15171C','assigned')+_statCell(late,'late',late?'#FFF1F2':'#F6F7F8',late?'#BE123C':'#15171C','late')+_statCell(tkCount,'tickets',tkCount?'#FFF7ED':'#F6F7F8',tkCount?'#C2410C':'#15171C','tickets');
           return`<button onclick="S.tvUser='${u.id}';S.tvCalDate=todayISO();S.tvCalWk=0;S.tvExpanded=null;rr()"
             style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:14px;transition:all .15s"
             class="team-card-hover">
@@ -3403,14 +3404,36 @@ function ticketsPage(){
   '</div>';
 }
 
-App._showLateDetail=(uid)=>{
+App._showTeamStat=(uid,type)=>{
   const u=uById(uid);if(!u)return;
-  const lateSubs=DB.submissions.filter(s=>s.userId===uid&&s.status==='Late');
-  const rows=lateSubs.map(s=>{
-    const c=clById(s.checklistId);
-    return'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #F3F4F6">'      +'<div><div style="font-size:13px;font-weight:600">'+(c?esc(c.name):'[Deleted checklist]')+'</div>'      +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+fmtS(s.date)+(s.submittedAt?' · Submitted '+new Date(s.submittedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'')+'</div></div>'      +chip(s.status)      +'</div>';
-  }).join('');
-  openModal('<div style="padding:20px"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px"><h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">Late submissions — '+esc(fullName(u))+'</h2><button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">'+ic('x')+'</button></div>'+(rows||'<div style="font-size:13px;color:#9CA3AF;text-align:center;padding:20px">No late submissions found in local data.</div>')+'</div>','max-w-md');
+  let title='',rows='',empty='';
+  if(type==='assigned'){
+    title='Assigned checklists — '+esc(fullName(u));
+    empty='No checklists assigned.';
+    const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(uid));
+    rows=cls.map(c=>{
+      const today=todayISO();
+      const isOn=clOn(c,today);
+      return'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #F3F4F6">'        +'<div><div style="font-size:13px;font-weight:600">'+esc(c.name)+'</div>'        +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+esc(c.frequency)+(c.department?' · '+esc(c.department):'')+'</div></div>'        +(isOn?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">Active today</span>':'<span style="font-size:11px;color:#D1D5DB">Not today</span>')        +'</div>';
+    }).join('');
+  } else if(type==='late'){
+    title='Late submissions — '+esc(fullName(u));
+    empty='No late submissions.';
+    const lateSubs=DB.submissions.filter(s=>s.userId===uid&&s.status==='Late'&&!!clById(s.checklistId));
+    rows=lateSubs.map(s=>{
+      const c=clById(s.checklistId);
+      return'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #F3F4F6">'        +'<div><div style="font-size:13px;font-weight:600">'+(c?esc(c.name):'[Deleted checklist]')+'</div>'        +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+fmtS(s.date)+(s.submittedAt?' · '+new Date(s.submittedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'')+'</div></div>'        +chip(s.status)+'</div>';
+    }).join('');
+  } else if(type==='tickets'){
+    title='Open tickets — '+esc(fullName(u));
+    empty='No open tickets.';
+    const tkts=(DB.tickets||[]).filter(t=>t.submitterId===uid&&t.status==='Open');
+    rows=tkts.map(t=>{
+      const priClr={High:'#DC2626',Medium:'#F59E0B',Low:'#6B7280'};
+      return'<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;border-bottom:1px solid #F3F4F6">'        +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(t.title)+'</div>'        +'<div style="font-size:11px;color:#9CA3AF;margin-top:2px">'+fmtS(t.date||t.createdAt?.slice(0,10)||'')+'</div></div>'        +'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FEF2F2;color:'+(priClr[t.priority]||'#6B7280')+'">'+esc(t.priority)+'</span>'        +'</div>';
+    }).join('');
+  }
+  openModal('<div style="padding:20px;max-height:80vh;display:flex;flex-direction:column">'    +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">'    +'<h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">'+title+'</h2>'    +'<button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">'+ic('x')+'</button>'    +'</div>'    +'<div style="overflow-y:auto;flex:1;border:1px solid #F3F4F6;border-radius:10px">'    +(rows||'<div style="font-size:13px;color:#9CA3AF;text-align:center;padding:24px">'+empty+'</div>')    +'</div></div>','max-w-md');
 };
 
 App._tkSetStatus=(el)=>{const id=el.dataset.id,status=el.dataset.st;App._ticketStatus(id,status);};
@@ -3618,7 +3641,7 @@ App._userDrill=(uid)=>{
   subs=subs.filter(s=>s.date>=dr1);
   const tot=subs.length;
   const onTime=subs.filter(s=>s.status==='On Time').length;
-  const late=subs.filter(s=>s.status==='Late').length;
+  const late=subs.filter(s=>s.status==='Late'&&!!clById(s.checklistId)).length;
   const pending=subs.filter(s=>s.status==='Pending Approval').length;
   const rejected=subs.filter(s=>s.status==='Rejected').length;
   const issues=subs.reduce((n,s)=>n+(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length,0);
