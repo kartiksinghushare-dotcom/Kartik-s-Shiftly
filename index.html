@@ -1656,17 +1656,20 @@ App._saveCl=(editing)=>{
   });
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
-  // ── Save locally and close IMMEDIATELY — no waiting for Supabase ──
-  toast(editing?'Saved ✓':'Checklist created ✓');
+  // ── Capture what we need before clearing CLD ──
+  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
+  const toastMsg=editing?'Saved ✓':'Checklist created ✓';
+  // ── Clear CLD FIRST so render() doesn't re-open modal ──
+  CLD=null;
+  App._clQSel=null;
   closeModal();
+  toast(toastMsg);
   try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
   render();
   // ── Sync to Supabase in background ──
-  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
   sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
-    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Checklist saved locally but not synced: '+error.message.slice(0,60),'warn');}
+    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Not synced to server: '+error.message.slice(0,60),'warn');}
   }).catch(e=>console.error('Checklist sync:',e));
-  CLD=null;
 };
 App.dupCl=async(id)=>{
   const src=clById(id);if(!src)return;
@@ -1698,20 +1701,19 @@ App.dupCl=async(id)=>{
   }).catch(e=>console.warn('dupCl sync:',e));
 };
 
-App.delCl=(id)=>{
+App.delCl=async(id)=>{
   const c=clById(id);if(!c)return;
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
-  // ── Remove locally immediately ──
+  // ── Delete from Supabase FIRST so refresh doesn't restore it ──
+  const{error}=await sb.from('checklists').delete().eq('id',id).catch(e=>({error:e}));
+  if(error){console.error('delCl error:',error.message||error);toast('Delete failed: '+(error.message||'unknown error').slice(0,60),'err');return;}
+  // ── Remove locally after server confirms ──
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
   const clAssignees=c.assignees||[];
   clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});
   _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
   toast('Deleted','warn');saveDB();render();
-  // ── Sync to Supabase in background ──
-  sb.from('checklists').delete().eq('id',id).then(({error})=>{
-    if(error)console.error('delCl sync error:',error.message);
-  }).catch(e=>console.error('delCl:',e));
 };
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
@@ -2434,13 +2436,14 @@ function questionsPage(){
 
 App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr();};
 
-App._delQuestion=(id)=>{
+App._delQuestion=async(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
   if(!confirm('Delete "'+q.text+'"?'))return;
+  // Delete from Supabase first
+  await sb.from('questions').delete().eq('id',id).catch(e=>console.error('delQuestion:',e));
   DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
   DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);if(c.questionConfigs)delete c.questionConfigs[id];});
   toast('Deleted','warn');saveDB();render();
-  sb.from('questions').delete().eq('id',id).catch(e=>console.error('delQuestion:',e));
 };
 
 App._editQuestion=(id)=>{
@@ -2588,6 +2591,8 @@ App._saveQuestion=()=>{
 // ── Checklist question picker ──
 App._openClQuestionPicker=()=>{
   if(!CLD)return;
+  // CRITICAL: Snapshot form values NOW while checklist modal is still open
+  _snapshotCLD();
   const allQ=DB.questions||[];
   const sel=new Set(CLD.questionIds||[]);
   App._clQSel=new Set(sel);
@@ -2742,15 +2747,16 @@ App._showClQEscalation=()=>{
 // Read all checklist modal form values into CLD (prevents data loss on re-render)
 function _snapshotCLD(){
   if(!CLD)return;
-  const v=id=>document.getElementById(id)?.value;
-  if(v('cn-name')!==undefined)CLD.name=v('cn-name')?.trim()||CLD.name;
-  if(v('cn-desc')!==undefined)CLD.description=v('cn-desc')?.trim()||'';
-  if(v('cn-status'))CLD.status=v('cn-status');
-  if(v('cn-dep'))CLD.department=v('cn-dep');
-  if(v('cn-freq'))CLD.frequency=v('cn-freq');
-  if(v('cn-sd')!==undefined)CLD.startDate=v('cn-sd')||null;
-  if(v('cn-ed')!==undefined)CLD.endDate=v('cn-ed')||null;
-  if(v('cn-time')!==undefined)CLD.scheduleTime=v('cn-time')||null;
+  // Only read fields that actually exist in DOM right now
+  const el=id=>document.getElementById(id);
+  if(el('cn-name'))CLD.name=el('cn-name').value.trim()||CLD.name;
+  if(el('cn-desc'))CLD.description=el('cn-desc').value.trim();
+  if(el('cn-status')&&el('cn-status').value)CLD.status=el('cn-status').value;
+  if(el('cn-dep')&&el('cn-dep').value)CLD.department=el('cn-dep').value;
+  if(el('cn-freq')&&el('cn-freq').value)CLD.frequency=el('cn-freq').value;
+  if(el('cn-sd'))CLD.startDate=el('cn-sd').value||null;
+  if(el('cn-ed'))CLD.endDate=el('cn-ed').value||null;
+  if(el('cn-time'))CLD.scheduleTime=el('cn-time').value||null;
 }
 
 
@@ -2781,6 +2787,8 @@ App._removeClQuestion=(qid)=>{
 };
 
 App._editClQuestionEscalation=(qid)=>{
+  if(!CLD)return;
+  _snapshotCLD(); // snapshot before replacing modal
   App._clQSel=new Set(CLD.questionIds||[]);
   App._showClQEscalation();
 };
@@ -3374,27 +3382,30 @@ function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return M
 App._docNav=(id)=>{S.filters.docFolder=id;rr();};  // alias kept for compatibility
 App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
 
-App._delFolder=(id)=>{
+App._delFolder=async(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
-  if(!confirm('Delete folder "'+f?.name+'" and all its files?'))return;
-  // Collect all folder IDs to delete (recursive)
+  if(!f)return;
+  if(!confirm('Delete folder "'+f.name+'" and all its files?'))return;
+  // Collect all folder IDs to delete (recursive) BEFORE modifying DB
   const toDelete=[];
   function collectRec(fid){
     toDelete.push(fid);
     (DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));
   }
   collectRec(id);
-  // Remove locally first — instant UI
-  DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
-  DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId));
-  log(fullName(me()),'Deleted folder',f?.name||'');
-  toast('Deleted','warn');saveDB();render();
-  // Delete from Supabase in background
-  // Delete documents from Supabase (those in deleted folders)
+  // Collect doc IDs BEFORE filtering them out
   const docIds=(DB.documents||[]).filter(x=>toDelete.includes(x.folderId)).map(x=>x.id);
-  const delOps=toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid));
-  if(docIds.length)delOps.push(sb.from('documents').delete().in('id',docIds));
-  Promise.all(delOps).catch(e=>console.warn('delFolder sync:',e));
+  // Delete from Supabase FIRST so refresh doesn't bring them back
+  try{
+    const delOps=toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid));
+    if(docIds.length)delOps.push(sb.from('documents').delete().in('id',docIds));
+    await Promise.all(delOps);
+  }catch(e){console.warn('delFolder Supabase:',e);}
+  // Remove locally after server confirms
+  DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
+  DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId||''));
+  log(fullName(me()),'Deleted folder',f.name);
+  toast('Deleted','warn');saveDB();render();
 };
 
 // ── Upload file ──
@@ -3507,9 +3518,13 @@ App._previewDoc=async(id)=>{
   }
 };
 
-App._delDoc=(id)=>{
+App._delDoc=async(id)=>{
   const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc||!confirm('Delete "'+doc.name+'"?'))return;
-  sb.storage.from('documents').remove([doc.storagePath||doc.url]).catch(()=>{});
+  // Delete from Supabase and storage first so refresh doesn't restore it
+  try{
+    await sb.from('documents').delete().eq('id',id);
+    if(doc.storagePath)await sb.storage.from('documents').remove([doc.storagePath]).catch(()=>{});
+  }catch(e){console.warn('delDoc Supabase:',e);}
   DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
   log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();render();
 };
