@@ -338,7 +338,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:c.question_configs||{},scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],editCount:s.edit_count||0,editHistory:s.edit_history||[]}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -386,7 +386,7 @@ async function _sync(){try{
   const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],schedule_time:c.scheduleTime||null,status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -1372,7 +1372,7 @@ App.editCl=(id=null)=>{
   CLD=c?JSON.parse(JSON.stringify(c)):{
     id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
     frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
-    startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],scheduleTime:null,createdBy:S.uid
+    startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,createdBy:S.uid
   };
   _renderClModal(!!c);
 };
@@ -1442,7 +1442,7 @@ function _renderClModal(editing){
           <button type="button" onclick="App._openClQuestionPicker()" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add question</button>
         </div>
         <div id="cn-questions" style="display:flex;flex-direction:column;gap:6px">
-          ${(c.questionIds||[]).map(qid=>{const q=(DB.questions||[]).find(x=>x.id===qid);if(!q)return'';const TYPE_LABELS={answer:'Answer',number:'Number',passfail:'Pass/Fail',yesno:'Yes/No',tick:'Tick/Cross'};return`<div style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:8px 12px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:#EEF2FF;color:#4338CA">${TYPE_LABELS[q.type]||q.type}</span><span style="flex:1;font-size:13px;font-weight:500;color:#15171C;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</span><button type="button" onclick="App._removeClQuestion('${qid}')" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('x','w-3 h-3')}</button></div>`;}).join('')}
+          ${(c.questionIds||[]).map(qid=>{const q=(DB.questions||[]).find(x=>x.id===qid);if(!q)return'';const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;const clr=Q_TYPE_CLR[q.type]||'#6B7280';const bg=Q_TYPE_BG[q.type]||'#F6F7F8';const cfg=(c.questionConfigs||{})[qid]||{};const escCount=Object.values(cfg).filter(v=>v).length;return`<div style="display:flex;align-items:center;gap:8px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:10px;padding:8px 12px"><span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:6px;background:${bg};color:${clr};flex-shrink:0">${tl}</span><span style="flex:1;font-size:13px;font-weight:500;color:#15171C;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</span>${escCount?`<span style="font-size:10px;font-weight:700;color:#EF4444;flex-shrink:0">${escCount} escalation${escCount>1?'s':''}</span>`:''}<button type="button" onclick="App._editClQuestionEscalation('${qid}')" style="font-size:11px;font-weight:600;padding:3px 8px;border-radius:6px;border:1px solid #E5E7EB;background:#fff;cursor:pointer;color:#374151;flex-shrink:0">Escalation</button><button type="button" onclick="App._removeClQuestion('${qid}')" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('x','w-3 h-3')}</button></div>`;}).join('')}
           ${!(c.questionIds||[]).length?`<div style="text-align:center;padding:12px;border:2px dashed #E5E7EB;border-radius:10px;font-size:12px;color:#9CA3AF">No questions added yet</div>`:''}
         </div>
       </div>
@@ -1632,7 +1632,7 @@ App._saveCl=async(editing)=>{
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
   if(!CLD.name){toast('Name required','err');return;}
-  CLD.questionIds=CLD.questionIds||[];CLD.tasks=CLD.tasks||[];
+  CLD.questionIds=CLD.questionIds||[];CLD.questionConfigs=CLD.questionConfigs||{};CLD.tasks=CLD.tasks||[];
   const prevAssignees=editing?((clById(CLD.id)?.assignees)||[]):[];
   if(editing){const idx=DB.checklists.findIndex(c=>c.id===CLD.id);DB.checklists[idx]=CLD;}
   else DB.checklists.push(CLD);
@@ -1671,7 +1671,7 @@ App.dupCl=async(id)=>{
     schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
     selected_dates:copy.selectedDates||[],custom_dates:copy.customDates||[],
     start_date:null,end_date:null,
-    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],schedule_time:copy.scheduleTime||null,
+    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:copy.questionConfigs||{},schedule_time:copy.scheduleTime||null,
     status:'Draft',created_by:S.uid
   }).catch(e=>console.warn('dupCl sync:',e));
 };
@@ -2380,14 +2380,14 @@ function questionsPage(){
       const opts=q.options||[];
       if(!opts.length){h+=`<p style="font-size:12px;color:#D1D5DB;font-style:italic;padding:8px 0">No options — click Edit</p>`;}
       else opts.forEach((o,oi)=>{
-        const asgn=o.escalateTo?uById(o.escalateTo):null;
+
         let lbl=q.type==='number'
           ?((NUM_CONDITIONS.find(x=>x.id===o.condition)||{label:o.condition}).label+' '+o.value+(o.condition==='between'?' – '+o.value2:''))
           :(o.text||o.label||'');
         h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9F8F5">`;
         h+=`<span style="width:20px;height:20px;border-radius:50%;background:#EFF6FF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#1D4ED8">${oi+1}</span>`;
         h+=`<span style="flex:1;font-size:13px;color:#374151">${esc(lbl)}</span>`;
-        h+=asgn?`<span style="font-size:11px;font-weight:600;color:#EF4444">→ ${esc(fullName(asgn))}</span>`:`<span style="font-size:11px;color:#D1D5DB">No escalation</span>`;
+
         h+=`</div>`;
       });
       h+=`</div>`;
@@ -2426,7 +2426,6 @@ App._renderQModal=()=>{
   if(!_QED)return;
   const q=_QED;
   const au=DB.users.filter(u=>u.status==='Active');
-  const uSel=(esc)=>'<option value="">No escalation</option>'+au.map(u=>`<option value="${u.id}">${fullName(u)}</option>`).join('');
 
   let optsHtml='';
   if(q.type==='answer'){
@@ -2435,11 +2434,10 @@ App._renderQModal=()=>{
       rows+=`<div style="display:flex;align-items:center;gap:6px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:9px;padding:7px 10px">
         <span style="font-size:11px;font-weight:700;color:#9CA3AF;width:18px;text-align:center">${String.fromCharCode(65+i)}</span>
         <input type="text" value="${o.text||''}" oninput="_QED.options[${i}].text=this.value" placeholder="Answer option…" style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;outline:none;padding:2px 0"/>
-        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 6px;outline:none;max-width:140px">${uSel()}</select>
         <button onclick="_QED.options.splice(${i},1);App._renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer">${ic('x','w-3 h-3')}</button>
       </div>`;
     });
-    optsHtml=rows+`<button onclick="_QED.options.push({text:'',escalateTo:null});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add answer</button>`;
+    optsHtml=rows+`<button onclick="_QED.options.push({text:''});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add answer</button>`;
   }
   else if(q.type==='number'){
     let rows='';
@@ -2452,20 +2450,18 @@ App._renderQModal=()=>{
           ${o.condition==='between'?`<span style="font-size:12px;color:#9CA3AF">and</span><input type="number" value="${o.value2!=null?o.value2:''}" oninput="_QED.options[${i}].value2=parseFloat(this.value)" placeholder="Value 2" style="width:70px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:12px;outline:none"/>`:''}
           <button onclick="_QED.options.splice(${i},1);App._renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;margin-left:auto">${ic('x','w-3 h-3')}</button>
         </div>
-        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;outline:none">${uSel()}</select>
       </div>`;
     });
-    optsHtml=rows+`<button onclick="_QED.options.push({condition:'lt',value:null,value2:null,escalateTo:null});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add condition</button>`;
+    optsHtml=rows+`<button onclick="_QED.options.push({condition:'lt',value:null,value2:null});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add condition</button>`;
   }
   else {
     const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
     const lbs=labels[q.type]||['Option A','Option B'];
-    if(!q.options||q.options.length!==2)_QED.options=[{label:lbs[0],escalateTo:null},{label:lbs[1],escalateTo:null}];
+    if(!q.options||q.options.length!==2)_QED.options=[{label:lbs[0]},{label:lbs[1]}];
     optsHtml=(q.options||[]).map((o,i)=>{
       const good=i===0;
       return`<div style="display:flex;align-items:center;gap:10px;background:${good?'#F0FDF4':'#FFF5F5'};border:1px solid ${good?'#BBF7D0':'#FECACA'};border-radius:9px;padding:8px 12px;margin-bottom:6px">
         <span style="font-size:13px;font-weight:700;color:${good?'#16A34A':'#DC2626'};min-width:50px">${lbs[i]}</span>
-        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="flex:1;font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;outline:none">${uSel()}</select>
       </div>`;
     }).join('');
   }
@@ -2507,7 +2503,7 @@ App._renderQModal=()=>{
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${typeBtns}</div>
       </div>
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${q.type==='answer'?'Answer options & escalation':q.type==='number'?'Conditions & escalation':'Escalation per response'}</label>
+        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${q.type==='answer'?'Answer options':q.type==='number'?'Conditions':'Response options'}</label>
         ${optsHtml}
       </div>
       <div>
@@ -2529,15 +2525,6 @@ App._renderQModal=()=>{
     </div>
   `,'max-w-lg');
 
-  // Restore escalation selects after render
-  setTimeout(()=>{
-    (q.options||[]).forEach((o,i)=>{
-      const sel=document.querySelectorAll('#modal select');
-      // find the right select by its position - simpler: re-set value directly
-      const selEls=document.querySelectorAll('[onchange*="escalateTo"]');
-      if(selEls[i]&&o.escalateTo)selEls[i].value=o.escalateTo;
-    });
-  },0);
 };
 
 App._saveQuestion=()=>{
@@ -2566,17 +2553,23 @@ App._openClQuestionPicker=()=>{
   const allQ=DB.questions||[];
   const sel=new Set(CLD.questionIds||[]);
   App._clQSel=new Set(sel);
+  App._showClQPicker();
+};
+
+App._showClQPicker=()=>{
+  const allQ=DB.questions||[];
+  const sel=App._clQSel||new Set();
   openModal(`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #ECEDF0">
       <div>
         <h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">Add Questions</h2>
-        <p style="font-size:12px;color:#9CA3AF;margin-top:1px">Select questions for this checklist</p>
+        <p style="font-size:12px;color:#9CA3AF;margin-top:1px">Select questions, then configure escalation</p>
       </div>
       <button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('x')}</button>
     </div>
     <div style="padding:12px 16px;overflow-y:auto;max-height:60vh;display:flex;flex-direction:column;gap:5px">
       ${!allQ.length
-        ?`<div style="text-align:center;padding:32px;color:#9CA3AF;font-size:13px">No questions yet</div>`
+        ?`<div style="text-align:center;padding:32px;color:#9CA3AF;font-size:13px">No questions yet — create some in the Questions page first</div>`
         :allQ.map(q=>{
           const on=sel.has(q.id);
           const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
@@ -2594,8 +2587,9 @@ App._openClQuestionPicker=()=>{
           </label>`;
         }).join('')}
     </div>
-    <div style="padding:10px 16px;border-top:1px solid #ECEDF0;background:#fff">
-      <button onclick="App._confirmClQs()" style="width:100%;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Confirm selection</button>
+    <div style="padding:10px 16px;border-top:1px solid #ECEDF0;background:#fff;display:flex;gap:8px">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._showClQEscalation()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Next: Set escalation →</button>
     </div>
   `,'max-w-md');
 };
@@ -2608,12 +2602,112 @@ App._togClQ=(qid,el)=>{
   el.style.border=`1.5px solid ${now?'#15171C':'#E5E7EB'}`;
   el.style.background=now?'#F9FAFB':'#fff';
   const box=el.querySelector('div');
-  if(box){box.style.border=`1.5px solid ${now?'#15171C':'#D1D5DB'}`;box.style.background=now?'#15171C':'#fff';box.innerHTML=now?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:'`';}
+  if(box){
+    box.style.border=`1.5px solid ${now?'#15171C':'#D1D5DB'}`;
+    box.style.background=now?'#15171C':'#fff';
+    box.innerHTML=now?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:'';
+  }
+};
+
+App._showClQEscalation=()=>{
+  if(!CLD||!App._clQSel)return;
+  const selectedIds=[...App._clQSel];
+  if(!selectedIds.length){toast('Select at least one question','warn');return;}
+  const au=DB.users.filter(u=>u.status==='Active');
+  const configs=CLD.questionConfigs||{};
+
+  const uOptsFn=(curVal)=>'<option value="">— No escalation —</option>'+au.map(u=>`<option value="${u.id}" ${curVal===u.id?'selected':''}>${fullName(u)}</option>`).join('');
+
+  let sectionsHtml=selectedIds.map(qid=>{
+    const q=(DB.questions||[]).find(x=>x.id===qid);
+    if(!q)return'';
+    const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
+    const clr=Q_TYPE_CLR[q.type]||'#6B7280';
+    const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
+    const qCfg=configs[qid]||{};
+
+    // Build option rows with escalation dropdown per option
+    let optRows='';
+    const opts=q.options||[];
+
+    if(q.type==='answer'){
+      opts.forEach((o,i)=>{
+        const key='opt_'+i;
+        const cur=qCfg[key]||'';
+        optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
+          <span style="width:20px;height:20px;border-radius:50%;background:#EEF2FF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#4338CA;flex-shrink:0">${String.fromCharCode(65+i)}</span>
+          <span style="flex:1;font-size:13px;color:#374151">${o.text||''}</span>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+        </div>`;
+      });
+    } else if(q.type==='number'){
+      opts.forEach((o,i)=>{
+        const key='opt_'+i;
+        const cur=qCfg[key]||'';
+        const condLabel=(NUM_CONDITIONS.find(c=>c.id===o.condition)||{label:o.condition}).label;
+        const condText=condLabel+' '+o.value+(o.condition==='between'?' – '+o.value2:'');
+        optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
+          <span style="width:20px;height:20px;border-radius:50%;background:#E0F2FE;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#0369A1;flex-shrink:0">${i+1}</span>
+          <span style="flex:1;font-size:13px;color:#374151">${condText}</span>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+        </div>`;
+      });
+    } else {
+      // passfail, yesno, tick
+      const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
+      const lbs=labels[q.type]||['Option A','Option B'];
+      lbs.forEach((lbl,i)=>{
+        const key='opt_'+i;
+        const cur=qCfg[key]||'';
+        const isGood=i===0;
+        optRows+=`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5F4F0">
+          <span style="font-size:12px;font-weight:700;color:${isGood?'#16A34A':'#DC2626'};min-width:50px">${lbl}</span>
+          <div style="flex:1"></div>
+          <select onchange="(CLD.questionConfigs=CLD.questionConfigs||{})[${JSON.stringify(qid)}]=(CLD.questionConfigs[${JSON.stringify(qid)}]||{});CLD.questionConfigs[${JSON.stringify(qid)}]['opt_${i}']=this.value||null" style="font-size:12px;background:#fff;border:1.5px solid #E5E7EB;border-radius:8px;padding:4px 10px;outline:none;min-width:150px">${uOptsFn(cur)}</select>
+        </div>`;
+      });
+    }
+
+    if(!opts.length){
+      optRows=`<p style="font-size:12px;color:#D1D5DB;font-style:italic;padding:6px 0">No options defined for this question</p>`;
+    }
+
+    return`<div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:12px 14px;margin-bottom:10px">
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+        <span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${bg};color:${clr}">${tl}</span>
+        <span style="font-size:13px;font-weight:700;color:#15171C">${q.text}</span>
+      </div>
+      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px">Escalate answer to</div>
+      ${optRows}
+    </div>`;
+  }).join('');
+
+  openModal(`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #ECEDF0">
+      <div>
+        <h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">Set Escalation</h2>
+        <p style="font-size:12px;color:#9CA3AF;margin-top:1px">Choose who gets notified for each answer</p>
+      </div>
+      <button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('x')}</button>
+    </div>
+    <div style="padding:14px 16px;overflow-y:auto;max-height:60vh">
+      ${sectionsHtml}
+    </div>
+    <div style="padding:10px 16px;border-top:1px solid #ECEDF0;background:#fff;display:flex;gap:8px">
+      <button onclick="App._showClQPicker()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">← Back</button>
+      <button onclick="App._confirmClQs()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Done</button>
+    </div>
+  `,'max-w-lg');
 };
 
 App._confirmClQs=()=>{
   if(!CLD||!App._clQSel)return;
   CLD.questionIds=[...App._clQSel];
+  CLD.questionConfigs=CLD.questionConfigs||{};
+  // Remove configs for deselected questions
+  Object.keys(CLD.questionConfigs).forEach(qid=>{
+    if(!App._clQSel.has(qid))delete CLD.questionConfigs[qid];
+  });
   closeModal();
   _renderClModal(!!(DB.checklists.find(c=>c.id===CLD.id)));
 };
@@ -2621,20 +2715,33 @@ App._confirmClQs=()=>{
 App._removeClQuestion=(qid)=>{
   if(!CLD)return;
   CLD.questionIds=(CLD.questionIds||[]).filter(x=>x!==qid);
+  if(CLD.questionConfigs)delete CLD.questionConfigs[qid];
   _renderClModal(!!(DB.checklists.find(c=>c.id===CLD.id)));
 };
+
+App._editClQuestionEscalation=(qid)=>{
+  App._clQSel=new Set(CLD.questionIds||[]);
+  App._showClQEscalation();
+};
+
 
 // ── Escalation on submit ──
 function _processEscalations(checklistId,date,responses){
   const c=clById(checklistId);if(!c)return;
   const u=me();
+  const configs=c.questionConfigs||{};
   (responses||[]).forEach(resp=>{
     const q=(DB.questions||[]).find(x=>x.id===resp.questionId);if(!q)return;
+    const qCfg=configs[resp.questionId]||{};
     let escalateTo=null;
-    if(q.type==='answer'){const opt=(q.options||[]).find(o=>o.text===resp.response);if(opt)escalateTo=opt.escalateTo;}
-    else if(q.type==='number'){
+    // Find which option index matched the response
+    if(q.type==='answer'){
+      const optIdx=(q.options||[]).findIndex(o=>o.text===resp.response);
+      if(optIdx>-1)escalateTo=qCfg['opt_'+optIdx]||null;
+    } else if(q.type==='number'){
       const val=parseFloat(resp.response);
-      for(const cond of(q.options||[])){
+      for(let i=0;i<(q.options||[]).length;i++){
+        const cond=q.options[i];
         let m=false;
         if(cond.condition==='lt')m=val<cond.value;
         else if(cond.condition==='lte')m=val<=cond.value;
@@ -2643,9 +2750,15 @@ function _processEscalations(checklistId,date,responses){
         else if(cond.condition==='eq')m=val===cond.value;
         else if(cond.condition==='neq')m=val!==cond.value;
         else if(cond.condition==='between')m=val>=cond.value&&val<=(cond.value2||cond.value);
-        if(m){escalateTo=cond.escalateTo;break;}
+        if(m){escalateTo=qCfg['opt_'+i]||null;break;}
       }
-    }else{const opt=(q.options||[]).find(o=>(o.label||'').toLowerCase()===String(resp.response).toLowerCase());if(opt)escalateTo=opt.escalateTo;}
+    } else {
+      // passfail, yesno, tick — match by label index
+      const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
+      const lbs=labels[q.type]||[];
+      const optIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response).toLowerCase());
+      if(optIdx>-1)escalateTo=qCfg['opt_'+optIdx]||null;
+    }
     if(escalateTo&&escalateTo!==S.uid){
       if(!DB.notifications)DB.notifications=[];
       DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:`\u26a0\ufe0f Escalation: "${q.text}" answered "${resp.response}" by ${fullName(u)} on ${c.name} (${date})`,time:new Date().toISOString(),read:false});
