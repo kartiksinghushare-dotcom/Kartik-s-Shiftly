@@ -2339,266 +2339,222 @@ App._viewSubFor=async(btn)=>{
 
 /* ===== QUESTIONS PAGE ===== */
 const Q_TYPES=[
-  {id:'answer',  label:'Answer',     desc:'Multiple choice answers'},
-  {id:'number',  label:'Number',     desc:'Numeric value with conditions'},
-  {id:'passfail',label:'Pass / Fail',desc:'Pass or Fail response'},
-  {id:'yesno',   label:'Yes / No',   desc:'Yes or No response'},
-  {id:'tick',    label:'Tick / Cross',desc:'Done or Not done'},
+  {id:'answer',   label:'Answer',      desc:'Multiple choice answers'},
+  {id:'number',   label:'Number',      desc:'Numeric value with conditions'},
+  {id:'passfail', label:'Pass / Fail', desc:'Pass or Fail response'},
+  {id:'yesno',    label:'Yes / No',    desc:'Yes or No response'},
+  {id:'tick',     label:'Tick / Cross',desc:'Done or Not done'},
 ];
 const Q_TYPE_CLR={answer:'#4338CA',number:'#0369A1',passfail:'#16A34A',yesno:'#D97706',tick:'#0E9F6E'};
 const Q_TYPE_BG ={answer:'#EEF2FF',number:'#E0F2FE',passfail:'#DCFCE7',yesno:'#FEF9C3',tick:'#ECFDF5'};
 const NUM_CONDITIONS=[
-  {id:'lt',    label:'Less than'},
-  {id:'lte',   label:'Less than or equal'},
-  {id:'gt',    label:'Greater than'},
-  {id:'gte',   label:'Greater than or equal'},
-  {id:'eq',    label:'Equal to'},
-  {id:'neq',   label:'Not equal to'},
+  {id:'lt',     label:'Less than'},
+  {id:'lte',    label:'Less than or equal'},
+  {id:'gt',     label:'Greater than'},
+  {id:'gte',    label:'Greater than or equal'},
+  {id:'eq',     label:'Equal to'},
+  {id:'neq',    label:'Not equal to'},
   {id:'between',label:'Between'},
 ];
 
+let _QED=null;
+
 function questionsPage(){
   const allQ=DB.questions||[];
-  const activeUsers=DB.users.filter(u=>u.status==='Active');
-  function renderQCard(q){
+  function qCard(q){
     const exp=S.filters.expandedQ===q.id;
     const clr=Q_TYPE_CLR[q.type]||'#6B7280';
     const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
-    const typeLabel=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
-    let html=`<div style="background:#fff;border-radius:14px;border:1.5px solid ${exp?'#C7D2FE':'#ECEDF0'};overflow:hidden;box-shadow:0 1px 3px rgba(16,24,40,.04)">`;
-    html+=`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer" onclick="App._togExpandQ('${q.id}')">`;
-    html+=`<span style="color:#C8C5BD;display:flex;align-items:center;flex-shrink:0;transition:transform .2s;transform:rotate(${exp?90:0}deg)">${ic('chevR','w-4 h-4')}</span>`;
-    html+=`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${bg};color:${clr};flex-shrink:0">${typeLabel}</span>`;
-    html+=`<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600;color:#15171C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</div>`;
-    const flags=[];
-    if(q.photo)flags.push('📷 Photo');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Comment');
-    if(flags.length)html+=`<div style="font-size:11px;color:#9CA3AF;margin-top:2px">${flags.join(' · ')}</div>`;
-    html+=`</div>`;
-    html+=`<div style="display:flex;gap:4px;flex-shrink:0" onclick="event.stopPropagation()">`;
-    html+=`<button onclick="App._editQuestion('${q.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151">Edit</button>`;
-    html+=`<button onclick="App._delQuestion('${q.id}')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C';this.style.background='#FFF1F2'" onmouseout="this.style.color='#D1D5DB';this.style.background='transparent'">${ic('trash','w-4 h-4')}</button>`;
-    html+=`</div></div>`;
+    const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
+    let h=`<div style="background:#fff;border-radius:14px;border:1.5px solid ${exp?'#C7D2FE':'#ECEDF0'};overflow:hidden">`;
+    h+=`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer" onclick="App._togExpandQ('${q.id}')">`;
+    h+=`<span style="color:#C8C5BD;transition:transform .2s;transform:rotate(${exp?90:0}deg)">${ic('chevR','w-4 h-4')}</span>`;
+    h+=`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${bg};color:${clr}">${tl}</span>`;
+    h+=`<div style="flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</div>`;
+    h+=`<div style="display:flex;gap:4px" onclick="event.stopPropagation()">`;
+    h+=`<button onclick="App._editQuestion('${q.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Edit</button>`;
+    h+=`<button onclick="App._delQuestion('${q.id}')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-4 h-4')}</button>`;
+    h+=`</div></div>`;
     if(exp){
-      html+=`<div style="padding:0 14px 12px 40px;border-top:1px solid #F5F4F0">`;
+      h+=`<div style="padding:0 14px 12px 40px;border-top:1px solid #F5F4F0">`;
       const opts=q.options||[];
-      if(!opts.length){html+=`<p style="font-size:12px;color:#D1D5DB;font-style:italic;padding:8px 0">No options configured — click Edit</p>`;}
-      else{
-        opts.forEach((o,oi)=>{
-          const assignee=o.escalateTo?uById(o.escalateTo):null;
-          let label='';
-          if(q.type==='number'){const c=NUM_CONDITIONS.find(x=>x.id===o.condition)||{label:o.condition};label=c.label+' '+o.value+(o.condition==='between'?' – '+o.value2:'');}
-          else{label=o.text||o.label||'';}
-          html+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9F8F5">`;
-          html+=`<span style="width:20px;height:20px;border-radius:50%;background:#EFF6FF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#1D4ED8;flex-shrink:0">${oi+1}</span>`;
-          html+=`<span style="flex:1;font-size:13px;color:#374151">${esc(label)}</span>`;
-          if(assignee){html+=`<div style="display:flex;align-items:center;gap:5px;flex-shrink:0">${avatar(assignee,'w-6 h-6','text-[9px]')}<span style="font-size:11px;font-weight:600;color:#EF4444">→ ${esc(fullName(assignee))}</span></div>`;}
-          else{html+=`<span style="font-size:11px;color:#D1D5DB;flex-shrink:0">No escalation</span>`;}
-          html+=`</div>`;
-        });
-      }
-      html+=`</div>`;
+      if(!opts.length){h+=`<p style="font-size:12px;color:#D1D5DB;font-style:italic;padding:8px 0">No options — click Edit</p>`;}
+      else opts.forEach((o,oi)=>{
+        const asgn=o.escalateTo?uById(o.escalateTo):null;
+        let lbl=q.type==='number'
+          ?((NUM_CONDITIONS.find(x=>x.id===o.condition)||{label:o.condition}).label+' '+o.value+(o.condition==='between'?' – '+o.value2:''))
+          :(o.text||o.label||'');
+        h+=`<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid #F9F8F5">`;
+        h+=`<span style="width:20px;height:20px;border-radius:50%;background:#EFF6FF;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;color:#1D4ED8">${oi+1}</span>`;
+        h+=`<span style="flex:1;font-size:13px;color:#374151">${esc(lbl)}</span>`;
+        h+=asgn?`<span style="font-size:11px;font-weight:600;color:#EF4444">→ ${esc(fullName(asgn))}</span>`:`<span style="font-size:11px;color:#D1D5DB">No escalation</span>`;
+        h+=`</div>`;
+      });
+      h+=`</div>`;
     }
-    html+=`</div>`;
-    return html;
+    h+=`</div>`;
+    return h;
   }
-  return `<div class="fade">${hdr('Questions','')}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">${btnP('New Question','App._editQuestion(null)','plus')}</div>
+  return`<div class="fade">${hdr('Questions','')}
+    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
+      <button onclick="App._editQuestion(null)" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:14px;font-weight:600;padding:10px 16px;border-radius:12px;border:none;cursor:pointer">${ic('plus','w-4 h-4')}New Question</button>
+    </div>
     ${!allQ.length?empty('help','No questions yet','Create questions to attach to your checklists.')
-    :'<div class="space-y-2">'+allQ.map(q=>renderQCard(q)).join('')+'</div>'}
+    :'<div class="space-y-2">'+allQ.map(q=>qCard(q)).join('')+'</div>'}
   </div>`;
 }
 
 App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr();};
+
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
-  if(!confirm('Delete "'+q.text+'"? It will be removed from any checklists using it.'))return;
+  if(!confirm('Delete "'+q.text+'"? It will be removed from any checklists.'))return;
   DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
   DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);});
   toast('Deleted','warn');saveDB();render();
 };
 
-// ── Question builder modal ──
-let _QED=null; // editing state
-
 App._editQuestion=(id)=>{
   const existing=id?(DB.questions||[]).find(x=>x.id===id):null;
   _QED=existing?JSON.parse(JSON.stringify(existing)):{
-    id:uid('q'),text:'',type:'answer',
-    options:[],photo:false,approval:false,comment:false
+    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false
   };
-  _renderQModal();
+  App._renderQModal();
 };
 
-function _renderQModal(){
+App._renderQModal=()=>{
   if(!_QED)return;
   const q=_QED;
-  const typeLabel=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
-  const clr=Q_TYPE_CLR[q.type]||'#6B7280';
-  const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
-  const activeUsers=DB.users.filter(u=>u.status==='Active');
-  const userOpts='<option value="">— No escalation —</option>'+activeUsers.map(u=>`<option value="${u.id}">${esc(fullName(u))}</option>`).join('');
+  const au=DB.users.filter(u=>u.status==='Active');
+  const uSel=(esc)=>'<option value="">No escalation</option>'+au.map(u=>`<option value="${u.id}">${fullName(u)}</option>`).join('');
 
-  // Build options editor based on type
-  function optionsEditor(){
-    if(q.type==='answer'){
-      let html=`<div style="display:flex;flex-direction:column;gap:6px" id="qed-opts">`;
-      (q.options||[]).forEach((o,i)=>{
-        const sel=activeUsers.map(u=>`<option value="${u.id}" ${o.escalateTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('');
-        html+=`<div style="display:flex;align-items:center;gap:6px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:9px;padding:7px 10px">
-          <span style="font-size:11px;font-weight:700;color:#9CA3AF;width:18px;text-align:center">${String.fromCharCode(65+i)}</span>
-          <input type="text" value="${esc(o.text||'')}" onchange="_QED.options[${i}].text=this.value;_refreshQPreview()" placeholder="Answer option…" style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;outline:none;color:#15171C;padding:2px 0"/>
-          <select onchange="_QED.options[${i}].escalateTo=this.value||null;_refreshQPreview()" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 6px;outline:none;color:#374151;max-width:140px"><option value="">No escalation</option>${sel}</select>
-          <button onclick="_QED.options.splice(${i},1);_renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('x','w-3 h-3')}</button>
-        </div>`;
-      });
-      html+=`</div>
-      <button onclick="_QED.options.push({text:'',escalateTo:null});_renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add answer</button>`;
-      return html;
-    }
-    if(q.type==='number'){
-      let html=`<div style="display:flex;flex-direction:column;gap:6px" id="qed-opts">`;
-      (q.options||[]).forEach((o,i)=>{
-        const sel=activeUsers.map(u=>`<option value="${u.id}" ${o.escalateTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('');
-        const condSel=NUM_CONDITIONS.map(c=>`<option value="${c.id}" ${o.condition===c.id?'selected':''}>${c.label}</option>`).join('');
-        html+=`<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:6px">
-          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-            <select onchange="_QED.options[${i}].condition=this.value;_renderQModal()" style="font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;outline:none;color:#374151">${condSel}</select>
-            <input type="number" value="${o.value??''}" onchange="_QED.options[${i}].value=parseFloat(this.value);_refreshQPreview()" placeholder="Value" style="width:70px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:12px;outline:none"/>
-            ${o.condition==='between'?`<span style="font-size:12px;color:#9CA3AF">and</span><input type="number" value="${o.value2??''}" onchange="_QED.options[${i}].value2=parseFloat(this.value);_refreshQPreview()" placeholder="Value 2" style="width:70px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:12px;outline:none"/>` :''}
-            <button onclick="_QED.options.splice(${i},1);_renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;margin-left:auto" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('x','w-3 h-3')}</button>
-          </div>
-          <select onchange="_QED.options[${i}].escalateTo=this.value||null;_refreshQPreview()" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;outline:none;color:#374151"><option value="">No escalation</option>${sel}</select>
-        </div>`;
-      });
-      html+=`</div>
-      <button onclick="_QED.options.push({condition:'lt',value:0,value2:null,escalateTo:null});_renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add condition</button>`;
-      return html;
-    }
-    // Fixed options: passfail, yesno, tick
-    const fixedLabels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
-    const labels=fixedLabels[q.type]||['Option A','Option B'];
-    if(!q.options||q.options.length!==2){
-      _QED.options=[{label:labels[0],escalateTo:null},{label:labels[1],escalateTo:null}];
-    }
-    let html=`<div style="display:flex;flex-direction:column;gap:6px">`;
+  let optsHtml='';
+  if(q.type==='answer'){
+    let rows='';
     (q.options||[]).forEach((o,i)=>{
-      const isGood=i===0;
-      const sel=activeUsers.map(u=>`<option value="${u.id}" ${o.escalateTo===u.id?'selected':''}>${esc(fullName(u))}</option>`).join('');
-      html+=`<div style="display:flex;align-items:center;gap:10px;background:${isGood?'#F0FDF4':'#FFF5F5'};border:1px solid ${isGood?'#BBF7D0':'#FECACA'};border-radius:9px;padding:8px 12px">
-        <span style="font-size:13px;font-weight:700;color:${isGood?'#16A34A':'#DC2626'};min-width:44px">${labels[i]}</span>
-        <select onchange="_QED.options[${i}].escalateTo=this.value||null;_refreshQPreview()" style="flex:1;font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;outline:none;color:#374151"><option value="">No escalation</option>${sel}</select>
+      rows+=`<div style="display:flex;align-items:center;gap:6px;background:#F9FAFB;border:1px solid #E5E7EB;border-radius:9px;padding:7px 10px">
+        <span style="font-size:11px;font-weight:700;color:#9CA3AF;width:18px;text-align:center">${String.fromCharCode(65+i)}</span>
+        <input type="text" value="${o.text||''}" oninput="_QED.options[${i}].text=this.value" placeholder="Answer option…" style="flex:1;background:transparent;border:none;border-bottom:1px solid #E5E7EB;font-size:13px;outline:none;padding:2px 0"/>
+        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 6px;outline:none;max-width:140px">${uSel()}</select>
+        <button onclick="_QED.options.splice(${i},1);App._renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer">${ic('x','w-3 h-3')}</button>
       </div>`;
     });
-    html+=`</div>`;
-    return html;
+    optsHtml=rows+`<button onclick="_QED.options.push({text:'',escalateTo:null});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add answer</button>`;
+  }
+  else if(q.type==='number'){
+    let rows='';
+    (q.options||[]).forEach((o,i)=>{
+      const cSel=NUM_CONDITIONS.map(c=>`<option value="${c.id}" ${o.condition===c.id?'selected':''}>${c.label}</option>`).join('');
+      rows+=`<div style="background:#F9FAFB;border:1px solid #E5E7EB;border-radius:9px;padding:8px 10px;display:flex;flex-direction:column;gap:6px">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <select onchange="_QED.options[${i}].condition=this.value;App._renderQModal()" style="font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;outline:none">${cSel}</select>
+          <input type="number" value="${o.value!=null?o.value:''}" oninput="_QED.options[${i}].value=parseFloat(this.value)" placeholder="Value" style="width:70px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:12px;outline:none"/>
+          ${o.condition==='between'?`<span style="font-size:12px;color:#9CA3AF">and</span><input type="number" value="${o.value2!=null?o.value2:''}" oninput="_QED.options[${i}].value2=parseFloat(this.value)" placeholder="Value 2" style="width:70px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;font-size:12px;outline:none"/>`:''}
+          <button onclick="_QED.options.splice(${i},1);App._renderQModal()" style="width:20px;height:20px;display:grid;place-items:center;border-radius:5px;border:none;background:transparent;color:#D1D5DB;cursor:pointer;margin-left:auto">${ic('x','w-3 h-3')}</button>
+        </div>
+        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="font-size:11px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:3px 8px;outline:none">${uSel()}</select>
+      </div>`;
+    });
+    optsHtml=rows+`<button onclick="_QED.options.push({condition:'lt',value:null,value2:null,escalateTo:null});App._renderQModal()" style="margin-top:6px;display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:700;padding:5px 12px;border-radius:8px;background:#0E9F6E;color:#fff;border:none;cursor:pointer">${ic('plus','w-3 h-3')}Add condition</button>`;
+  }
+  else {
+    const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
+    const lbs=labels[q.type]||['Option A','Option B'];
+    if(!q.options||q.options.length!==2)_QED.options=[{label:lbs[0],escalateTo:null},{label:lbs[1],escalateTo:null}];
+    optsHtml=(q.options||[]).map((o,i)=>{
+      const good=i===0;
+      return`<div style="display:flex;align-items:center;gap:10px;background:${good?'#F0FDF4':'#FFF5F5'};border:1px solid ${good?'#BBF7D0':'#FECACA'};border-radius:9px;padding:8px 12px;margin-bottom:6px">
+        <span style="font-size:13px;font-weight:700;color:${good?'#16A34A':'#DC2626'};min-width:50px">${lbs[i]}</span>
+        <select onchange="_QED.options[${i}].escalateTo=this.value||null" style="flex:1;font-size:12px;background:#fff;border:1px solid #E5E7EB;border-radius:6px;padding:4px 8px;outline:none">${uSel()}</select>
+      </div>`;
+    }).join('');
   }
 
-  // Live preview
-  function preview(){
-    const typeLabel=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
-    let resp='';
-    if(q.type==='answer'){
-      resp=(q.options||[]).map((o,i)=>`<button style="display:block;width:100%;text-align:left;margin-bottom:5px;padding:8px 12px;border-radius:8px;border:1.5px solid #E5E7EB;background:#fff;font-size:13px;cursor:pointer">${String.fromCharCode(65+i)}. ${esc(o.text||'...')}</button>`).join('');
-    }else if(q.type==='number'){
-      resp=`<input type="number" placeholder="Enter number…" style="width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:14px;background:#fff" disabled/>`;
-    }else if(q.type==='passfail'){
-      resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:13px;font-weight:700;cursor:pointer">Pass</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700;cursor:pointer">Fail</button></div>`;
-    }else if(q.type==='yesno'){
-      resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:13px;font-weight:700;cursor:pointer">Yes</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700;cursor:pointer">No</button></div>`;
-    }else if(q.type==='tick'){
-      resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:15px;font-weight:700;cursor:pointer">✓</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:15px;font-weight:700;cursor:pointer">✕</button></div>`;
-    }
-    const flags=[];
-    if(q.photo)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#EFF6FF;color:#1D4ED8">📷 Photo required</span>`);
-    if(q.approval)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDF4;color:#16A34A">✓ Needs approval</span>`);
-    if(q.comment)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF9C3;color:#92400E">💬 Comment required</span>`);
-    return`<div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px">
-      <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Preview</div>
-      <div style="font-size:14px;font-weight:700;color:#15171C;margin-bottom:10px;line-height:1.4">${esc(q.text||'Your question text…')}</div>
-      ${resp}
-      ${flags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px">${flags.join('')}</div>`:''}
-    </div>`;
-  }
+  // Preview
+  let prev='';
+  if(q.type==='answer')prev=(q.options||[]).map((o,i)=>`<div style="padding:7px 12px;border-radius:8px;border:1.5px solid #E5E7EB;background:#fff;font-size:13px;margin-bottom:4px">${String.fromCharCode(65+i)}. ${o.text||'...'}</div>`).join('');
+  else if(q.type==='number')prev=`<input disabled placeholder="Enter a number…" style="width:100%;padding:9px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:14px;background:#F9FAFB"/>`;
+  else if(q.type==='passfail')prev=`<div style="display:flex;gap:8px"><div style="flex:1;padding:9px;border-radius:9px;background:#DCFCE7;color:#16A34A;font-weight:700;font-size:13px;text-align:center">Pass</div><div style="flex:1;padding:9px;border-radius:9px;background:#FEE2E2;color:#DC2626;font-weight:700;font-size:13px;text-align:center">Fail</div></div>`;
+  else if(q.type==='yesno')prev=`<div style="display:flex;gap:8px"><div style="flex:1;padding:9px;border-radius:9px;background:#DCFCE7;color:#16A34A;font-weight:700;font-size:13px;text-align:center">Yes</div><div style="flex:1;padding:9px;border-radius:9px;background:#FEE2E2;color:#DC2626;font-weight:700;font-size:13px;text-align:center">No</div></div>`;
+  else if(q.type==='tick')prev=`<div style="display:flex;gap:8px"><div style="flex:1;padding:9px;border-radius:9px;background:#DCFCE7;color:#16A34A;font-weight:700;font-size:18px;text-align:center">✓</div><div style="flex:1;padding:9px;border-radius:9px;background:#FEE2E2;color:#DC2626;font-weight:700;font-size:18px;text-align:center">✕</div></div>`;
 
-  openModal(`<div style="display:flex;flex-direction:column;max-height:90vh">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px 14px;border-bottom:1px solid #ECEDF0;flex-shrink:0">
-      <h2 class="fd" style="font-size:18px;font-weight:800">${id?'Edit':'New'} Question</h2>
+  const flags=[q.photo?'📷 Photo required':'',q.approval?'✓ Approval needed':'',q.comment?'💬 Comment required':''].filter(Boolean);
+
+  const togRow=(k,lbl,desc)=>`<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${_QED[k]?'#BBF7D0':'#F3F4F6'};background:${_QED[k]?'#F0FDF4':'#FAFAFA'};cursor:pointer;margin-bottom:5px">
+    <div><div style="font-size:13px;font-weight:600">${lbl}</div><div style="font-size:11px;color:#9CA3AF">${desc}</div></div>
+    <button type="button" class="tog ${_QED[k]?'on':'off'}" onclick="_QED['${k}']=!_QED['${k}'];App._renderQModal()"><span></span></button>
+  </label>`;
+
+  const typeBtns=Q_TYPES.map(t=>`<button type="button" onclick="_QED.type='${t.id}';_QED.options=[];App._renderQModal()" style="padding:8px;border-radius:9px;border:1.5px solid ${q.type===t.id?Q_TYPE_CLR[t.id]:'#E5E7EB'};background:${q.type===t.id?Q_TYPE_BG[t.id]:'#fff'};cursor:pointer;text-align:left">
+    <div style="font-size:12px;font-weight:700;color:${q.type===t.id?Q_TYPE_CLR[t.id]:'#374151'}">${t.label}</div>
+    <div style="font-size:10px;color:#9CA3AF;margin-top:2px">${t.desc}</div>
+  </button>`).join('');
+
+  const isExisting=!!(DB.questions||[]).find(x=>x.id===q.id);
+
+  openModal(`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid #ECEDF0">
+      <h2 style="font-size:17px;font-weight:800;font-family:var(--font-display)">${isExisting?'Edit':'New'} Question</h2>
       <button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('x')}</button>
     </div>
-    <div style="overflow-y:auto;flex:1;padding:18px 20px;display:flex;flex-direction:column;gap:16px">
-      <!-- Question text -->
+    <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:70vh">
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Question text *</label>
-        <input id="qed-text" type="text" value="${esc(q.text||'')}" oninput="_QED.text=this.value;_refreshQPreview()" placeholder="e.g. Is the area clean and clear?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none" class="rf"/>
+        <input id="qed-text" type="text" value="${q.text||''}" oninput="_QED.text=this.value" placeholder="e.g. Is the area clean?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none"/>
       </div>
-      <!-- Response type -->
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Response type</label>
-        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">
-          ${Q_TYPES.map(t=>`<button type="button" onclick="_QED.type='${t.id}';if(_QED.type!='answer'&&_QED.type!='number'){_QED.options=[];}else if(_QED.type==='answer'&&!_QED.options.length){_QED.options=[{text:'',escalateTo:null}];}_renderQModal()" style="padding:8px;border-radius:9px;border:1.5px solid ${q.type===t.id?Q_TYPE_CLR[t.id]:'#E5E7EB'};background:${q.type===t.id?Q_TYPE_BG[t.id]:'#fff'};cursor:pointer;text-align:left;transition:all .12s"><div style="font-size:12px;font-weight:700;color:${q.type===t.id?Q_TYPE_CLR[t.id]:'#374151'}">${t.label}</div><div style="font-size:10px;color:#9CA3AF;margin-top:2px">${t.desc}</div></button>`).join('')}
-        </div>
+        <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${typeBtns}</div>
       </div>
-      <!-- Options -->
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">
-          ${q.type==='answer'?'Answer options & escalation':q.type==='number'?'Conditions & escalation':'Escalation per response'}
-        </label>
-        ${optionsEditor()}
+        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">${q.type==='answer'?'Answer options & escalation':q.type==='number'?'Conditions & escalation':'Escalation per response'}</label>
+        ${optsHtml}
       </div>
-      <!-- Toggles -->
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Options</label>
-        <div style="display:flex;flex-direction:column;gap:6px">
-          ${[['photo','📷 Photo mandatory','Require a photo with this question'],['approval','✓ Approval required','Response needs manager approval'],['comment','💬 Comment required','Require a written comment']].map(([k,lbl,desc])=>`<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${_QED[k]?'#BBF7D0':'#F3F4F6'};background:${_QED[k]?'#F0FDF4':'#FAFAFA'};cursor:pointer"><div><div style="font-size:13px;font-weight:600;color:#15171C">${lbl}</div><div style="font-size:11px;color:#9CA3AF">${desc}</div></div><button type="button" class="tog ${_QED[k]?'on':'off'}" onclick="_QED['${k}']=!_QED['${k}'];_renderQModal()"><span></span></button></label>`).join('')}
-        </div>
+        ${togRow('photo','📷 Photo mandatory','Require a photo with this question')}
+        ${togRow('approval','✓ Approval required','Response needs manager approval')}
+        ${togRow('comment','💬 Comment required','Require a written comment')}
       </div>
-      <!-- Preview -->
-      <div id="qed-preview">${preview()}</div>
+      <div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px">
+        <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Preview</div>
+        <div style="font-size:14px;font-weight:700;color:#15171C;margin-bottom:10px">${q.text||'Your question text…'}</div>
+        ${prev}
+        ${flags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:8px">${flags.map(f=>`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F3F4F6;color:#374151">${f}</span>`).join('')}</div>`:''}
+      </div>
     </div>
-    <div style="padding:14px 20px;border-top:1px solid #ECEDF0;display:flex;gap:8px;flex-shrink:0;background:#fff">
+    <div style="padding:12px 18px;border-top:1px solid #ECEDF0;display:flex;gap:8px;background:#fff">
       <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
-      <button onclick="App._saveQuestion()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${_QED&&_QED.createdAt?'Save changes':'Create question'}</button>
+      <button onclick="App._saveQuestion()" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">${isExisting?'Save changes':'Create question'}</button>
     </div>
-  </div>`,'max-w-lg');
-}
+  `,'max-w-lg');
 
-function _refreshQPreview(){
-  const el=document.getElementById('qed-preview');
-  if(!el||!_QED)return;
-  const q=_QED;
-  const typeLabel=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
-  let resp='';
-  if(q.type==='answer'){resp=(q.options||[]).map((o,i)=>`<button style="display:block;width:100%;text-align:left;margin-bottom:5px;padding:8px 12px;border-radius:8px;border:1.5px solid #E5E7EB;background:#fff;font-size:13px;cursor:pointer">${String.fromCharCode(65+i)}. ${esc(o.text||'...')}</button>`).join('');}
-  else if(q.type==='number'){resp=`<input type="number" placeholder="Enter number…" style="width:100%;padding:9px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:14px;background:#fff" disabled/>`;}
-  else if(q.type==='passfail'){resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:13px;font-weight:700">Pass</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700">Fail</button></div>`;}
-  else if(q.type==='yesno'){resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:13px;font-weight:700">Yes</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:13px;font-weight:700">No</button></div>`;}
-  else if(q.type==='tick'){resp=`<div style="display:flex;gap:8px"><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#DCFCE7;color:#16A34A;font-size:15px;font-weight:700">✓</button><button style="flex:1;padding:9px;border-radius:9px;border:none;background:#FEE2E2;color:#DC2626;font-size:15px;font-weight:700">✕</button></div>`;}
-  const flags=[];
-  if(q.photo)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#EFF6FF;color:#1D4ED8">📷 Photo required</span>`);
-  if(q.approval)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#F0FDF4;color:#16A34A">✓ Needs approval</span>`);
-  if(q.comment)flags.push(`<span style="font-size:11px;font-weight:600;padding:2px 8px;border-radius:20px;background:#FEF9C3;color:#92400E">💬 Comment required</span>`);
-  el.innerHTML=`<div style="background:#F9FAFB;border:1.5px solid #E5E7EB;border-radius:12px;padding:14px">
-    <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Preview</div>
-    <div style="font-size:14px;font-weight:700;color:#15171C;margin-bottom:10px;line-height:1.4">${esc(q.text||'Your question text…')}</div>
-    ${resp}
-    ${flags.length?`<div style="display:flex;flex-wrap:wrap;gap:4px;margin-top:10px">${flags.join('')}</div>`:''}
-  </div>`;
-}
+  // Restore escalation selects after render
+  setTimeout(()=>{
+    (q.options||[]).forEach((o,i)=>{
+      const sel=document.querySelectorAll('#modal select');
+      // find the right select by its position - simpler: re-set value directly
+      const selEls=document.querySelectorAll('[onchange*="escalateTo"]');
+      if(selEls[i]&&o.escalateTo)selEls[i].value=o.escalateTo;
+    });
+  },0);
+};
 
 App._saveQuestion=()=>{
   if(!_QED)return;
+  const textEl=document.getElementById('qed-text');
+  if(textEl)_QED.text=textEl.value.trim();
   const text=(_QED.text||'').trim();
   if(!text){toast('Question text is required','err');return;}
-  // Validate options
   if(_QED.type==='answer'){
-    if(!(_QED.options||[]).some(o=>o.text?.trim())){toast('Add at least one answer option','err');return;}
-    _QED.options=(_QED.options||[]).filter(o=>o.text?.trim());
+    _QED.options=(_QED.options||[]).filter(o=>(o.text||'').trim());
+    if(!_QED.options.length){toast('Add at least one answer option','err');return;}
   }
   if(_QED.type==='number'&&!(_QED.options||[]).length){toast('Add at least one condition','err');return;}
   if(!DB.questions)DB.questions=[];
-  const existing=DB.questions.findIndex(x=>x.id===_QED.id);
-  const isNew=existing===-1;
-  if(!isNew){DB.questions[existing]=_QED;}
+  const existIdx=DB.questions.findIndex(x=>x.id===_QED.id);
+  const isNew=existIdx===-1;
+  if(!isNew){DB.questions[existIdx]=_QED;}
   else{_QED.createdBy=S.uid;_QED.createdAt=new Date().toISOString();DB.questions.push(_QED);}
   toast(isNew?'Question created ✓':'Saved ✓');
   closeModal();_QED=null;saveDB();render();
@@ -2608,101 +2564,91 @@ App._saveQuestion=()=>{
 App._openClQuestionPicker=()=>{
   if(!CLD)return;
   const allQ=DB.questions||[];
-  const selected=new Set(CLD.questionIds||[]);
-  openModal(`<div style="display:flex;flex-direction:column;max-height:85vh">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:16px 18px 12px;border-bottom:1px solid #ECEDF0;flex-shrink:0">
+  const sel=new Set(CLD.questionIds||[]);
+  App._clQSel=new Set(sel);
+  openModal(`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #ECEDF0">
       <div>
-        <h2 class="fd" style="font-size:17px;font-weight:800">Add Questions</h2>
-        <p style="font-size:12px;color:#9CA3AF;margin-top:2px">Select questions to include in this checklist</p>
+        <h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">Add Questions</h2>
+        <p style="font-size:12px;color:#9CA3AF;margin-top:1px">Select questions for this checklist</p>
       </div>
       <button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('x')}</button>
     </div>
-    <div style="overflow-y:auto;flex:1;padding:14px 18px;display:flex;flex-direction:column;gap:6px">
+    <div style="padding:12px 16px;overflow-y:auto;max-height:60vh;display:flex;flex-direction:column;gap:5px">
       ${!allQ.length
-        ?`<div style="text-align:center;padding:32px;color:#9CA3AF;font-size:13px">No questions yet — <button onclick="App.closeModal();App.go('questions')" style="color:#0E9F6E;border:none;background:none;cursor:pointer;font-weight:600">create some first</button></div>`
+        ?`<div style="text-align:center;padding:32px;color:#9CA3AF;font-size:13px">No questions yet</div>`
         :allQ.map(q=>{
-          const on=selected.has(q.id);
-          const typeLabel=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
+          const on=sel.has(q.id);
+          const tl=(Q_TYPES.find(t=>t.id===q.type)||{label:q.type}).label;
           const clr=Q_TYPE_CLR[q.type]||'#6B7280';
           const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
-          return`<label style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#F9FAFB':'#fff'};cursor:pointer;transition:all .12s">
-            <input type="checkbox" class="sr-only" ${on?'checked':''} onchange="App._togClQuestion('${q.id}',this.checked)"/>
+          return`<label id="qpick-${q.id}" style="display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:10px;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#F9FAFB':'#fff'};cursor:pointer" onclick="App._togClQ('${q.id}',this)">
             <div style="width:20px;height:20px;border-radius:6px;border:1.5px solid ${on?'#15171C':'#D1D5DB'};background:${on?'#15171C':'#fff'};display:flex;align-items:center;justify-content:center;flex-shrink:0">
-              ${on?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>`:''}
+              ${on?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:''}
             </div>
-            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:${bg};color:${clr};flex-shrink:0">${typeLabel}</span>
+            <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:${bg};color:${clr};flex-shrink:0">${tl}</span>
             <div style="flex:1;min-width:0">
-              <div style="font-size:13px;font-weight:600;color:#15171C;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</div>
-              <div style="font-size:11px;color:#9CA3AF;margin-top:1px">${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}</div>
+              <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.text}</div>
+              <div style="font-size:11px;color:#9CA3AF">${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}</div>
             </div>
           </label>`;
         }).join('')}
     </div>
-    <div style="padding:12px 18px;border-top:1px solid #ECEDF0;flex-shrink:0;background:#fff">
-      <button onclick="App._confirmClQuestions()" style="width:100%;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Confirm selection</button>
+    <div style="padding:10px 16px;border-top:1px solid #ECEDF0;background:#fff">
+      <button onclick="App._confirmClQs()" style="width:100%;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Confirm selection</button>
     </div>
-  </div>`,'max-w-md');
-  // Store picker state
-  App._clQPickerSelected=new Set(selected);
+  `,'max-w-md');
 };
 
-App._togClQuestion=(qid,on)=>{
-  if(!App._clQPickerSelected)App._clQPickerSelected=new Set();
-  if(on)App._clQPickerSelected.add(qid);
-  else App._clQPickerSelected.delete(qid);
+App._togClQ=(qid,el)=>{
+  if(!App._clQSel)App._clQSel=new Set();
+  const on=App._clQSel.has(qid);
+  if(on)App._clQSel.delete(qid);else App._clQSel.add(qid);
+  const now=!on;
+  el.style.border=`1.5px solid ${now?'#15171C':'#E5E7EB'}`;
+  el.style.background=now?'#F9FAFB':'#fff';
+  const box=el.querySelector('div');
+  if(box){box.style.border=`1.5px solid ${now?'#15171C':'#D1D5DB'}`;box.style.background=now?'#15171C':'#fff';box.innerHTML=now?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:'`';}
 };
 
-App._confirmClQuestions=()=>{
-  if(!CLD||!App._clQPickerSelected)return;
-  CLD.questionIds=[...App._clQPickerSelected];
+App._confirmClQs=()=>{
+  if(!CLD||!App._clQSel)return;
+  CLD.questionIds=[...App._clQSel];
   closeModal();
-  // Re-render the checklist modal
-  _renderClModal(!!DB.checklists.find(c=>c.id===CLD.id));
+  _renderClModal(!!(DB.checklists.find(c=>c.id===CLD.id)));
 };
 
 App._removeClQuestion=(qid)=>{
   if(!CLD)return;
   CLD.questionIds=(CLD.questionIds||[]).filter(x=>x!==qid);
-  // Re-render the checklist modal
-  _renderClModal(!!DB.checklists.find(c=>c.id===CLD.id));
+  _renderClModal(!!(DB.checklists.find(c=>c.id===CLD.id)));
 };
 
-// ── Escalation on checklist submit ──
-function _processEscalations(checklistId, date, responses){
-  // responses: array of {questionId, response, numericValue}
+// ── Escalation on submit ──
+function _processEscalations(checklistId,date,responses){
   const c=clById(checklistId);if(!c)return;
   const u=me();
   (responses||[]).forEach(resp=>{
     const q=(DB.questions||[]).find(x=>x.id===resp.questionId);if(!q)return;
     let escalateTo=null;
-    if(q.type==='answer'){
-      const opt=(q.options||[]).find(o=>o.text===resp.response);
-      if(opt)escalateTo=opt.escalateTo||null;
-    }else if(q.type==='number'){
+    if(q.type==='answer'){const opt=(q.options||[]).find(o=>o.text===resp.response);if(opt)escalateTo=opt.escalateTo;}
+    else if(q.type==='number'){
       const val=parseFloat(resp.response);
-      for(const cond of (q.options||[])){
-        let match=false;
-        if(cond.condition==='lt')match=val<cond.value;
-        else if(cond.condition==='lte')match=val<=cond.value;
-        else if(cond.condition==='gt')match=val>cond.value;
-        else if(cond.condition==='gte')match=val>=cond.value;
-        else if(cond.condition==='eq')match=val===cond.value;
-        else if(cond.condition==='neq')match=val!==cond.value;
-        else if(cond.condition==='between')match=val>=cond.value&&val<=cond.value2;
-        if(match){escalateTo=cond.escalateTo||null;break;}
+      for(const cond of(q.options||[])){
+        let m=false;
+        if(cond.condition==='lt')m=val<cond.value;
+        else if(cond.condition==='lte')m=val<=cond.value;
+        else if(cond.condition==='gt')m=val>cond.value;
+        else if(cond.condition==='gte')m=val>=cond.value;
+        else if(cond.condition==='eq')m=val===cond.value;
+        else if(cond.condition==='neq')m=val!==cond.value;
+        else if(cond.condition==='between')m=val>=cond.value&&val<=(cond.value2||cond.value);
+        if(m){escalateTo=cond.escalateTo;break;}
       }
-    }else{
-      // passfail, yesno, tick — match by label
-      const opt=(q.options||[]).find(o=>(o.label||'').toLowerCase()===String(resp.response).toLowerCase());
-      if(opt)escalateTo=opt.escalateTo||null;
-    }
+    }else{const opt=(q.options||[]).find(o=>(o.label||'').toLowerCase()===String(resp.response).toLowerCase());if(opt)escalateTo=opt.escalateTo;}
     if(escalateTo&&escalateTo!==S.uid){
       if(!DB.notifications)DB.notifications=[];
-      DB.notifications.unshift({
-        id:uid('n'),userId:escalateTo,
-        text:`⚠️ Escalation: "${esc(q.text)}" answered "${esc(String(resp.response))}" by ${esc(fullName(u))} on ${c.name} (${date})`,
-        time:new Date().toISOString(),read:false
-      });
+      DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:`\u26a0\ufe0f Escalation: "${q.text}" answered "${resp.response}" by ${fullName(u)} on ${c.name} (${date})`,time:new Date().toISOString(),read:false});
       _invalidateNotifCache();
     }
   });
