@@ -329,6 +329,8 @@ const I={
   doc:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/>',
   help:`<circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><circle cx="12" cy="17" r=".5" fill="currentColor"/>`,
   ticket:`<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 17v2M13 11v2"/>`,
+  eye:`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
+  send:`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`,
 };
 const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]||''}</svg>`;
 
@@ -363,8 +365,10 @@ async function loadFromSB(){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
   }
-  DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
-  DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
+  const _delDepts=new Set(DB.departments_deleted||[]);
+  DB.departments=(depts||[]).filter(d=>!_delDepts.has(d.id)).map(d=>({id:d.id,name:d.name}));
+  const _delLocs=new Set(DB.locations_deleted||[]);
+  DB.locations=(locs||[]).filter(l=>!_delLocs.has(l.id)).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
   if(cls){
     const mapped=_mC(cls);
     // Preserve local deletes — don't restore items that were deleted locally
@@ -428,6 +432,9 @@ const CHIP_CLS={
   'Active':    'bg-emerald-50 text-emerald-700 ring-emerald-200',
   'Inactive':  'bg-ink-100 text-ink-400 ring-ink-200',
   'Approved':  'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  'Editing':   'bg-sky-50 text-sky-700 ring-sky-200',
+  'Upcoming':  'bg-purple-50 text-purple-700 ring-purple-200',
+  'Draft':     'bg-ink-50 text-ink-400 ring-ink-200',
 };
 const CHIP_DOT={'On Time':'bg-emerald-500','Submitted':'bg-emerald-500','Pending':'bg-amber-400','Late':'bg-rose-500','Pending Approval':'bg-orange-500','Rejected':'bg-rose-800','Active':'bg-emerald-500','Inactive':'bg-ink-300','Approved':'bg-emerald-500'};
 const CHIP_STYLE={"On Time": "background:#ECFDF5;color:#047857", "Submitted": "background:#ECFDF5;color:#047857", "Pending": "background:#FFFBEB;color:#B45309", "Late": "background:#FFF1F2;color:#BE123C", "Pending Approval": "background:#FFF7ED;color:#C2410C", "Rejected": "background:#FFF1F2;color:#9F1239", "Active": "background:#ECFDF5;color:#047857", "Inactive": "background:#F6F7F8;color:#9CA3AF", "Approved": "background:#ECFDF5;color:#047857"};
@@ -459,6 +466,7 @@ function seed(){
   DB.audit=[];
   DB.checklists_deleted=[];DB.questions_deleted=[];
   DB.folders_deleted=[];DB.documents_deleted=[];
+  DB.departments_deleted=[];DB.locations_deleted=[];DB.users_deleted=[];
   log('System','Workspace initialised','');
 }
 
@@ -469,9 +477,11 @@ function saveDB(){
   // Always save to localStorage — strip large base64 photos to avoid 5MB limit
   try{
     const dbCopy=JSON.parse(JSON.stringify({DB,uid:S.uid}));
-    // Strip base64 photos from submissions (re-uploaded on edit if needed)
+    // Strip base64 photos from submissions to avoid 5MB localStorage limit
     (dbCopy.DB.submissions||[]).forEach(s=>{
       (s.tasks||[]).forEach(t=>{if(t.photo&&t.photo.startsWith('data:'))t.photo='[photo]';});
+      // Also strip question response photos
+      (s.questionResponses||[]).forEach(r=>{if(r.photo&&r.photo.startsWith('data:'))r.photo='[photo]';});
     });
     localStorage.setItem(LS_KEY,JSON.stringify(dbCopy));
   }catch(e){
@@ -491,7 +501,7 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted'].forEach(k=>{if(!DB[k])DB[k]=[];});
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};
       // Ensure individual rule fields have proper defaults (true, not false)
@@ -555,7 +565,6 @@ function openModal(html,size='max-w-lg'){
 }
 const closeModal=()=>{const m=$('#modal');if(m&&m.remove)m.remove();};
 const App={};window.App=App;App.closeModal=closeModal;
-
 
 let _notifCache={uid:null,count:0,ts:0};
 function _notifCount(){
@@ -637,7 +646,7 @@ App.go=(r)=>{S.route=r;S.search='';S.expandedCl=null;S.afOpen=null;
 let _lastUserAction=0; // timestamp of last submit/approve/etc — prevents loadFromSB overwriting fresh state
 function _touchAction(){_lastUserAction=Date.now();}
 function render(){if(!S.uid){$('#app').innerHTML=loginView();return;}$('#app').innerHTML=shell(pageContent());}
-function rr(){const c=$('#content');if(c)c.innerHTML=pageContent();}
+function rr(){_invalidateNotifCache();const c=$('#content');if(c)c.innerHTML=pageContent();}
 App.rr=rr;
 
 function shell(content){
@@ -1084,7 +1093,7 @@ App.delUser=async(id)=>{
     sb.from('notifications').delete().eq('user_id',id),
     sb.from('feedback').delete().eq('user_id',id),
     sb.from('profiles').delete().eq('id',id),
-  ]).catch(e=>console.warn('delUser cleanup:',e));
+  ]).then(()=>{}).catch(e=>console.warn('delUser cleanup:',e));
 };
 
 /* ===== DEPARTMENTS ===== */
@@ -1343,7 +1352,7 @@ function deptsPage(){
 }
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveDept:',error.message);}).catch(()=>{});};
-App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;DB.departments=DB.departments.filter(x=>x.id!==id);sb.from('departments').delete().eq('id',id).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});// Clear dept from users and checklists (don't delete them)
+App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;if(!DB.departments_deleted)DB.departments_deleted=[];if(!DB.departments_deleted.includes(id))DB.departments_deleted.push(id);DB.departments=DB.departments.filter(x=>x.id!==id);sb.from('departments').delete().eq('id',id).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});// Clear dept from users and checklists (don't delete them)
 DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
@@ -1410,7 +1419,7 @@ function locsPage(){
 App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveLoc:',error.message);}).catch(()=>{});};
 App.togLoc=(id)=>{const l=locById(id);if(!l)return;l.status=l.status==='Active'?'Inactive':'Active';saveDB();render();toast(l.name+' '+(l.status==='Active'?'enabled ✓':'disabled'),'ok');sb.from('locations').update({status:l.status}).eq('id',id).then(()=>{}).catch(()=>{});};
-App.delLoc=(id)=>{const l=locById(id);if(!l)return;if(!confirm('Delete "'+l.name+'"? Checklists using this location will keep it as reference.'))return;DB.locations=DB.locations.filter(x=>x.id!==id);saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
+App.delLoc=(id)=>{const l=locById(id);if(!l)return;if(!confirm('Delete "'+l.name+'"? Checklists using this location will keep it as reference.'))return;if(!DB.locations_deleted)DB.locations_deleted=[];if(!DB.locations_deleted.includes(id))DB.locations_deleted.push(id);DB.locations=DB.locations.filter(x=>x.id!==id);saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
 
 
 const Q_TYPES=[
@@ -1875,8 +1884,8 @@ function _clCard(c,date){
   const run=RUN[c.id];
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
   const editApproved=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Approved');
-  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend'};
-  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444','Editing':'#0EA5E9'};
+  const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend','Upcoming':'st-pend'};
+  const stBar={'On Time':'#22C55E','Submitted':'#22C55E','Pending':'#F59E0B','Late':'#EF4444','Pending Approval':'#F97316','Rejected':'#EF4444','Editing':'#0EA5E9','Upcoming':'#A855F7'};
 
   return`<div class="clc" style="border-top:3px solid ${stBar[st]||'#EEECE8'}">
     <!-- Header -->
@@ -1886,7 +1895,13 @@ function _clCard(c,date){
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
           ${c.description?`<span style="font-size:11px;color:#B8B5AC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(c.description)}</span>`:''}
-          ${(c.questionIds||[]).length?`<span style="font-size:11px;color:#9CA3AF;flex-shrink:0">${(c.questionIds||[]).length} question${(c.questionIds||[]).length>1?'s':''}</span>`:''}
+          ${(()=>{
+            const total=(c.questionIds||[]).length;if(!total)return'';
+            const answered=(run?.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;
+            const allAnswered=!isSubmitted&&answered>=total;
+            if(isSubmitted){return`<span style="font-size:11px;font-weight:600;color:#0E9F6E;flex-shrink:0">${total} question${total>1?'s':''}</span>`;}
+            return`<span style="font-size:11px;font-weight:600;color:${allAnswered?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${answered}/${total} answered</span>`;
+          })()}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -1919,7 +1934,20 @@ function _clCard(c,date){
           } else if(q.type==='tick'){
             inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✓</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✕</button></div>`;
           }
-          const flags=[];if(q.photo)flags.push('📷');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Comment');
+          const flags=[];if(q.photo)flags.push('📷 Photo');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Comment');
+          // Photo upload if required and not locked
+          if(q.photo&&!locked){
+            const existingPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
+            inputHtml+='<div style="margin-top:8px">'
+              +(existingPhoto?'<div style="margin-bottom:6px"><img src="'+existingPhoto+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>':'')
+              +'<label style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;background:#F3F4F6;color:#374151;font-size:12px;font-weight:600;cursor:pointer">'
+              +ic('cam','w-4 h-4')+'Upload photo'
+              +'<input type="file" accept="image/*" capture="environment" style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
+              +'</label></div>';
+          } else if(q.photo&&locked){
+            const existingPhoto2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
+            if(existingPhoto2)inputHtml+='<div style="margin-top:6px"><img src="'+existingPhoto2+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>';
+          }
           return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
               <span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:5px;background:${Q_TYPE_BG[q.type]||'#F6F7F8'};color:${Q_TYPE_CLR[q.type]||'#6B7280'}">${TYPE_LABELS[q.type]||q.type}</span>
@@ -1979,6 +2007,22 @@ App._setQR=(clId,qId,val,skipRr)=>{
   if(!skipRr)rr();
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
 };
+App._setQRPhoto=(clId,qId,input)=>{
+  const file=input?.files?.[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const dataUrl=e.target.result;
+    if(!RUN[clId])return;
+    if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
+    const existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
+    if(existing){existing.photo=dataUrl;}
+    else{RUN[clId].questionResponses.push({questionId:qId,response:null,comment:'',photo:dataUrl});}
+    clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+    rr();
+  };
+  reader.readAsDataURL(file);
+};
+
 App._setQRComment=(clId,qId,val)=>{
   if(!RUN[clId])return;
   if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
@@ -2035,7 +2079,9 @@ App._submitRun=async(clId,date)=>{
   // Process escalations — only on first submission, not resubmits
   if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
   // questionResponses already in run — will be included in push/update below
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:run.questionResponses||[],edit_count:run.editCount||0,edit_history:run.editHistory||[]};
+  // Strip base64 photos before sending to Supabase (store URL reference instead)
+  const srQR=(run.questionResponses||[]).map(r=>({...r,photo:r.photo&&r.photo.startsWith('data:')?'[photo]':r.photo||null}));
+  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:srQR,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
   // 1. Save immediately (saveDB strips photos before writing)
   saveDB();
   // 2. Render immediately — UI updates in <50ms
@@ -2173,8 +2219,6 @@ function teamViewPage(){
       ${dayCls.length?dayCls.map(c=>{
         const sub=subFor(c.id,S.tvUser,selDate);
         const st=sub?sub.status:selDate<today?'Late':'Pending';
-        const tasks=c.tasks||[];const rtasks=sub?.tasks||[];
-        const photos=rtasks.filter(t=>t.photo).length;
         const BC={'Late':'#F43F5E','Pending Approval':'#F97316','On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','Rejected':'#9F1239'};
         const exp=S.tvExpanded===c.id;
         return`<div style="background:#fff;border-radius:16px;border:1px solid #ECEDF0;border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
@@ -2182,10 +2226,9 @@ function teamViewPage(){
           <button onclick="S.tvExpanded=S.tvExpanded==='${c.id}'?null:'${c.id}';rr()" style="width:100%;text-align:left;padding:14px 16px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
             <div style="flex:1;min-width:0">
               <div style="font-size:14px;font-weight:700">${esc(c.name)}</div>
-              <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${tasks.length} tasks · ${esc(c.department)}</div>
+              <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''} · ${esc(c.department)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${issues?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FFF7ED;color:#C2410C">${issues} issue${issues>1?'s':''}</span>`:''}
               ${photos?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EFF6FF;color:#1D4ED8">📷 ${photos}</span>`:''}
               ${chip(st)}
               <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
@@ -2193,30 +2236,24 @@ function teamViewPage(){
           </button>
           <!-- Expanded task list (read-only) -->
           ${exp?`<div style="border-top:1px solid #F3F4F6">
-            ${sub?tasks.map((t,i)=>{
-              const rt=rtasks[i]||{};const hasR=rt.response!==null&&rt.response!==undefined;const isIss=false;
-              const CDOT={Low:'#D1D5DB',Medium:'#D97706',High:'#EA580C',Critical:'#DC2626'};
-              return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:flex-start;gap:10px;background:${isIss?'#FFF8F8':hasR?'#F9FEFB':'#fff'}">
-                <!-- Status dot -->
-                <div style="width:18px;height:18px;border-radius:5px;background:${isIss?'#DC2626':hasR?'#10B981':'#E5E7EB'};display:grid;place-items:center;flex-shrink:0;margin-top:1px">
-                  ${hasR?`<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="${isIss?'M18 6 6 18M6 6l12 12':'M20 6 9 17l-5-5'}"/></svg>`:''}
-                </div>
-                <div style="flex:1;min-width:0">
-                  <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
-                    ${t.criticality&&t.criticality!=='Low'?`<span style="width:6px;height:6px;border-radius:50%;background:${CDOT[t.criticality]};flex-shrink:0"></span>`:''}
-                    <span style="font-size:13px;font-weight:600;${isIss?'color:#DC2626':!hasR?'color:#9CA3AF':''}">${esc(t.name)}</span>
-                    ${hasR&&!isIss?`<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:#DCFCE7;color:#15803D">${esc(String(rt.response))}</span>`:''}
-                    ${isIss?`<span style="font-size:11px;font-weight:700;padding:1px 7px;border-radius:5px;background:#FEE2E2;color:#DC2626">⚠ Issue</span>`:''}
+            ${(()=>{
+              if(!sub)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(selDate)}</div>`;
+              const qResps=sub.questionResponses||[];
+              const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+              if(!qs.length)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No questions in this checklist</div>`;
+              return qs.map(q=>{
+                const qr=qResps.find(r=>r.questionId===q.id)||{};
+                const resp=qr.response;const hasR=resp!==null&&resp!==undefined&&resp!=='';
+                return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px">
+                  <div style="width:18px;height:18px;border-radius:5px;background:${hasR?'#10B981':'#E5E7EB'};display:grid;place-items:center;flex-shrink:0">${hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':''}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}</div>
+                    ${hasR?`<div style="font-size:11px;font-weight:700;color:#0E9F6E;margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
+                    ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
                   </div>
-
-                  ${rt.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px">${esc(rt.comment)}</div>`:''}
-                  ${rt.photo?`<div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-                    ${rt.photo?`<div><div style="font-size:9px;font-weight:700;color:#9CA3AF;margin-bottom:3px">TASK PHOTO</div><img src="${rt.photo}" onclick="App._bigImg('${rt.photo}')" style="width:64px;height:64px;object-fit:cover;border-radius:8px;border:1px solid #E5E7EB;cursor:pointer"/></div>`:''}
-
-                  </div>`:''}
-                </div>
-              </div>`;
-            }).join(''):`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(selDate)}</div>`}
+                </div>`;
+              }).join('');
+            })()}
             ${sub?`<div style="padding:10px 16px;font-size:11px;color:#9CA3AF;border-top:1px solid #F3F4F6">Submitted ${sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'unknown time'}</div>`:''}
           </div>`:''}
         </div>`;
@@ -2345,7 +2382,12 @@ App.viewSub=(subId)=>{
   const c=clById(s.checklistId);
   const clName=c?esc(c.name):'<em style="color:#9CA3AF">Deleted checklist</em>';
   const qResps=s.questionResponses||[];
-  const qs=c?(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean):[];
+  // If checklist deleted, reconstruct question list from saved responses
+  let qs=c?(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean):[];
+  if(!qs.length&&qResps.length){
+    // Hydrate from DB.questions using the response questionIds
+    qs=qResps.map(r=>(DB.questions||[]).find(x=>x.id===r.questionId)).filter(Boolean);
+  }
   const TYPE_LABELS={answer:'Answer',number:'Number',passfail:'Pass/Fail',yesno:'Yes/No',tick:'Tick/Cross'};
   const qRows=qs.map(q=>{
     const qr=qResps.find(r=>r.questionId===q.id)||{};
@@ -2361,6 +2403,7 @@ App.viewSub=(subId)=>{
       +'</div>'
       +(hasResp?'<div style="font-size:13px;font-weight:700;color:#0E9F6E">'+esc(String(resp))+'</div>':'<div style="font-size:12px;color:#D1D5DB;font-style:italic">Not answered</div>')
       +(qr.comment?'<div style="font-size:12px;color:#6B7280;margin-top:4px;font-style:italic">"'+esc(qr.comment)+'"</div>':'')
+      +(qr.photo?'<div style="margin-top:6px"><img src="'+qr.photo+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>':'')
       +'</div>';
   }).join('');
   openModal('<div class="p-5">'
@@ -2388,7 +2431,7 @@ App._viewSubFor=async(btn)=>{
     // Try loading from Supabase
     const{data}=await sb.from('submissions').select('*').eq('checklist_id',btn.dataset.cl).eq('user_id',btn.dataset.uid).eq('date',btn.dataset.dt).single();
     if(data){
-      s={id:data.id,checklistId:data.checklist_id,userId:data.user_id,date:data.date,status:data.status||'Pending',submittedAt:data.submitted_at||null,tasks:data.tasks||[],editCount:data.edit_count||0,editHistory:data.edit_history||[]};
+      s={id:data.id,checklistId:data.checklist_id,userId:data.user_id,date:data.date,status:data.status||'Pending',submittedAt:data.submitted_at||null,tasks:data.tasks||[],questionResponses:data.question_responses||[],editCount:data.edit_count||0,editHistory:data.edit_history||[]};
       DB.submissions.push(s);
     }
   }
@@ -2886,6 +2929,32 @@ function _processEscalations(checklistId,date,responses){
 
 
 
+function _feedbackTabContent(uid){
+  const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(!myFb.length)return empty('msg','No feedback yet','Feedback from your manager appears here.');
+  return'<div style="display:flex;flex-direction:column;gap:10px">'+myFb.map(fb=>{
+    const mgr=uById(fb.managerId);const cl=clById(fb.checklistId);
+    const bc=fb.acknowledged?'#E5E7EB':'#BFDBFE';
+    const priClr=fb.priority==='High'||fb.priority==='Critical'?'#DC2626':'#92400E';
+    const priBg=fb.priority==='High'||fb.priority==='Critical'?'#FEE2E2':'#FEF9C3';
+    return'<div style="background:#fff;border-radius:16px;border:1px solid '+bc+';padding:16px">'
+      +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">'
+      +'<div>'
+      +'<div style="font-size:14px;font-weight:700">'+(cl?esc(cl.name):'General feedback')+'</div>'
+      +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' &middot; '+fmtD((fb.date||fb.createdAt||'').slice(0,10))+'</div>'
+      +'</div>'
+      +(fb.priority&&fb.priority!=='Low'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:'+priBg+';color:'+priClr+'">'+fb.priority+'</span>':'')
+      +'</div>'
+      +'<p style="font-size:13px;line-height:1.6;margin:0 0 10px">'+esc(fb.text)+'</p>'
+      +(fb.reply?'<div style="background:#F0FDF4;border-radius:10px;padding:10px 12px;margin-bottom:10px"><div style="font-size:11px;font-weight:700;color:#059669;margin-bottom:4px">Your reply</div><p style="font-size:13px;color:#374151;margin:0">'+esc(fb.reply)+'</p></div>':'')
+      +'<div style="display:flex;gap:8px;flex-wrap:wrap">'
+      +(!fb.acknowledged?'<button onclick="App._ackFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:6px 14px;border-radius:8px;background:#1D4ED8;color:#fff;font-size:12px;font-weight:600;border:none;cursor:pointer">Acknowledge</button>':'<span style="font-size:12px;font-weight:600;color:#0E9F6E">&#10003; Acknowledged</span>')
+      +(!fb.reply?'<button onclick="App._replyFb(this.dataset.id)" data-id="'+fb.id+'" style="padding:6px 14px;border-radius:8px;background:#F3F4F6;color:#374151;font-size:12px;font-weight:600;border:none;cursor:pointer">Reply</button>':'')
+      +'</div></div>';
+  }).join('')+'</div>';
+}
+
+
 function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
@@ -2905,7 +2974,7 @@ function notificationsPage(){
   const unackFb=myFb.filter(fb=>!fb.acknowledged);
 
   const tab=S.filters.ntab||'All';
-  const TABS=['All','Approvals','Feedback'];
+  const TABS=['All','Approvals','Escalations','Feedback'];
 
   function notifType(text){
     if(!text)return'general';
@@ -2928,14 +2997,15 @@ function notificationsPage(){
   const filteredNotifs=tab==='All'?notifs
     :tab==='Approvals'?notifs.filter(n=>['approval','edit'].includes(notifType(n.text)))
     :tab==='Feedback'?notifs.filter(n=>notifType(n.text)==='feedback')
-    :tab==='Issues'?notifs.filter(n=>notifType(n.text)==='issue')
+    :tab==='Escalations'?notifs.filter(n=>notifType(n.text)==='escalation')
     :notifs;
 
   const counts={
     All:notifs.length,
     Approvals:notifs.filter(n=>['approval','edit'].includes(notifType(n.text))).length,
+    Escalations:notifs.filter(n=>notifType(n.text)==='escalation').length,
     Feedback:notifs.filter(n=>notifType(n.text)==='feedback').length+myFb.filter(fb=>!fb.acknowledged).length,
-    Issues:notifs.filter(n=>notifType(n.text)==='issue').length,
+
   };
 
   return '<div class="fade">'+hdr('Notifications','')
@@ -2975,7 +3045,6 @@ function notificationsPage(){
     +'</div>';
 }
 App._setNTab=(t)=>{S.filters.ntab=t;rr();};
-App._setFbView=(v)=>{S.filters.fbView=v;rr();};
 App._notifClick=(id)=>{
   const n=DB.notifications.find(x=>x.id===id);if(!n)return;
   n.read=true;_invalidateNotifCache();saveDB();
@@ -2984,10 +3053,7 @@ App._notifClick=(id)=>{
   if(t.includes('💬')||t.includes('replied')||t.includes('Feedback')){
     App._goNotifFeedback();return;
   }
-  if(t.includes('Issue')||t.includes('issue')||t.includes('⚑')||t.includes('resolved')||t.includes('Resolved')||t.includes('Reopened')){
-    S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
-    S.filters={atab:'All'};render();window.scrollTo(0,0);return;
-  }
+
   if(t.includes('approved')||t.includes('Approved')){
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Approved'};render();window.scrollTo(0,0);return;
@@ -3004,9 +3070,9 @@ App._notifClick=(id)=>{
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
   }
-  // Escalation notification → go to approvals
+  // Escalation notification → go to notifications escalations tab
   if(t.includes('Escalation')||t.includes('escalation')){
-    App.go('approvals');return;
+    App._setNTab('Escalations');App.go('notifications');return;
   }
   // Checklist removed → go to my checklists
   if(t.includes('Checklist removed')||t.includes('no longer assigned')){
@@ -3015,20 +3081,7 @@ App._notifClick=(id)=>{
   // Default: go to notifications
   App._setNTab('All');App.go('notifications');
 };
-function _notifTypeGlobal(text){
-  if(!text)return'general';
-  if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
-  if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
-  
-  if(text.includes('resolved')||text.includes('Resolved')||text.includes('Reopened'))return'issue';
-  if(text.includes('Approved')||text.includes('approved'))return'approval';
-  if(text.includes('Rejected')||text.includes('rejected'))return'approval';
-  if(text.includes('pproval')||text.includes('pprove'))return'approval';
-  if(text.includes('Edit')||text.includes('edit request')||text.includes('resubmit'))return'edit';
-  if(text.includes('Re-submitted')||text.includes('Resubmit'))return'edit';
-  if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
-  return'general';
-}
+
 App._replyFb=(id)=>{
   openModal(
     '<div class="p-6">'
@@ -3075,14 +3128,13 @@ App._openSendFeedback=(userId)=>{
     // Type selector
     +'<div style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Feedback type</label>'
     +'<input type="hidden" id="sfb-type-val" value="General">'+'<div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">'
-    +['General','Checklist','Task','Performance'].map((t,i)=>'<button type="button" onclick="App._sfbSelectType(this)" data-type="'+t+'" style="padding:8px;border-radius:9px;border:1.5px solid '+(i===0?'#15171C':'#E5E7EB')+';background:'+(i===0?'#15171C':'#fff')+';color:'+(i===0?'#fff':'#6B7280')+';font-size:13px;font-weight:600;cursor:pointer">'+t+'</button>').join('')
+    +['General','Checklist','Performance'].map((t,i)=>'<button type="button" onclick="App._sfbSelectType(this)" data-type="'+t+'" style="padding:8px;border-radius:9px;border:1.5px solid '+(i===0?'#15171C':'#E5E7EB')+';background:'+(i===0?'#15171C':'#fff')+';color:'+(i===0?'#fff':'#6B7280')+';font-size:13px;font-weight:600;cursor:pointer">'+t+'</button>').join('')
     +'</div></div>'
     // Checklist dropdown
     +'<div id="sfb-cl-wrap" style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Checklist <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
     +'<select id="sfb-cl" onchange="App._sfbClChange(this.value)" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select checklist…</option>'+clOptions+'</select></div>'
     // Task dropdown (updates dynamically)
-    +'<div id="sfb-task-wrap" style="margin-bottom:14px;display:none"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Task <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
-    +'<select id="sfb-task" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select task…</option></select></div>'
+
     // Priority + title in one row
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">'
     +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Title</label>'
@@ -3123,13 +3175,9 @@ App._sfbSelectType=(btn)=>{
   }
 };
 App._sfbClChange=(clId)=>{
+  // Tasks removed — task selector always hidden
   const taskWrap=document.getElementById('sfb-task-wrap');
-  const taskSel=document.getElementById('sfb-task');
-  if(!clId||!taskWrap||!taskSel){if(taskWrap)taskWrap.style.display='none';return;}
-  const cl=(App._sfbCls||[]).find(c=>c.id===clId);
-  if(!cl||!cl.tasks?.length){taskWrap.style.display='none';return;}
-  taskSel.innerHTML='<option value="">Select task…</option>'+cl.tasks.map(t=>'<option value="'+esc(t.name)+'">'+esc(t.name)+'</option>').join('');
-  taskWrap.style.display='';
+  if(taskWrap)taskWrap.style.display='none';
 };
 App._saveSendFeedback=(userId)=>{
   if(!userId){toast('No user selected','err');return;}
@@ -3282,16 +3330,15 @@ function analyticsPage(){
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="border-bottom:1px solid #F3F4F6">
-        ${['User','Checklist','Dept','Date','Status','Issues','Photos'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
+        ${['User','Checklist','Dept','Date','Status','Answered'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
       </tr></thead>
-      <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return'';const iss=(s.tasks||[]).filter(t=>t.issue).length;const imgs=(s.tasks||[]).filter(t=>t.photo||t.issuePhoto).length;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
+      <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const qCount=(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;if(!c)return`<tr style="border-bottom:1px solid #F9FAFB;opacity:.5"><td style="padding:9px 16px" colspan="6"><span style="font-size:12px;color:#9CA3AF">${esc(fullName(u))} — deleted checklist — ${fmtS(s.date)}</span></td></tr>`;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
         <td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer" onclick="event.stopPropagation();App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;text-decoration:underline;text-decoration-color:#E5E7EB">${esc(fullName(u))}</span></div></td>
         <td style="padding:9px 16px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(c.name)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px">${esc(c.department)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px;white-space:nowrap">${fmtS(s.date)}</td>
         <td style="padding:9px 16px">${chip(s.status)}</td>
-        <td style="padding:9px 16px">${iss?`<span style="font-size:12px;font-weight:700;color:#F97316">${iss}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
-        <td style="padding:9px 16px">${imgs?`<span style="font-size:12px;font-weight:700;color:#0284C7">📷 ${imgs}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
+        <td style="padding:9px 16px">${qCount?`<span style="font-size:12px;font-weight:700;color:#0E9F6E">${qCount}/${(clById(s.checklistId)?.questionIds||[]).length}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
       </tr>`;}).join('')}</tbody>
     </table>${recent.length?'':empty('chart','No submissions match','Adjust filters or date range')}</div>
   </div></div>`;
@@ -3310,7 +3357,7 @@ App._userDrill=(uid)=>{
   const late=subs.filter(s=>s.status==='Late').length;
   const pending=subs.filter(s=>s.status==='Pending Approval').length;
   const rejected=subs.filter(s=>s.status==='Rejected').length;
-  const issues=subs.reduce((n,s)=>n+(s.tasks||[]).filter(t=>t.issue).length,0);
+  const issues=subs.reduce((n,s)=>n+(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length,0);
   const pct=tot?Math.round(onTime/tot*100):0;
   const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,10);
   openModal(
@@ -3323,7 +3370,7 @@ App._userDrill=(uid)=>{
     +'</div>'
     // Score
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
-    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Rejected',rejected,'#7C3AED'],['Issues',issues,'#EA580C']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
+    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Rejected',rejected,'#7C3AED'],['Answered',issues,'#0E9F6E']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
     +'</div>'
     // Completion rate bar
     +'<div style="background:#F9FAFB;border-radius:12px;padding:12px;margin-bottom:16px">'
@@ -3333,7 +3380,7 @@ App._userDrill=(uid)=>{
     // Recent submissions
     +'<div class="fd" style="font-size:13px;font-weight:700;margin-bottom:8px">Recent submissions</div>'
     +(recent.length
-      ? recent.map(s=>{const c=clById(s.checklistId);const iss=(s.tasks||[]).filter(t=>t.issue).length;return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+chip(s.status)+(iss?'<span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 7px;border-radius:20px">⚑'+iss+'</span>':'')+'</div>';}).join('')
+      ? recent.map(s=>{const c=clById(s.checklistId);return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+chip(s.status)+'</div>';}).join('')
       : '<p style="font-size:13px;color:#9CA3AF">No submissions in last 30 days</p>'
     )
     +'</div>',
@@ -3599,6 +3646,7 @@ App._clearOperational=async()=>{
   // Also clear local deleted-tracking arrays
   DB.checklists_deleted=[];DB.questions_deleted=[];
   DB.folders_deleted=[];DB.documents_deleted=[];
+  DB.departments_deleted=[];DB.locations_deleted=[];DB.users_deleted=[];
   log(fullName(me()),'Cleared operational data','checklists, submissions, approvals, notifications, audit');
   toast('Cleared ✓');saveDB();S.route='dashboard';render();
 };
@@ -3607,7 +3655,7 @@ App._clearOperational=async()=>{
 const NS_LS='shiftly_ns_v2';
 
 // Default templates — subject + body for every event type
-// Variables: {{user_name}} {{checklist_name}} {{task_name}} {{ticket_title}} {{flagged_by}} {{resolved_by}} {{from_name}}
+// Variables: {{user_name}} {{checklist_name}} {{date}} {{status}} {{manager_name}} {{action_url}} {{app_url}}
 const EMAIL_EVENTS=[
   {key:'checklist_assigned',label:'Checklist assigned',  vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'submission_late',  label:'Submission late',       vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
@@ -3811,15 +3859,10 @@ function settingsPage(){
   const workflowTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
       <h3 class="fd font-semibold text-sm mb-3">Approval & Submission</h3>
-      ${mkTog('st-ap',true,'Enable approval flow')}
-      ${mkTog('st-late',true,'Mark submissions late after cutoff')}
-      ${mkTog('st-edit',true,'Allow users to edit after submission')}
-      ${mkTog('st-pa',true,'Require approval for edited submissions')}
-    </div>
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Issues & Tickets</h3>
-      ${mkTog('st-if',true,'Notify manager when issue is flagged')}
-      ${mkTog('st-ta',true,'Auto-assign ticket from question answer')}
+      ${_nsTogRow('workflow_approval_flow','Enable approval flow','Submissions can require manager approval')}
+      ${_nsTogRow('workflow_late_marking','Mark submissions late after cutoff','Late status applied after schedule time')}
+      ${_nsTogRow('workflow_allow_edit','Allow users to request edits','Users can request to edit a submitted checklist')}
+      ${_nsTogRow('workflow_edit_approval','Require approval for edited submissions','Resubmissions go back for approval')}
     </div>
   </div>`;
 
@@ -3837,7 +3880,6 @@ function settingsPage(){
         ${_nsTogRow('inapp_submission_approved','Submission approved','Sent to the user whose submission was approved')}
         ${_nsTogRow('inapp_submission_rejected','Submission rejected','Sent to the user whose submission was rejected')}
         ${_nsTogRow('inapp_deadline_reminder','Deadline reminder','Sent to the user before their task cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
         <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
         ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
         ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
@@ -3887,7 +3929,6 @@ function settingsPage(){
         ${_nsTogRow('email_submission_approved','Submission approved','Email sent to the user')}
         ${_nsTogRow('email_submission_rejected','Submission rejected','Email sent to the user')}
         ${_nsTogRow('email_deadline_reminder','Deadline reminder','Email sent to the user before cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Tickets & Issues</div>
         <div style="font-size:10px;font-weight:800;color:#B8B5AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
         ${_nsTogRow('email_approval_requested','Approval requested','Email sent to admin')}
         ${_nsTogRow('email_approval_decided','Approval decided','Email sent to the user')}
@@ -3904,7 +3945,7 @@ function settingsPage(){
       <div style="font-size:13px;color:#9CA3AF;line-height:1.6">
         Customise the subject and body for each email. Use these variables anywhere in your text:
         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          ${['{{user_name}}','{{checklist_name}}','{{task_name}}','{{ticket_title}}','{{flagged_by}}','{{resolved_by}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
+          ${['{{user_name}}','{{checklist_name}}','{{date}}','{{status}}','{{manager_name}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#F5F4F0;border-radius:6px;padding:2px 8px;font-size:12px;color:#374151">${v}</code>`).join('')}
         </div>
       </div>
     </div>
@@ -3991,13 +4032,14 @@ App._exportCSV=()=>{
   if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
   const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval']];
-  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';const rt=s.tasks||[];summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No']);});
-  const taskRows=[['Sub #','User','Email','Checklist','Date','Status','Task #','Task Name','Criticality','Type','Response','Done','Photo','Comment']];
-  subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return;(c.tasks||[]).forEach((t,ti)=>{const rt=(s.tasks||[])[ti]||{};taskRows.push([si+1,fullName(u),u.email||'',c.name,s.date,s.status,ti+1,t.name||'',t.criticality||'Low',t.responseType||'tick',rt.response!==null&&rt.response!==undefined?String(rt.response):'',(rt.response!==null&&rt.response!==undefined?'Yes':'No'),rt.photo?'Yes':'No',rt.comment||'']);});});
-  const all=[...summaryRows,[],['=== TASK DETAIL (one row per task) ==='],[],...taskRows];
+  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No']);});
+  // Also export question responses as a second sheet
+  const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment']];
+  subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;(s.questionResponses||[]).forEach((qr,qi)=>{const q=(DB.questions||[]).find(x=>x.id===qr.questionId);qRows.push([si+1,fullName(u),u.email||'',c?c.name:'[Deleted]',s.date,s.status,q?q.text:'Q'+(qi+1),qr.response!==null&&qr.response!==undefined?String(qr.response):'',qr.comment||'']);});});
+  const all=[...summaryRows,[],['=== QUESTION RESPONSES (one row per response) ==='],[],...qRows];
   const csv=all.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='shiftly_export_'+todayISO()+'.csv';a.click();
-  toast('Exported '+subs.length+' submissions ('+(taskRows.length-1)+' task rows)');
+  toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
 };
 
 </script>
