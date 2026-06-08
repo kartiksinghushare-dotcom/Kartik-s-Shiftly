@@ -377,7 +377,8 @@ async function loadFromSB(){
   DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
   // Preserve questionsAccess set locally (in case Supabase profile column doesn't exist yet)
   const _savedQAccess={};DB.users.forEach(u=>{if(u.questionsAccess)_savedQAccess[u.id]=true;});
-  DB.users=_mU(profiles);
+  const _deletedUsers=new Set(DB.users_deleted||[]);
+  DB.users=_mU(profiles).filter(u=>!_deletedUsers.has(u.id));
   // Re-apply questionsAccess from local snapshot for users where Supabase returned false
   DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
   // Load questions from Supabase (shared across all accounts)
@@ -452,14 +453,12 @@ function log(a,b,c){
   sb.from('audit_logs').insert({id:entry.id,actor:entry.actor,action:entry.action,target:entry.target,created_at:entry.time}).then(()=>{}).catch(()=>{});
 }
 function seed(){
-  DB.feedback=[];
-  DB.users=[]; // Users are loaded from Supabase profiles
-  DB.locations=[
-    {id:uid('loc'),name:'Main Building',address:'Floor 1, Main Block',department:'',status:'Active'},
-    {id:uid('loc'),name:'Housekeeping Depot',address:'Ground Floor, East Wing',department:'Housekeeping',status:'Active'},
-    {id:uid('loc'),name:'Restaurant Floor',address:'Level 2, South Wing',department:'Food & Beverage',status:'Active'},
-  ];
-  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];DB.notifications=[];DB.questions=[];DB.folders=[];DB.documents=[];
+  DB.users=[];DB.departments=[];DB.locations=[];
+  DB.checklists=[];DB.submissions=[];DB.approvals=[];DB.feedback=[];
+  DB.notifications=[];DB.questions=[];DB.folders=[];DB.documents=[];
+  DB.audit=[];
+  DB.checklists_deleted=[];DB.questions_deleted=[];
+  DB.folders_deleted=[];DB.documents_deleted=[];
   log('System','Workspace initialised','');
 }
 
@@ -492,7 +491,7 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted'].forEach(k=>{if(!DB[k])DB[k]=[];});
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};
       // Ensure individual rule fields have proper defaults (true, not false)
@@ -522,7 +521,12 @@ const clById=id=>DB.checklists.find(c=>c.id===id);
 const locById=id=>DB.locations.find(l=>l.id===id);
 function myCls(uid,date){
   const assigned=DB.checklists.filter(c=>(c.assignees||[]).includes(uid)&&clOn(c,date));
-  return assigned;
+  // Sort by deadline time (earlier first), then by name
+  return assigned.sort((a,b)=>{
+    const ta=a.scheduleTime||'99:99',tb=b.scheduleTime||'99:99';
+    if(ta!==tb)return ta.localeCompare(tb);
+    return (a.name||'').localeCompare(b.name||'');
+  });
 }
 const subFor=(clId,uid,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);
 
@@ -703,22 +707,29 @@ function shell(content){
   </nav></div>`;
 }
 
-App.moreMenu=()=>{const nav=navFor();openModal(`<div class="p-5"><div class="flex justify-between mb-4"><h2 class="fd text-lg font-bold">Menu</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="grid grid-cols-3 gap-2">${nav.map(([r,i,l])=>`<button onclick="App.closeModal();App.go('${r}')" class="flex flex-col items-center gap-1.5 p-3 rounded-2xl border border-ink-100 hover:bg-ink-50 ${S.route===r?'bg-brand-50 border-brand-200 text-brand-700':'text-ink-600'}">${ic(i,'w-5 h-5')}<span class="text-[11px] font-semibold text-center">${l}</span></button>`).join('')}</div><button onclick="App.logout()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ink-50 text-ink-600 font-semibold text-sm">${ic('logout','w-4 h-4')}Sign out</button></div>`);};
+App.moreMenu=()=>{
+  const nav=navFor();
+  const nb=_notifCount();
+  const ab=DB.approvals.filter(a=>a.status==='Pending').length;
+  openModal(`<div class="p-5"><div class="flex justify-between mb-4"><h2 class="fd text-lg font-bold">Menu</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="grid grid-cols-3 gap-2">${nav.map(([r,i,l])=>{let badge='';if(r==='notifications'&&nb)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#EF4444;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${nb}</span>`;if(r==='approvals'&&ab)badge=`<span style="position:absolute;top:4px;right:4px;font-size:9px;font-weight:800;background:#F97316;color:#fff;border-radius:99px;padding:1px 5px;min-width:15px;text-align:center">${ab}</span>`;return`<button onclick="App.closeModal();App.go('${r}')" style="position:relative" class="flex flex-col items-center gap-1.5 p-3 rounded-2xl border border-ink-100 hover:bg-ink-50 ${S.route===r?'bg-brand-50 border-brand-200 text-brand-700':'text-ink-600'}">${ic(i,'w-5 h-5')}${badge}<span class="text-[11px] font-semibold text-center">${l}</span></button>`;}).join('')}</div><button onclick="App.logout()" class="mt-4 w-full flex items-center justify-center gap-2 py-3 rounded-xl bg-ink-50 text-ink-600 font-semibold text-sm">${ic('logout','w-4 h-4')}Sign out</button></div>`);
+};
 App.saveProfile=async()=>{
   const u=me();if(!u)return;
   const fn=($('#ep-fn')?.value||'').trim();
   const ln=($('#ep-ln')?.value||'').trim();
   if(!fn||!ln){toast('Name required','err');return;}
+  // Update locally immediately
   u.firstName=fn;u.lastName=ln;
   u.phone=($('#ep-ph')?.value||'').trim();
   u.position=($('#ep-pos')?.value||'').trim();
-  // Write to Supabase
-  const {error}=await sb.from('profiles').update({
+  saveDB();toast('Profile updated ✓');render();
+  // Sync to Supabase in background
+  sb.from('profiles').update({
     first_name:u.firstName,last_name:u.lastName,
     phone:u.phone,position:u.position
-  }).eq('id',u.id);
-  if(error){toast('Save failed: '+error.message,'err');return;}
-  saveDB();toast('Profile updated ✓');render();
+  }).eq('id',u.id).then(({error})=>{
+    if(error)console.error('saveProfile sync:',error.message);
+  }).catch(()=>{});
 };
 App.changePw=async()=>{const cur=($('#pw-cur')?.value||'').trim();const nw=($('#pw-new')?.value||'').trim();if(!cur||!nw){toast('Fill both fields','err');return;}if(nw.length<6){toast('Min 6 characters','err');return;}const u=me();const{error:se}=await sb.auth.signInWithPassword({email:u.email,password:cur});if(se){toast('Current password incorrect','err');return;}const{error}=await sb.auth.updateUser({password:nw});if(error){toast(error.message,'err');return;}toast('Password updated');const c=$('#pw-cur'),n=$('#pw-new');if(c)c.value='';if(n)n.value='';};
 // _showNotifs removed — now using notificationsPage route
@@ -825,7 +836,7 @@ function adminDash(){
     </div>
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
       <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center"><h3 class="fd font-semibold text-sm">Recent submissions</h3><button onclick="App.go('analytics')" class="text-xs font-semibold text-brand-700">View all →</button></div>
-      <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return'';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400 truncate">${esc(c.name)}</div></div>${chip(s.status)}</div>`;}).join('')||'<div class="px-4 py-8 text-center text-sm text-ink-400">No submissions yet</div>'}</div>
+      <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const cName=c?c.name:'[Deleted]';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400 truncate">${esc(cName)}</div></div>${chip(s.status)}</div>`;}).join('')||'<div class="px-4 py-8 text-center text-sm text-ink-400">No submissions yet</div>'}</div>
     </div>
   </div></div>`;}
 
@@ -926,7 +937,7 @@ App.editUser=(id=null)=>{
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Tab Access</p>${mkTog('u-qa',u?.questionsAccess??false,'Access to Questions tab')}</div>
     ${_docAccessSection(u)}
   </div>
-  <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveUser('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
+  <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button id="save-user-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=this.textContent==='Save'?'Saving…':'Creating…';App.saveUser('${id||''}').catch(()=>{}).finally(()=>{const b=document.getElementById('save-user-btn');if(b){b.disabled=false;b.textContent='${u?'Save':'Create'}';}})" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
 };
 App.saveUser=async(id)=>{
@@ -998,7 +1009,7 @@ App.saveUser=async(id)=>{
       questionsAccess,
       docAccess,password:'***'});
     // Save doc_access + questions_access for new user
-    sb.from('profiles').update({doc_access:docAccess,questions_access:questionsAccess}).eq('id',newId).catch(()=>{});
+    sb.from('profiles').update({doc_access:docAccess,questions_access:questionsAccess}).eq('id',newId).then(()=>{}).catch(()=>{});
     log(fullName(me()),'Created user',fn+' '+ln);
     toast('✓ '+fn+' '+ln+' created');
     closeModal();saveDB();render();
@@ -1016,7 +1027,7 @@ App.resetPw=(id)=>{
     +fld('New password','rp-pw','','password','')
     +'<div class="flex gap-2 mt-4">'
     +'<button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
-    +'<button onclick="App._doResetPw(this.dataset.uid)" data-uid="'+id+'" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Reset</button>'
+    +'<button id="rp-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=\'Resetting…\';App._doResetPw(this.dataset.uid).finally(()=>{const b=document.getElementById(\'rp-btn\');if(b){b.disabled=false;b.textContent=\'Reset\';}})" data-uid="'+id+'" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Reset</button>'
     +'</div></div>',
     'max-w-sm'
   );
@@ -1035,7 +1046,7 @@ App.togUser=(id)=>{
   u.status=enabling?'Active':'Inactive';
   saveDB();render();
   toast(fullName(u)+' '+(enabling?'enabled ✓':'disabled'),enabling?'ok':'warn');
-  sb.from('profiles').update({status:u.status}).eq('id',id).catch(e=>console.warn('togUser:',e));
+  sb.from('profiles').update({status:u.status}).eq('id',id).then(()=>{}).catch(e=>console.warn('togUser:',e));
 };
 App.delUser=async(id)=>{
   const u=uById(id);if(!u)return;
@@ -1043,6 +1054,8 @@ App.delUser=async(id)=>{
   if(!confirm('Permanently delete '+name+'?\n\nThis will delete ALL their submissions and approvals. This cannot be undone.\n\nTo keep their data, use Disable instead.'))return;
   // Optimistic local cleanup first
   DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
+  if(!DB.users_deleted)DB.users_deleted=[];
+  if(!DB.users_deleted.includes(id))DB.users_deleted.push(id);
   DB.users=DB.users.filter(x=>x.id!==id);
   DB.checklists.forEach(c=>c.assignees=(c.assignees||[]).filter(a=>a!==id));
   DB.submissions=DB.submissions.filter(s=>s.userId!==id);
@@ -1056,7 +1069,7 @@ App.delUser=async(id)=>{
       const stillHasTeam=DB.users.some(x=>x.managerId===exMgr.id);
       if(!stillHasTeam){
         exMgr.role='User';
-        sb.from('profiles').update({role:'User'}).eq('id',exMgr.id).catch(()=>{});
+        sb.from('profiles').update({role:'User'}).eq('id',exMgr.id).then(()=>{}).catch(()=>{});
         toast(fullName(exMgr)+' has no team — role changed to User','warn');
       }
     }
@@ -1229,7 +1242,7 @@ App._createFolderIn=()=>{
     id:f.id,name:f.name,parent_id:f.parentId||null,
     type:f.type,scope:f.scope,
     created_by:f.createdBy,created_at:f.createdAt
-  }).catch(e=>console.warn('folder sync:',e));
+  }).then(()=>{}).catch(e=>console.warn('folder sync:',e));
   log(fullName(me()),'Created folder',name);
 };
 
@@ -1329,7 +1342,7 @@ function deptsPage(){
     +'</div></div>';
 }
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveDept=async(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
+App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveDept:',error.message);}).catch(()=>{});};
 App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;DB.departments=DB.departments.filter(x=>x.id!==id);sb.from('departments').delete().eq('id',id).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});// Clear dept from users and checklists (don't delete them)
 DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
@@ -1350,7 +1363,7 @@ function locsPage(){
       +'<div style="flex:1"><div class="fd" style="font-size:16px;font-weight:800">'+esc(l.name)+'</div>'
       +'<div style="font-size:12px;color:#9CA3AF">'+esc(l.address||'No address')+'</div></div>'
       +chip(l.status||'Active')
-      +(isAdmin()?'<button onclick="App.editLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">'+ic('edit','w-4 h-4')+'Edit</button>':'')
+      +(isAdmin()?'<button onclick="App.editLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">'+ic('edit','w-4 h-4')+'Edit</button><button onclick="App.delLoc(this.dataset.id)" data-id="'+l.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#FFF1F2;color:#BE123C;font-size:13px;font-weight:600;border:1px solid #FECACA;cursor:pointer">'+ic('trash','w-4 h-4')+'Delete</button>':'')
       +'</div>'
       +'<div style="display:flex;gap:4px;margin-bottom:16px;background:#F6F7F8;border-radius:12px;padding:4px">'
       +TABS.map(([k,ll])=>'<button onclick="App._setLocTab(this.dataset.k)" data-k="'+k+'" style="flex:1;padding:8px;border-radius:9px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(stab===k?'#fff':'transparent')+';color:'+(stab===k?'#15171C':'#6B7280')+';box-shadow:'+(stab===k?'0 1px 4px rgba(0,0,0,.08)':'none')+'">'+ll+'</button>').join('')
@@ -1395,8 +1408,9 @@ function locsPage(){
     +'</div></div>';
 }
 App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveLoc=async(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);await sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'});log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
-App.togLoc=async(id)=>{const l=locById(id);l.status=l.status==='Active'?'Inactive':'Active';await sb.from('locations').update({status:l.status}).eq('id',id);toast(l.name+' '+l.status,l.status==='Active'?'ok':'warn');saveDB();render();};
+App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveLoc:',error.message);}).catch(()=>{});};
+App.togLoc=(id)=>{const l=locById(id);if(!l)return;l.status=l.status==='Active'?'Inactive':'Active';saveDB();render();toast(l.name+' '+(l.status==='Active'?'enabled ✓':'disabled'),'ok');sb.from('locations').update({status:l.status}).eq('id',id).then(()=>{}).catch(()=>{});};
+App.delLoc=(id)=>{const l=locById(id);if(!l)return;if(!confirm('Delete "'+l.name+'"? Checklists using this location will keep it as reference.'))return;DB.locations=DB.locations.filter(x=>x.id!==id);saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
 
 
 const Q_TYPES=[
@@ -1456,7 +1470,7 @@ function _renderClModal(editing){
   // Admin sees all users; manager sees only their direct team; regular user sees none
   const cands=isAdmin()?DB.users.filter(u=>u.status==='Active'):isMgr()?[me(),...subTree(S.uid)].filter(Boolean).filter(u=>u.status==='Active'):[];
   const activeLocs=DB.locations.filter(l=>l.status==='Active');
-  openModal(`<div class="flex flex-col h-full">
+  openModal(`<div style="display:flex;flex-direction:column;max-height:92vh">
     <!-- Modal header -->
     <div class="flex items-center justify-between px-5 pt-5 pb-4 border-b border-ink-100">
       <div>
@@ -1466,7 +1480,7 @@ function _renderClModal(editing){
       <button onclick="App.closeModal()" style="width:32px;height:32px;display:grid;place-items:center;border-radius:10px;background:transparent;border:none;cursor:pointer;color:#9CA3AF" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='transparent'">${ic('x')}</button>
     </div>
     <!-- Scrollable body -->
-    <div class="overflow-y-auto flex-1 px-5 py-4 space-y-5">
+    <div style="overflow-y:auto;flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:20px">
       <!-- Basic info -->
       <div class="space-y-3">
         <div>
@@ -1721,7 +1735,7 @@ App.dupCl=async(id)=>{
     start_date:null,end_date:null,
     location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:JSON.parse(JSON.stringify(copy.questionConfigs||{})),schedule_time:copy.scheduleTime||null,
     status:'Draft',created_by:S.uid
-  }).catch(e=>console.warn('dupCl sync:',e));
+  }).then(()=>{}).catch(e=>console.warn('dupCl sync:',e));
 };
 
 App.delCl=(id)=>{
@@ -1819,7 +1833,7 @@ function myClsPage(){
 }
 
 
-function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved){/* issN/total unused - tasks removed */
+function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   const cid=c.id;
   // Guard: never show Submit if already submitted (catches stale RUN state)
   if(sub&&sub.status!=='Editing'){
@@ -1830,7 +1844,7 @@ function _clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEdit
     if(hasEditReq)right='<span style="font-size:12px;font-weight:600;color:#F97316">Edit pending</span>';
     else if(editApproved)right='<button onclick="App._resubmit(\''+cid+'\',\''+date+'\')" class="submit-pill go">Edit &amp; Resubmit</button>';
     else if(sub.status==='Pending Approval'||sub.status==='Pending')right='<span style="font-size:12px;font-weight:600;color:#F97316">Awaiting approval</span>';
-    else if(u?.rules?.edit)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
+    else if(u?.rules?.edit&&u?.managerId)right='<button onclick="App._reqEdit(\''+cid+'\',\''+date+'\')" style="font-size:13px;font-weight:700;color:#0D7A4E;background:#ECFDF5;border:1px solid #6EE7B7;border-radius:8px;cursor:pointer;padding:7px 16px">Request edit</button>';
     return left+right;
   }
   if(!sub){
@@ -1854,10 +1868,11 @@ function _clCard(c,date){
   const isSubmitted=!!sub&&sub.status!=='Editing';
   // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
   if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
-    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:[]};
+    // Restore questionResponses from existing submission if available
+    const _existSub=subFor(c.id,S.uid,date);
+    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(_existSub?.questionResponses||[]))};
   }
   const run=RUN[c.id];
-  const doneN=0;const issN=0;const total=0;const allDone=true;
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
   const editApproved=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Approved');
   const stCls={'On Time':'st-on','Submitted':'st-sub','Pending':'st-pend','Late':'st-late','Pending Approval':'st-pa','Rejected':'st-late','Editing':'st-pend'};
@@ -1870,7 +1885,8 @@ function _clCard(c,date){
         <div class="fd" style="font-size:15px;font-weight:800;color:#111110">${esc(c.name)}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
-          ${(c.questionIds||[]).length?`<span style="font-size:11px;color:#9CA3AF">${(c.questionIds||[]).length} question${(c.questionIds||[]).length>1?'s':''}</span>`:''}
+          ${c.description?`<span style="font-size:11px;color:#B8B5AC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(c.description)}</span>`:''}
+          ${(c.questionIds||[]).length?`<span style="font-size:11px;color:#9CA3AF;flex-shrink:0">${(c.questionIds||[]).length} question${(c.questionIds||[]).length>1?'s':''}</span>`:''}
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
@@ -1897,11 +1913,11 @@ function _clCard(c,date){
           } else if(q.type==='number'){
             inputHtml=`<input type="number" value="${resp??''}" oninput="App._setQR('${c.id}','${q.id}',this.value,true)" onchange="App._setQR('${c.id}','${q.id}',this.value)" placeholder="Enter number…" style="width:120px;padding:6px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:13px;outline:none"/>`;
           } else if(q.type==='passfail'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Pass')" style="padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Pass'?'#16A34A':'#E5E7EB'};background:${resp==='Pass'?'#DCFCE7':'#fff'};color:${resp==='Pass'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Pass</button><button onclick="App._setQR('${c.id}','${q.id}','Fail')" style="padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Fail'?'#DC2626':'#E5E7EB'};background:${resp==='Fail'?'#FEE2E2':'#fff'};color:${resp==='Fail'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Fail</button></div>`;
+            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Pass')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Pass'?'#16A34A':'#E5E7EB'};background:${resp==='Pass'?'#DCFCE7':'#fff'};color:${resp==='Pass'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Pass</button><button onclick="App._setQR('${c.id}','${q.id}','Fail')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Fail'?'#DC2626':'#E5E7EB'};background:${resp==='Fail'?'#FEE2E2':'#fff'};color:${resp==='Fail'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Fail</button></div>`;
           } else if(q.type==='yesno'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Yes')" style="padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Yes'?'#16A34A':'#E5E7EB'};background:${resp==='Yes'?'#DCFCE7':'#fff'};color:${resp==='Yes'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Yes</button><button onclick="App._setQR('${c.id}','${q.id}','No')" style="padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='No'?'#DC2626':'#E5E7EB'};background:${resp==='No'?'#FEE2E2':'#fff'};color:${resp==='No'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">No</button></div>`;
+            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Yes')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='Yes'?'#16A34A':'#E5E7EB'};background:${resp==='Yes'?'#DCFCE7':'#fff'};color:${resp==='Yes'?'#16A34A':'#374151'};font-weight:700;font-size:13px;cursor:pointer">Yes</button><button onclick="App._setQR('${c.id}','${q.id}','No')" style="flex:1;min-height:44px;padding:6px 18px;border-radius:9px;border:1.5px solid ${resp==='No'?'#DC2626':'#E5E7EB'};background:${resp==='No'?'#FEE2E2':'#fff'};color:${resp==='No'?'#DC2626':'#374151'};font-weight:700;font-size:13px;cursor:pointer">No</button></div>`;
           } else if(q.type==='tick'){
-            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✓</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✕</button></div>`;
+            inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✓</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✕</button></div>`;
           }
           const flags=[];if(q.photo)flags.push('📷');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Comment');
           return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
@@ -1916,7 +1932,7 @@ function _clCard(c,date){
           </div>`;
         }).join('')+'</div>';
       })()}
-      <div class="clc-ft">${_clFooter(c,date,sub,allDone,doneN,issN,total,isPast,isFuture,u,hasEditReq,editApproved)}</div>
+      <div class="clc-ft">${_clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved)}</div>
       ${sub?DB.feedback.filter(fb=>fb.checklistId===c.id&&fb.userId===S.uid&&fb.date===date).map(fb=>{
         const mgr=uById(fb.managerId);
         return`<div style="background:#EFF6FF;border-top:1px solid #BFDBFE;padding:12px 18px">
@@ -2016,12 +2032,12 @@ App._submitRun=async(clId,date)=>{
   }
   log(fullName(u),'Submitted '+run.status,c.name);
   toast(needsAppr?'Submitted — pending approval':'Submitted ✓',late||needsAppr?'warn':'ok');
-  // Process escalations based on question responses
-  _processEscalations(clId,date,run.questionResponses||[]);
+  // Process escalations — only on first submission, not resubmits
+  if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
   // questionResponses already in run — will be included in push/update below
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:run.questionResponses||[],edit_count:run.editCount||0,edit_history:run.editHistory||[]};
-  // 1. Save to localStorage instantly (synchronous — zero delay)
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  // 1. Save immediately (saveDB strips photos before writing)
+  saveDB();
   // 2. Render immediately — UI updates in <50ms
   delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();_touchAction();render();
   // 3. Save ONLY this submission to Supabase (targeted — not full _sync of 11 tables)
@@ -2310,14 +2326,13 @@ App._decide=async(id,status)=>{
   }
   log(fullName(me()),status+' '+a.type,fullName(u));
   _invalidateNotifCache();
-  // Save to localStorage instantly
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  saveDB();
   toast(status==='Approved'?'Approved ✓':'Rejected',status==='Approved'?'ok':'warn');
   _touchAction();render();
   // Targeted Supabase save — only affected rows, not full 11-table sync
   Promise.allSettled([
     sb.from('approvals').update({status:a.status}).eq('id',a.id),
-    s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
+    s ? sb.from('submissions').update({status:s.status,question_responses:s.questionResponses||[]}).eq('id',s.id) : Promise.resolve(),
     sb.from('notifications').upsert(DB.notifications.slice(0,20).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
   ]).catch(()=>{});
 };
@@ -2399,8 +2414,7 @@ App._viewSubFor=async(btn)=>{
         // CRITICAL: Always load from Supabase FIRST before any sync
         // This prevents empty local state from overwriting real server data
         await loadFromSB();
-        // Only save to localStorage after pulling from server (never push before pulling)
-        try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+        saveDB();
         render();
         return;
       }
@@ -2607,7 +2621,7 @@ App._saveQuestion=()=>{
   toast(isNew?'Question created ✓':'Saved ✓');
   closeModal();
   const savedQ=_QED;_QED=null;
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  saveDB();
   render();
   // ── Sync to Supabase in background ──
   const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString()};
@@ -2878,9 +2892,14 @@ function notificationsPage(){
   // Track which were unread BEFORE marking them (so the dot shows on this render)
   const unreadIds=new Set(notifs.filter(n=>!n.read).map(n=>n.id));
   const hadUnread=unreadIds.size>0;
-  // Mark as read after snapshot — do it now so next render they're read
-  notifs.forEach(n=>n.read=true);
-  if(hadUnread){_invalidateNotifCache();setTimeout(()=>saveDB(),300);}
+  // Mark as read after a short delay so user can see what was unread
+  if(hadUnread){
+    setTimeout(()=>{
+      notifs.forEach(n=>n.read=true);
+      _invalidateNotifCache();
+      saveDB();
+    },1500);
+  }
   // Feedback for this user
   const myFb=DB.feedback.filter(fb=>fb.userId===uid).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   const unackFb=myFb.filter(fb=>!fb.acknowledged);
@@ -3148,8 +3167,8 @@ function analyticsPage(){
   const f=S.filters;
   const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
   if(fArr('users').length)  subs=subs.filter(s=>fArr('users').includes(s.userId));
-  if(fArr('deps').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('deps').includes(c?.department);});
-  if(fArr('locs').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('locs').some(l=>(c?.locationIds||[]).includes(l));});
+  if(fArr('deps').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return c&&fArr('deps').includes(c.department);});
+  if(fArr('locs').length)   subs=subs.filter(s=>{const c=clById(s.checklistId);return c&&fArr('locs').some(l=>(c.locationIds||[]).includes(l));});
   if(fArr('stats').length)  subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1) subs=subs.filter(s=>s.date>=f.dr1);
   if(f.dr2) subs=subs.filter(s=>s.date<=f.dr2);
@@ -3367,7 +3386,7 @@ function profilePage(){
         ${fld('Phone','ep-ph',u.phone||'','tel')}
         ${fld('Position','ep-pos',u.position||'')}
       </div>
-      <button onclick="App.saveProfile()" style="padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
+      <button id="ep-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';App.saveProfile().finally(()=>{const b=document.getElementById('ep-save-btn');if(b){b.disabled=false;b.textContent='Save changes';}})" style="padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
     </div>
   </div>
   <!-- Change password -->
@@ -3376,7 +3395,7 @@ function profilePage(){
     <div class="space-y-2">
       ${fld('Current password','pw-cur','','password','')}
       ${fld('New password','pw-new','','password','min 6 characters')}
-      <button onclick="App.changePw()" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
+      <button id="pw-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Updating…';App.changePw().finally(()=>{const b=document.getElementById('pw-save-btn');if(b){b.disabled=false;b.textContent='Update password';}})" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
     </div>
   </div>
   <!-- Feedback history -->
@@ -3504,7 +3523,10 @@ App._doUpload=async()=>{
     if(error){toast('Upload failed: '+error.message,'err');if(btn)btn.style.display='block';if(prog)prog.style.display='none';return;}
     const{data:urlData}=sb.storage.from('documents').getPublicUrl(path);
     if(!DB.documents)DB.documents=[];
-    DB.documents.push({id:uid('doc'),name:file.name,folderId,type:scopeTab,scope:scopeKey,url:urlData?.publicUrl||path,storagePath:path,fileType:file.type,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()});
+    const docObj={id:uid('doc'),name:file.name,folderId,type:scopeTab,scope:scopeKey,url:urlData?.publicUrl||path,storagePath:path,fileType:file.type,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()};
+    DB.documents.push(docObj);
+    // Insert directly to Supabase so refresh doesn't lose the file
+    await sb.from('documents').insert({id:docObj.id,name:docObj.name,folder_id:docObj.folderId||null,type:docObj.type,scope:docObj.scope,url:docObj.url,storage_path:docObj.storagePath,file_type:docObj.fileType,file_size:docObj.fileSize,uploaded_by:docObj.uploadedBy,uploader_name:docObj.uploaderName,uploaded_at:docObj.uploadedAt}).then(({error})=>{if(error)console.error('doc insert:',error.message);}).catch(()=>{});
     done++;
     if(bar)bar.style.width=Math.round(done/files.length*100)+'%';
   }
@@ -3573,7 +3595,10 @@ App._clearOperational=async()=>{
     sb.from('approvals').delete().neq('id','00000000-0000-0000-0000-000000000000'),
     sb.from('notifications').delete().neq('id','00000000-0000-0000-0000-000000000000'),
     sb.from('audit_logs').delete().neq('id','00000000-0000-0000-0000-000000000000'),
-  ]).catch(e=>console.warn('clear sync:',e));
+  ]).then(()=>{}).catch(e=>console.warn('clear sync:',e));
+  // Also clear local deleted-tracking arrays
+  DB.checklists_deleted=[];DB.questions_deleted=[];
+  DB.folders_deleted=[];DB.documents_deleted=[];
   log(fullName(me()),'Cleared operational data','checklists, submissions, approvals, notifications, audit');
   toast('Cleared ✓');saveDB();S.route='dashboard';render();
 };
@@ -3626,7 +3651,8 @@ async function _loadNS(){
   if(_ns)return _ns;
   try{const r=localStorage.getItem(NS_LS);if(r)_ns={..._nsDefault(),...JSON.parse(r)};}catch(e){}
   if(!_ns)_ns=_nsDefault();
-  try{const{data}=await sb.from('workspace_settings').select('value').eq('key','notification_settings').single();
+  try{const{data,error:wsErr}=await sb.from('workspace_settings').select('value').eq('key','notification_settings').single();
+      if(wsErr&&(wsErr.code==='42P01'||wsErr.message?.includes('does not exist'))){console.warn('workspace_settings table missing — using defaults');return _ns;}
     if(data?.value){
       const saved=data.value;
       _ns={..._nsDefault(),...saved};
@@ -3965,7 +3991,7 @@ App._exportCSV=()=>{
   if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
   const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval']];
-  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return;const locs=(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; ');const rt=s.tasks||[];summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',c.name,c.department||'',locs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No']);});
+  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';const rt=s.tasks||[];summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No']);});
   const taskRows=[['Sub #','User','Email','Checklist','Date','Status','Task #','Task Name','Criticality','Type','Response','Done','Photo','Comment']];
   subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u||!c)return;(c.tasks||[]).forEach((t,ti)=>{const rt=(s.tasks||[])[ti]||{};taskRows.push([si+1,fullName(u),u.email||'',c.name,s.date,s.status,ti+1,t.name||'',t.criticality||'Low',t.responseType||'tick',rt.response!==null&&rt.response!==undefined?String(rt.response):'',(rt.response!==null&&rt.response!==undefined?'Yes':'No'),rt.photo?'Yes':'No',rt.comment||'']);});});
   const all=[...summaryRows,[],['=== TASK DETAIL (one row per task) ==='],[],...taskRows];
