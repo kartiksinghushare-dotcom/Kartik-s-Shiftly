@@ -348,7 +348,7 @@ function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.des
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
-  let depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows;
+  let depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows,ticketRows;
   try{
     const res=await Promise.all([
       sb.from('departments').select('*').order('name'),
@@ -363,8 +363,10 @@ async function loadFromSB(){
       sb.from('doc_folders').select('*').order('created_at',{ascending:false}),
       sb.from('documents').select('*').order('uploaded_at',{ascending:false}),
       sb.from('questions').select('*').order('created_at',{ascending:false}),
+      sb.from('tickets').select('*').order('created_at',{ascending:false}),
     ]);
-  [depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows]=res.map(r=>r.data||[]);
+  let ticketRows;
+  [depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows,ticketRows]=res.map(r=>r.data||[]);
   }catch(e){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
@@ -431,7 +433,10 @@ async function loadFromSB(){
   }
   if(docRows){
     const locallyDeletedDocs=new Set((DB.documents_deleted||[]));
-    DB.documents=docRows.filter(d=>!locallyDeletedDocs.has(d.id)).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
+    DB.documents=docRows.filter(d=>!locallyDeletedDocs.has(d.id)).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploaderName||null,uploadedAt:d.uploaded_at}));
+  }
+  if(ticketRows){
+    DB.tickets=(ticketRows||[]).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||''}));
   }
 }
 async function _sync(){try{
@@ -447,21 +452,22 @@ async function _sync(){try{
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
     sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||''})),{onConflict:'id'}):Promise.resolve()),
   ]);
   const failed=results.filter(r=>r.status==='rejected');
   if(failed.length)console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',failed.map(r=>r.reason?.message).join(', '));
 }catch(e){console.warn('[Shiftly sync error]',e.message);}}
 
 /* ===== STATUS CHIPS ===== */
-const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF"};
-const CHIP_DOT_C={"On Time":"#10B981","Submitted":"#10B981","Pending":"#F59E0B","Late":"#F43F5E","Pending Approval":"#F97316","Rejected":"#9F1239","Active":"#10B981","Inactive":"#D1D5DB","Approved":"#10B981","Editing":"#3B82F6","Upcoming":"#A855F7","Draft":"#9CA3AF"};
+const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF","Open":"background:#FFF7ED;color:#C2410C","In Progress":"background:#EFF6FF;color:#1D4ED8","Resolved":"background:#ECFDF5;color:#047857","Closed":"background:#F6F7F8;color:#9CA3AF"};
+const CHIP_DOT_C={"On Time":"#10B981","Submitted":"#10B981","Pending":"#F59E0B","Late":"#F43F5E","Pending Approval":"#F97316","Rejected":"#9F1239","Active":"#10B981","Inactive":"#D1D5DB","Approved":"#10B981","Editing":"#3B82F6","Upcoming":"#A855F7","Draft":"#9CA3AF","Open":"#F97316","In Progress":"#3B82F6","Resolved":"#10B981","Closed":"#D1D5DB"};
 const chip=s=>{const st=CHIP_STYLE[s]||'background:#FFFBEB;color:#B45309';const dot=CHIP_DOT_C[s]||'#F59E0B';return`<span style="display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:20px;font-size:12px;font-weight:700;${st}"><span style="width:6px;height:6px;border-radius:50%;background:${dot};flex-shrink:0"></span>${esc(s)}</span>`;};
 
 
 /* ===== DATA MODEL ===== */
 let DB={
   departments:[],
-  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[]
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[],tickets:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -605,12 +611,12 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
-const NAV_USR=[['mychecklists','check','My Checklists'],['notifications','bell','Notifications']];
-const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['teamview','users','Team'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
-const MOB_ADM=['dashboard','mychecklists','notifications','more'];
-const MOB_USR=['mychecklists','notifications','more'];
-const MOB_MGR=['dashboard','mychecklists','questions','notifications','more'];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
+const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
+const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['teamview','users','Team'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
+const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
+const MOB_USR=['mychecklists','tickets','notifications','more'];
+const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
   const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
@@ -763,6 +769,7 @@ function pageContent(){
   if(r==='checklists')return clsPage();
   if(r==='approvals'){if(isAdmin()||isMgr())return approvalsPage();S.route='notifications';return notificationsPage();}
   if(r==='notifications')return notificationsPage();
+  if(r==='tickets')return ticketsPage();
   if(r==='hierarchy')return hierarchyPage();
   if(r==='analytics')return analyticsPage();
   if(r==='audit')return auditPage();
@@ -2892,9 +2899,34 @@ function _processEscalations(checklistId,date,responses){
     }
     if(escalateTo&&escalateTo!==S.uid){
       if(!DB.notifications)DB.notifications=[];
+      if(!DB.tickets)DB.tickets=[];
       const escMsg='⚠️ Escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" by '+fullName(u)+' on '+c.name+' ('+date+')';
+      // Determine priority from question or response
+      const _respLower=String(resp.response||'').toLowerCase();
+      const ticketPriority=_respLower==='fail'||_respLower==='not done'||_respLower==='no'?'High':'Medium';
+      // Create ticket
+      const ticket={
+        id:uid('tk'),
+        title:q.text.slice(0,80),
+        description:'Answer: "'+String(resp.response||'')+'"\nSubmitted by: '+fullName(u)+'\nChecklist: '+c.name+'\nDate: '+date,
+        priority:ticketPriority,
+        status:'Open',
+        assignedTo:escalateTo,
+        createdBy:S.uid,
+        checklistId:checklistId,
+        questionId:q.id,
+        questionText:q.text,
+        answerGiven:String(resp.response||''),
+        submitterId:S.uid,
+        date:date,
+        createdAt:new Date().toISOString(),
+        resolvedAt:null,
+        resolveNote:''
+      };
+      DB.tickets.unshift(ticket);
+      // In-app notification to assignee
       DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
-      // Also notify admin
+      // In-app notification to admin
       const adminU=DB.users.find(x=>x.role==='Admin');
       if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid){
         DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
@@ -3049,9 +3081,9 @@ App._notifClick=(id)=>{
     S.route='approvals';S.search='';S.expandedCl=null;S.afOpen=null;S.tvUser=null;
     S.filters={atab:'Pending'};render();window.scrollTo(0,0);return;
   }
-  // Escalation notification → go to notifications escalations tab
+  // Escalation/ticket notification → go to tickets page
   if(t.includes('Escalation')||t.includes('escalation')){
-    App._setNTab('Escalations');App.go('notifications');return;
+    App.go('tickets');return;
   }
   // Checklist removed → go to my checklists
   if(t.includes('Checklist removed')||t.includes('no longer assigned')){
@@ -3183,6 +3215,133 @@ function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col
 /* ===== ANALYTICS ===== */
 
 
+/* ===== TICKETS PAGE ===== */
+function ticketsPage(){
+  // Visibility: admin sees all, manager sees team's, user sees only assigned to them
+  let tickets=(DB.tickets||[]).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+  if(isAdmin()){
+    // all tickets
+  } else if(isMgr()){
+    const teamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
+    tickets=tickets.filter(t=>teamIds.has(t.assignedTo)||teamIds.has(t.submitterId));
+  } else {
+    tickets=tickets.filter(t=>t.assignedTo===S.uid||t.submitterId===S.uid);
+  }
+
+  const f=S.filters;
+  const statusFilter=f.tkStatus||'';
+  const priorityFilter=f.tkPriority||'';
+  if(statusFilter)tickets=tickets.filter(t=>t.status===statusFilter);
+  if(priorityFilter)tickets=tickets.filter(t=>t.priority===priorityFilter);
+
+  const open=tickets.filter(t=>t.status==='Open').length;
+  const inprog=tickets.filter(t=>t.status==='In Progress').length;
+  const resolved=tickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length;
+
+  const priClr={High:'#DC2626',Medium:'#F59E0B',Low:'#6B7280',Critical:'#7C3AED'};
+  const priBg={High:'#FEF2F2',Medium:'#FFFBEB',Low:'#F9FAFB',Critical:'#F5F3FF'};
+
+  function tkCard(t){
+    const assignee=uById(t.assignedTo);
+    const submitter=uById(t.submitterId);
+    const cl=clById(t.checklistId);
+    const canResolve=isAdmin()||(isMgr()&&subTree(S.uid).some(u=>u.id===t.submitterId||u.id===t.assignedTo))||(t.assignedTo===S.uid);
+    const canDelete=isAdmin();
+    return'<div style="background:#fff;border-radius:16px;border:1.5px solid #ECEDF0;padding:16px;border-left:4px solid '+(priClr[t.priority]||'#9CA3AF')+'">'+
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:10px">'+
+        '<div style="flex:1;min-width:0">'+
+          '<div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:4px">'+
+            '<span style="font-size:11px;font-weight:800;padding:2px 8px;border-radius:20px;background:'+(priBg[t.priority]||'#F9FAFB')+';color:'+(priClr[t.priority]||'#6B7280')+'">'+esc(t.priority)+'</span>'+
+            chip(t.status)+
+            '<span style="font-size:11px;color:#9CA3AF">'+fmtS(t.date||t.createdAt?.slice(0,10)||'')+'</span>'+
+          '</div>'+
+          '<div style="font-size:14px;font-weight:700;color:#15171C;margin-bottom:4px">'+esc(t.title)+'</div>'+
+          '<div style="font-size:12px;color:#6B7280;line-height:1.5;white-space:pre-wrap">'+esc(t.description)+'</div>'+
+        '</div>'+
+        (canDelete?'<button onclick="App._delTicket(\''+t.id+'\')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:#FEF2F2;cursor:pointer;color:#DC2626;flex-shrink:0">'+ic('x','w-3.5 h-3.5')+'</button>':'')+
+      '</div>'+
+      '<div style="display:flex;align-items:center;gap:16px;flex-wrap:wrap;padding-top:10px;border-top:1px solid #F3F4F6">'+
+        '<div style="display:flex;align-items:center;gap:6px">'+
+          '<span style="font-size:11px;font-weight:600;color:#9CA3AF">Assigned to</span>'+
+          '<span style="font-size:12px;font-weight:700;color:#374151">'+(assignee?esc(fullName(assignee)):'Unknown')+'</span>'+
+        '</div>'+
+        (submitter?'<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:600;color:#9CA3AF">From</span><span style="font-size:12px;font-weight:700;color:#374151">'+esc(fullName(submitter))+'</span></div>':'')+
+        (cl?'<div style="display:flex;align-items:center;gap:6px"><span style="font-size:11px;font-weight:600;color:#9CA3AF">Checklist</span><span style="font-size:12px;font-weight:700;color:#374151">'+esc(cl.name)+'</span></div>':'')+
+        '<div style="margin-left:auto;display:flex;gap:6px;flex-wrap:wrap">'+
+          (canResolve&&t.status==='Open'?`<button onclick="App._tkSetStatus(this)" data-id="${t.id}" data-st="In Progress" style="padding:5px 12px;border-radius:8px;background:#EFF6FF;color:#1D4ED8;font-size:12px;font-weight:600;border:1.5px solid #BFDBFE;cursor:pointer">Start</button>`:'')+
+          (canResolve&&t.status==='In Progress'?`<button onclick="App._resolveTicket('${t.id}')" style="padding:5px 12px;border-radius:8px;background:#ECFDF5;color:#047857;font-size:12px;font-weight:600;border:1.5px solid #A7F3D0;cursor:pointer">Resolve</button>`:'')+
+          (canResolve&&(t.status==='Open'||t.status==='In Progress')?`<button onclick="App._tkSetStatus(this)" data-id="${t.id}" data-st="Closed" style="padding:5px 12px;border-radius:8px;background:#F6F7F8;color:#6B7280;font-size:12px;font-weight:600;border:1.5px solid #E5E7EB;cursor:pointer">Close</button>`:'')+
+          (isAdmin()&&(t.status==='Resolved'||t.status==='Closed')?`<button onclick="App._tkSetStatus(this)" data-id="${t.id}" data-st="Open" style="padding:5px 12px;border-radius:8px;background:#FFF7ED;color:#C2410C;font-size:12px;font-weight:600;border:1.5px solid #FED7AA;cursor:pointer">Reopen</button>`:'')+
+        '</div>'+
+      '</div>'+
+    '</div>';
+  }
+
+  return'<div class="fade">'+
+    hdr('Tickets','Escalation tickets from checklist responses')+
+    // Stats row
+    '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">'+
+      statCard('Open',open,'#F97316')+
+      statCard('In Progress',inprog,'#3B82F6')+
+      statCard('Resolved',resolved,'#0E9F6E')+
+    '</div>'+
+    // Filters
+    '<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap">'+
+      ['','Open','In Progress','Resolved','Closed'].map(s=>{const on=statusFilter===s;return`<button onclick="App._tkFilter('status','${s}')" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#15171C':'#fff'};color:${on?'#fff':'#6B7280'};cursor:pointer">${s||'All'}</button>`;}).join('')+
+      '<div style="width:1px;background:#E5E7EB;margin:0 2px"></div>'+
+      ['','High','Medium','Low'].map(p=>{const on=priorityFilter===p;return`<button onclick="App._tkFilter('priority','${p}')" style="padding:5px 14px;border-radius:20px;font-size:12px;font-weight:600;border:1.5px solid ${on?'#15171C':'#E5E7EB'};background:${on?'#15171C':'#fff'};color:${on?'#fff':'#6B7280'};cursor:pointer">${p||'All priority'}</button>`;}).join('')+
+    '</div>'+
+    // List
+    (tickets.length?
+      '<div style="display:flex;flex-direction:column;gap:10px">'+tickets.map(tkCard).join('')+'</div>':
+      empty('ticket','No tickets','Tickets are created automatically when an escalation answer is submitted.')
+    )+
+  '</div>';
+}
+
+App._tkSetStatus=(el)=>{const id=el.dataset.id,status=el.dataset.st;App._ticketStatus(id,status);};
+App._tkFilter=(key,val)=>{if(key==='status')S.filters.tkStatus=val;else S.filters.tkPriority=val;rr();};
+App._ticketStatus=(id,status)=>{
+  const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
+  t.status=status;
+  saveDB();rr();
+  sb.from('tickets').update({status}).eq('id',id).then(()=>{}).catch(e=>console.warn('ticket status:',e.message));
+};
+
+App._resolveTicket=(id)=>{
+  const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
+  openModal(`<div style="padding:20px">
+    <h2 style="font-size:18px;font-weight:800;font-family:var(--font-display);margin-bottom:4px">Resolve ticket</h2>
+    <p style="font-size:13px;color:#6B7280;margin-bottom:14px">Add a note explaining how this was resolved.</p>
+    <textarea id="tk-note" rows="3" placeholder="What was done to resolve this?" style="width:100%;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px;font-size:13px;resize:none;outline:none;box-sizing:border-box"></textarea>
+    <div style="display:flex;gap:8px;margin-top:14px">
+      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #E5E7EB;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+      <button onclick="App._confirmResolve('${id}')" style="flex:2;padding:11px;border-radius:10px;background:#0E9F6E;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Mark Resolved</button>
+    </div>
+  </div>`,'max-w-sm');
+};
+
+App._confirmResolve=(id)=>{
+  const note=$('#tk-note')?.value?.trim()||'';
+  const t=(DB.tickets||[]).find(x=>x.id===id);if(!t)return;
+  t.status='Resolved';t.resolvedAt=new Date().toISOString();t.resolveNote=note;
+  // Notify the submitter
+  if(t.submitterId&&t.submitterId!==S.uid){
+    DB.notifications.unshift({id:uid('n'),userId:t.submitterId,text:'✅ Ticket resolved: "'+t.title+'"'+(note?' — '+note.slice(0,60):''),time:new Date().toISOString(),read:false});
+    _invalidateNotifCache();
+  }
+  closeModal();saveDB();rr();
+  sb.from('tickets').update({status:'Resolved',resolved_at:t.resolvedAt,resolve_note:note}).eq('id',id).then(()=>{}).catch(e=>console.warn('resolve:',e.message));
+};
+
+App._delTicket=(id)=>{
+  if(!isAdmin())return;
+  DB.tickets=(DB.tickets||[]).filter(t=>t.id!==id);
+  saveDB();rr();
+  sb.from('tickets').delete().eq('id',id).then(()=>{}).catch(e=>console.warn('del ticket:',e.message));
+};
+
+
 function analyticsPage(){
   const today=todayISO();
   // Collect all relevant submissions
@@ -3197,6 +3356,14 @@ function analyticsPage(){
   if(f.dr1) subs=subs.filter(s=>s.date>=f.dr1);
   if(f.dr2) subs=subs.filter(s=>s.date<=f.dr2);
 
+  // Ticket stats for analytics
+  let aTickets=(DB.tickets||[]).slice();
+  if(!isAdmin())aTickets=aTickets.filter(t=>subTree(S.uid).some(u=>u.id===t.assignedTo||u.id===t.submitterId)||t.assignedTo===S.uid||t.submitterId===S.uid);
+  if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
+  if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
+  const tkOpen=aTickets.filter(t=>t.status==='Open').length;
+  const tkResolved=aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed').length;
+  const tkHigh=aTickets.filter(t=>t.priority==='High'||t.priority==='Critical').length;
   const tot=Math.max(subs.length,1);
   const byS={'On Time':0,'Late':0,'Pending Approval':0,'Rejected':0,'Pending (not submitted)':0};
   subs.forEach(s=>{if(byS[s.status]!==undefined)byS[s.status]++;else byS['Pending (not submitted)']++;});
@@ -3222,7 +3389,7 @@ function analyticsPage(){
     });
   });
 
-  const topU=relevantUsers.map(u=>({u,n:subs.filter(s=>s.userId===u.id).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
+  const topU=relevantUsers.map(u=>({u,n:subs.filter(s=>s.userId===u.id).length,tk:aTickets.filter(t=>t.assignedTo===u.id||t.submitterId===u.id).length})).filter(x=>x.n).sort((a,b)=>b.n-a.n);
   const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,50);
   const activeCount=fArr('users').length+fArr('deps').length+fArr('locs').length+fArr('stats').length+(f.dr1?1:0)+(f.dr2?1:0);
 
@@ -3271,12 +3438,19 @@ function analyticsPage(){
     </div>
   </div>
 
-  <!-- Stats: 5 cards now including missed -->
-  <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:8px;margin-bottom:14px">
+  <!-- Stats row 1: submissions -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
     ${statCard('Submitted',subs.length,'sky')}
     ${statCard('On time',byS['On Time']||0,'brand')}
     ${statCard('Late',byS['Late']||0,'rose')}
     ${statCard('Missed',totalMissed,'orange')}
+  </div>
+  <!-- Stats row 2: tickets -->
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+    ${statCard('Tickets',aTickets.length,'#F97316')}
+    ${statCard('Open',tkOpen,'#F59E0B')}
+    ${statCard('High Priority',tkHigh,'#DC2626')}
+    ${statCard('Resolved',tkResolved,'#0E9F6E')}
   </div>
 
 
