@@ -365,92 +365,143 @@ async function loadFromSB(){
       sb.from('questions').select('*').order('created_at',{ascending:false}),
       sb.from('tickets').select('*').order('created_at',{ascending:false}),
     ]);
-  let ticketRows;
   [depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows,ticketRows]=res.map(r=>r.data||[]);
   }catch(e){
     console.error('loadFromSB failed:',e.message);
     return; // Keep existing cached data
   }
+  // ── Role-based IDs for filtering ──
+  // NOTE: DB.users is populated below from profiles, but we need it for subTree.
+  // Use the already-loaded DB.users from local cache for role checks here.
+  const _uid=S.uid;
+  const _isAdmin=isAdmin();
+  const _isMgr=isMgr();
+  const _teamIds=(_isMgr&&!_isAdmin)?new Set([_uid,...subTree(_uid).map(u=>u.id)]):null;
+
+  // ── Departments + Locations: everyone sees all ──
   const _delDepts=new Set(DB.departments_deleted||[]);
   DB.departments=(depts||[]).filter(d=>!_delDepts.has(d.id)).map(d=>({id:d.id,name:d.name}));
   const _delLocs=new Set(DB.locations_deleted||[]);
   DB.locations=(locs||[]).filter(l=>!_delLocs.has(l.id)).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
+
+  // ── Checklists ──
   {
-    const locallyDeletedCls=new Set((DB.checklists_deleted||[]));
-    const mapped=_mC(allCls||[]).filter(c=>!locallyDeletedCls.has(c.id));
-    const _isAdminOrMgr=isAdmin()||isMgr();
-    // Full diagnostic log — visible in browser console (F12)
-    console.group('[Shiftly] loadFromSB checklists debug');
-    console.log('S.uid:', S.uid);
-    console.log('role:', me()?.role, '| isAdmin:', isAdmin(), '| isMgr:', isMgr());
-    console.log('allCls from Supabase:', allCls.length, 'rows');
-    console.log('mapped (after deleted filter):', mapped.length, 'rows');
-    if(allCls.length>0){
-      console.log('First checklist assignees sample:', allCls.slice(0,3).map(c=>({name:c.name,assignees:c.assignees,status:c.status})));
-    }
-    console.log('DB.checklists before update:', DB.checklists.length, 'rows');
-    console.groupEnd();
-    if(allCls.length===0&&DB.checklists.length>0){
-      // Supabase returned nothing — RLS is blocking all reads. Keep local cache.
-      console.error('[Shiftly] CHECKLIST BUG: Supabase returned 0 checklists but local cache has',DB.checklists.length,'. RLS is blocking SELECT. Run in Supabase SQL Editor: CREATE POLICY "read_all" ON checklists FOR SELECT TO authenticated USING (true);');
+    const _delCls=new Set(DB.checklists_deleted||[]);
+    const mapped=_mC(allCls||[]).filter(c=>!_delCls.has(c.id));
+    if(mapped.length===0&&DB.checklists.length>0){
+      // Nothing from Supabase — keep local cache (RLS may be blocking)
+    } else if(_isAdmin){
+      DB.checklists=mapped;
+    } else if(_isMgr){
+      // Manager sees: checklists he created OR checklists assigned to him/his team
+      DB.checklists=mapped.filter(c=>
+        c.createdBy===_uid||
+        (c.assignees||[]).includes(_uid)||
+        (c.assignees||[]).some(aid=>_teamIds.has(aid))
+      );
     } else {
-      if(_isAdminOrMgr){
-        DB.checklists=mapped;
-        console.log('[Shiftly] Admin/Mgr: set',mapped.length,'checklists');
-      } else {
-        const mine=mapped.filter(c=>(c.assignees||[]).includes(S.uid));
-        console.log('[Shiftly] User',S.uid,': filtered to',mine.length,'of',mapped.length,'checklists');
-        if(mine.length===0&&mapped.length>0){
-          // Have checklists from Supabase but none assigned to this user
-          // Log each one so we can see the assignees vs S.uid
-          console.warn('[Shiftly] User not found in any checklist assignees. S.uid=',S.uid);
-          mapped.forEach(c=>console.log(' -',c.name,'assignees:',c.assignees,'includes uid?',(c.assignees||[]).includes(S.uid)));
-        }
-        DB.checklists=mine;
-      }
+      // User sees only checklists assigned to them
+      DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(_uid));
     }
   }
-  // For managers: also fetch team members' submissions (RLS may block cross-user reads)
-  if(isMgr()&&!isAdmin()){
-    const teamIds=subTree(S.uid).map(u=>u.id);
-    if(teamIds.length){
-      sb.from('submissions').select('*').in('user_id',teamIds).order('submitted_at',{ascending:false})
-        .then(({data})=>{
-          if(data&&data.length){
-            const existing=new Set(DB.submissions.map(s=>s.id));
-            const extra=_mS(data).filter(s=>!existing.has(s.id));
-            if(extra.length){DB.submissions.push(...extra);saveDB();}
-          }
-        }).catch(()=>{});
+
+  // ── Submissions ──
+  {
+    const allSubs=_mS(subs||[]);
+    if(_isAdmin){
+      DB.submissions=allSubs;
+    } else if(_isMgr){
+      // Manager sees: his own + all team members' submissions
+      DB.submissions=allSubs.filter(s=>_teamIds.has(s.userId));
+    } else {
+      // User sees only their own submissions
+      DB.submissions=allSubs.filter(s=>s.userId===_uid);
     }
   }
-  if(subs)DB.submissions=_mS(subs);
-  if(appr&&appr.length>=0)DB.approvals=_mA(appr);
-  DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
-  DB.notifications=(notifs||[]).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
-  // Preserve questionsAccess set locally (in case Supabase profile column doesn't exist yet)
-  const _savedQAccess={};DB.users.forEach(u=>{if(u.questionsAccess)_savedQAccess[u.id]=true;});
-  const _deletedUsers=new Set(DB.users_deleted||[]);
-  DB.users=_mU(profiles).filter(u=>!_deletedUsers.has(u.id));
-  // Re-apply questionsAccess from local snapshot for users where Supabase returned false
-  DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
-  // Load questions from Supabase (shared across all accounts)
+
+  // ── Approvals ──
+  {
+    const allAppr=_mA(appr||[]);
+    if(_isAdmin){
+      DB.approvals=allAppr;
+    } else if(_isMgr){
+      // Manager sees approvals for his team (requesterId in team) or where he is involved
+      DB.approvals=allAppr.filter(a=>_teamIds.has(a.requesterId)||a.requesterId===_uid);
+    } else {
+      // User sees only their own approval requests
+      DB.approvals=allAppr.filter(a=>a.requesterId===_uid);
+    }
+  }
+
+  // ── Audit logs: admin only ──
+  if(_isAdmin){
+    DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
+  } else {
+    DB.audit=[];
+  }
+
+  // ── Notifications: always only for this user ──
+  DB.notifications=(notifs||[]).filter(n=>n.user_id===_uid).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at}));
+  // ── Profiles (users): role-scoped ──
+  {
+    const _savedQAccess={};DB.users.forEach(u=>{if(u.questionsAccess)_savedQAccess[u.id]=true;});
+    const _delUsers=new Set(DB.users_deleted||[]);
+    const allUsers=_mU(profiles).filter(u=>!_delUsers.has(u.id));
+    if(_isAdmin){
+      DB.users=allUsers;
+    } else if(_isMgr){
+      // Manager sees himself + direct and recursive reports
+      const visIds=new Set([_uid,...subTree(_uid).map(u=>u.id)]);
+      DB.users=allUsers.filter(u=>visIds.has(u.id));
+    } else {
+      // User sees only themselves
+      DB.users=allUsers.filter(u=>u.id===_uid);
+    }
+    DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
+  }
+
+  // ── Questions: all roles see all (global shared library) ──
   if(qRows){
-    const locallyDeletedQs=new Set((DB.questions_deleted||[]));
-    DB.questions=qRows.filter(q=>!locallyDeletedQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
+    const _delQs=new Set(DB.questions_deleted||[]);
+    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
   }
-  DB.feedback=DB.feedback||[];
-  if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
+
+  // ── Feedback: role-scoped ──
+  if(feedbackRows){
+    const allFb=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
+    if(_isAdmin){
+      DB.feedback=allFb;
+    } else if(_isMgr){
+      // Manager sees feedback he sent or feedback for his team members
+      DB.feedback=allFb.filter(fb=>fb.managerId===_uid||_teamIds.has(fb.userId));
+    } else {
+      // User sees only feedback addressed to them
+      DB.feedback=allFb.filter(fb=>fb.userId===_uid);
+    }
+  } else { DB.feedback=DB.feedback||[]; }
+
+  // ── Documents + Folders: everyone sees all (access controlled by scope in UI) ──
   if(docFolderRows){
-    const locallyDeletedFolders=new Set((DB.folders_deleted||[]));
-    DB.folders=docFolderRows.filter(f=>!locallyDeletedFolders.has(f.id)).map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
+    const _delFolders=new Set(DB.folders_deleted||[]);
+    DB.folders=docFolderRows.filter(f=>!_delFolders.has(f.id)).map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
   }
   if(docRows){
-    const locallyDeletedDocs=new Set((DB.documents_deleted||[]));
-    DB.documents=docRows.filter(d=>!locallyDeletedDocs.has(d.id)).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploaderName||null,uploadedAt:d.uploaded_at}));
+    const _delDocs=new Set(DB.documents_deleted||[]);
+    DB.documents=docRows.filter(d=>!_delDocs.has(d.id)).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.fileType||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
   }
+
+  // ── Tickets: role-scoped ──
   if(ticketRows){
-    DB.tickets=(ticketRows||[]).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||''}));
+    const allTk=ticketRows.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||'',viewedBy:t.viewed_by||[]}));
+    if(_isAdmin){
+      DB.tickets=allTk;
+    } else if(_isMgr){
+      // Manager sees tickets where assignedTo or submitterId is in his team
+      DB.tickets=allTk.filter(t=>_teamIds.has(t.assignedTo)||_teamIds.has(t.submitterId));
+    } else {
+      // User sees only tickets assigned to them or submitted by them
+      DB.tickets=allTk.filter(t=>t.assignedTo===_uid||t.submitterId===_uid);
+    }
   }
 }
 async function _sync(){try{
@@ -2171,20 +2222,7 @@ function teamViewPage(){
   if(!tvU){S.tvUser=null;return teamViewPage();}
   if(!S.tvCalDate)S.tvCalDate=todayISO();
   if(!S.tvCalWk)S.tvCalWk=0;
-  // Supabase RLS typically only returns the current user's own submissions.
-  // When a manager views a team member, fetch their submissions explicitly.
-  const _hasTvSubs=DB.submissions.some(s=>s.userId===S.tvUser);
-  if(!_hasTvSubs){
-    sb.from('submissions').select('*').eq('user_id',S.tvUser).order('submitted_at',{ascending:false})
-      .then(({data,error})=>{
-        if(error){console.warn('[teamView] subs fetch:',error.message);return;}
-        if(data&&data.length){
-          const existing=new Set(DB.submissions.map(s=>s.id));
-          const newRows=_mS(data).filter(s=>!existing.has(s.id));
-          if(newRows.length){DB.submissions.push(...newRows);saveDB();rr();}
-        }
-      });
-  }
+
 
   const today=todayISO();
   const ref=new Date(today+'T00:00:00');
