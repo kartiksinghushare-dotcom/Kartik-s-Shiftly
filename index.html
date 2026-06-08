@@ -278,7 +278,7 @@ function clOn(c,date){if(c.status&&c.status!=='Active')return false;
   if(c.frequency==='Monthly'){
     const lastDay=new Date(new Date(date+'T00:00:00').getFullYear(),new Date(date+'T00:00:00').getMonth()+1,0).getDate();
     const isLast=dn===lastDay;
-    const sdt=c.selectedDates||[];
+    const sdt=(c.selectedDates||[]).map(x=>x==='L'?'L':Number(x));
     return sdt.includes(dn)||(isLast&&sdt.includes('L'));
   }
   if(c.frequency==='Custom')return(c.customDates||[]).includes(date);
@@ -344,7 +344,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:p.first_name||'',lastName:p.last_name||'',email:p.email||'',phone:p.phone||'',position:p.position||'',department:p.department||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:c.question_configs||{},scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -1627,9 +1627,13 @@ function _freqUI(freq){
 }
 
 App._freqChange=f=>{
-  CLD.frequency=f;CLD.schedule=f==='Daily'?'Every day':'';
-  CLD.selectedDays=[];CLD.selectedDates=[];CLD.customDates=[];
-  if(f==='Custom'){const n=new Date();CLD._calYear=n.getFullYear();CLD._calMonth=n.getMonth();}
+  const prev=CLD.frequency;
+  CLD.frequency=f;
+  if(prev!==f){
+    CLD.schedule=f==='Daily'?'Every day':'';
+    CLD.selectedDays=[];CLD.selectedDates=[];CLD.customDates=[];
+  }
+  if(f==='Custom'&&!CLD._calYear){const n=new Date();CLD._calYear=n.getFullYear();CLD._calMonth=n.getMonth();}
   const sw=$('#cn-sched');if(sw)sw.innerHTML=_freqUI(f);
 };
 App._dailySched=(o,el)=>{
@@ -2890,11 +2894,13 @@ function _processEscalations(checklistId,date,responses){
       if(!DB.notifications)DB.notifications=[];
       const escMsg='⚠️ Escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" by '+fullName(u)+' on '+c.name+' ('+date+')';
       DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
-      // Also notify admin if escalation target is not admin
+      // Also notify admin
       const adminU=DB.users.find(x=>x.role==='Admin');
       if(adminU&&adminU.id!==escalateTo&&adminU.id!==S.uid){
         DB.notifications.unshift({id:uid('n'),userId:adminU.id,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
       }
+      // Email the escalation target
+      queueEmail('escalation',escalateTo,null,date,{checklist_name:c.name,question:q.text,answer:String(resp.response||''),submitter:fullName(u)});
       _invalidateNotifCache();
     }
   });
