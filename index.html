@@ -1213,6 +1213,181 @@ App._uploadDocIn=(t,s)=>{
   App._uploadDoc();
 };
 
+// ── Document navigation ──
+App._docNav=(id)=>{S.filters.docFolder=id||null;rr();};
+
+App._delFolder=(id)=>{
+  const f=(DB.folders||[]).find(x=>x.id===id);
+  if(!f)return;
+  if(!confirm('Delete folder "'+f.name+'"? Files inside will also be removed.'))return;
+  const allIds=new Set();
+  function collect(fid){allIds.add(fid);(DB.folders||[]).filter(x=>x.parentId===fid).forEach(x=>collect(x.id));}
+  collect(id);
+  DB.folders=(DB.folders||[]).filter(x=>!allIds.has(x.id));
+  DB.documents=(DB.documents||[]).filter(d=>!allIds.has(d.folderId||''));
+  allIds.forEach(fid=>{
+    sb.from('doc_folders').delete().eq('id',fid).catch(()=>{});
+    sb.from('documents').delete().eq('folder_id',fid).catch(()=>{});
+  });
+  log(fullName(me()),'Deleted folder',f.name);
+  toast('Folder deleted','warn');saveDB();rr();
+};
+
+App._downloadDoc=(id)=>{
+  const d=(DB.documents||[]).find(x=>x.id===id);
+  if(!d||!d.url){toast('File not available','err');return;}
+  const a=document.createElement('a');a.href=d.url;a.download=d.name||'file';a.target='_blank';a.click();
+  log(fullName(me()),'Downloaded',d.name);
+};
+
+App._previewDoc=(id)=>{
+  const d=(DB.documents||[]).find(x=>x.id===id);
+  if(!d||!d.url){toast('File not available','err');return;}
+  window.open(d.url,'_blank');
+  log(fullName(me()),'Previewed',d.name);
+};
+
+App._delDoc=(id)=>{
+  const d=(DB.documents||[]).find(x=>x.id===id);
+  if(!d)return;
+  if(!confirm('Delete "'+d.name+'"?'))return;
+  DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
+  sb.from('documents').delete().eq('id',id).catch(()=>{});
+  // Also delete from storage if path exists
+  if(d.storagePath){
+    sb.storage.from('documents').remove([d.storagePath]).catch(()=>{});
+  }
+  log(fullName(me()),'Deleted doc',d.name);
+  toast('Deleted','warn');saveDB();rr();
+};
+
+App._uploadDoc=()=>{
+  const t=S.filters.docScope;const s=S.filters.docScopeKey;
+  if(!t||!s){toast('No upload context','err');return;}
+  openModal(`
+    <div style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 class="fd" style="font-size:18px;font-weight:800">Upload file</h2>
+        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
+      </div>
+      <div style="border:2px dashed #E5E7EB;border-radius:14px;padding:32px;text-align:center;margin-bottom:16px;cursor:pointer" onclick="document.getElementById('doc-file-inp').click()">
+        <div style="font-size:32px;margin-bottom:8px">⬆</div>
+        <div style="font-size:14px;font-weight:600;color:#374151;margin-bottom:4px">Click to choose a file</div>
+        <div style="font-size:12px;color:#9CA3AF">PDF, images, Word, Excel, PowerPoint</div>
+        <input id="doc-file-inp" type="file" style="display:none" onchange="App._handleDocUpload(this)"/>
+      </div>
+      <div id="doc-upload-status" style="font-size:13px;color:#9CA3AF;text-align:center"></div>
+    </div>
+  `,'max-w-sm');
+};
+
+App._handleDocUpload=async(inp)=>{
+  const file=inp.files[0];if(!file)return;
+  const statusEl=document.getElementById('doc-upload-status');
+  if(statusEl)statusEl.textContent='Uploading…';
+  const t=S.filters.docScope;const s=S.filters.docScopeKey;
+  const folderId=S.filters.docFolder||null;
+  const ext=file.name.split('.').pop();
+  const path=`${t}/${s}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+  // Upload to Supabase Storage
+  const{data:storageData,error:storageErr}=await sb.storage.from('documents').upload(path,file,{cacheControl:'3600',upsert:false});
+  if(storageErr){toast('Upload failed: '+storageErr.message,'err');closeModal();return;}
+  const{data:urlData}=sb.storage.from('documents').getPublicUrl(path);
+  const url=urlData?.publicUrl||'';
+  const doc={id:uid('doc'),name:file.name,folderId,type:t,scope:s,url,storagePath:path,fileType:ext,fileSize:file.size,uploadedBy:S.uid,uploaderName:fullName(me()),uploadedAt:new Date().toISOString()};
+  if(!DB.documents)DB.documents=[];
+  DB.documents.unshift(doc);
+  // Save to Supabase documents table
+  await sb.from('documents').insert({id:doc.id,name:doc.name,folder_id:doc.folderId||null,type:doc.type,scope:doc.scope,url:doc.url,storage_path:doc.storagePath,file_type:doc.fileType,file_size:doc.fileSize,uploaded_by:doc.uploadedBy,uploader_name:doc.uploaderName,uploaded_at:doc.uploadedAt}).catch(e=>console.warn('doc insert:',e));
+  log(fullName(me()),'Uploaded',file.name);
+  toast('✓ "'+file.name+'" uploaded');
+  closeModal();saveDB();render();
+};
+
+// ── Team view helpers ──
+App._userDrill=(id)=>{
+  const u=uById(id);if(!u)return;
+  const ss=DB.submissions.filter(s=>s.userId===id);
+  const total=ss.length;
+  const onTime=ss.filter(s=>s.status==='On Time'||s.status==='Submitted').length;
+  const late=ss.filter(s=>s.status==='Late').length;
+  const pct=total?Math.round(onTime/total*100):0;
+  openModal(`
+    <div style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <div style="display:flex;align-items:center;gap:10px">
+          ${avatar(u,'w-10 h-10','text-xs')}
+          <div>
+            <div class="fd" style="font-size:16px;font-weight:800">${esc(fullName(u))}</div>
+            <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department)}</div>
+          </div>
+        </div>
+        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
+      </div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px">
+        <div style="background:#F0FDF4;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#16A34A">${onTime}</div>
+          <div style="font-size:11px;color:#16A34A;font-weight:600">On time</div>
+        </div>
+        <div style="background:#FFF1F2;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#BE123C">${late}</div>
+          <div style="font-size:11px;color:#BE123C;font-weight:600">Late</div>
+        </div>
+        <div style="background:#EFF6FF;border-radius:12px;padding:14px;text-align:center">
+          <div style="font-size:22px;font-weight:800;color:#1D4ED8">${pct}%</div>
+          <div style="font-size:11px;color:#1D4ED8;font-weight:600">On-time rate</div>
+        </div>
+      </div>
+      <div style="font-size:12px;color:#9CA3AF;text-align:center">${total} total submissions</div>
+    </div>
+  `,'max-w-sm');
+};
+
+App._openSendFeedback=(id)=>{
+  const u=uById(id);if(!u)return;
+  openModal(`
+    <div style="padding:20px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+        <h2 class="fd" style="font-size:17px;font-weight:800">Send feedback to ${esc(fullName(u))}</h2>
+        <button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>
+      </div>
+      <textarea id="fb-direct-text" rows="4" placeholder="Write your feedback…" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:12px;padding:12px;font-size:14px;outline:none;resize:none;font-family:inherit"></textarea>
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:11px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
+        <button onclick="App._sendDirectFeedback('${id}')" style="flex:2;padding:11px;border-radius:11px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Send feedback</button>
+      </div>
+    </div>
+  `,'max-w-sm');
+};
+
+App._sendDirectFeedback=(userId)=>{
+  const text=(document.getElementById('fb-direct-text')?.value||'').trim();
+  if(!text){toast('Write something first','err');return;}
+  const u=uById(userId);
+  if(!DB.feedback)DB.feedback=[];
+  DB.feedback.push({id:uid('fb'),checklistId:null,userId,managerId:S.uid,date:todayISO(),text,type:'General',priority:'Low',level:'direct',status:'Sent',acknowledged:false,createdAt:new Date().toISOString()});
+  DB.notifications.unshift({id:uid('n'),userId,text:'📝 Feedback from '+fullName(me()),time:new Date().toISOString(),read:false});
+  _invalidateNotifCache();
+  log(fullName(me()),'Sent feedback',fullName(u));
+  toast('Feedback sent ✓');closeModal();saveDB();render();
+};
+
+// ── queueEmail stub — emails sent via Supabase edge functions or external service ──
+// Replace this with your actual email provider integration
+function queueEmail(eventKey, userId, clId, date, vars){
+  // Stub: log the email intent, implement with your email provider
+  const u=uById(userId);
+  if(!u||!u.email)return;
+  console.log('[Email queued]',eventKey,'→',u.email,vars||{});
+  // To implement: call a Supabase Edge Function or external API here
+  // sb.functions.invoke('send-email', { body: { event: eventKey, to: u.email, vars } })
+}
+
+// Stubs for removed task issue flow (dead code, never called from UI)
+App._issueCmt=()=>{};
+App._issuePh=()=>{};
+
+
 function deptsPage(){
   const sel=S.filters.deptSel||null;
   const stab=S.filters.deptTab||'docs';
