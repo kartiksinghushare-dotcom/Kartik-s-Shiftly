@@ -1425,13 +1425,15 @@ const CRIT_OPTS=['Low','Medium','High','Critical'];
 const RESP_TYPES=[['tick','✓ / ✗ Tick & cross'],['yesno','Yes / No'],['passfail','Pass / Fail'],['dropdown','Dropdown (custom options)'],['text','Text input'],['numeric','Numeric input']];
 
 App.editCl=(id=null)=>{
-  const c=id?clById(id):null;
-  CLD=c?JSON.parse(JSON.stringify(c)):{
-    id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
-    frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
-    startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,createdBy:S.uid
-  };
-  _renderClModal(!!c);
+  try{
+    const c=id?clById(id):null;
+    CLD=c?JSON.parse(JSON.stringify(c)):{
+      id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
+      frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
+      startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,createdBy:S.uid
+    };
+    _renderClModal(!!c);
+  }catch(err){console.error('editCl error:',err);toast('Error opening checklist: '+err.message,'err');}
 };
 
 function _renderClModal(editing){
@@ -1519,7 +1521,7 @@ function _renderClModal(editing){
     <!-- Sticky footer -->
     <div class="px-5 py-4 border-t border-ink-100 flex gap-3 bg-white">
       <button onclick="App.closeModal()" class="flex-1 py-3 rounded-xl border-2 border-ink-200 font-semibold text-sm text-ink-600 hover:bg-ink-50 transition">Cancel</button>
-      <button id="cl-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';App._saveCl(${editing})" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer" onmouseover="if(!this.disabled)this.style.background='#0E0F13'" onmouseout="if(!this.disabled)this.style.background='#15171C'">${editing?'Save changes':'Create checklist'}</button>
+      <button id="cl-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';try{App._saveCl(${editing});}catch(e){console.error('Save button error:',e);this.disabled=false;this.textContent='${editing?'Save changes':'Create checklist'}';}" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer" onmouseover="if(!this.disabled)this.style.background='#0E0F13'" onmouseout="if(!this.disabled)this.style.background='#15171C'">${editing?'Save changes':'Create checklist'}</button>
     </div>
   </div>`,'max-w-2xl');
 }
@@ -1632,6 +1634,7 @@ App._togAsgn=(id,on,el)=>{if(!CLD.assignees)CLD.assignees=[];if(on&&!CLD.assigne
 
 
 App._saveCl=(editing)=>{
+  try{
   // Read all form values — also call _snapshotCLD for safety
   _snapshotCLD();
   CLD.name=$('#cn-name')?.value.trim()||CLD.name;CLD.description=$('#cn-desc')?.value.trim()||'';
@@ -1656,20 +1659,26 @@ App._saveCl=(editing)=>{
   });
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
-  // ── Capture what we need before clearing CLD ──
+  // ── Capture row before clearing CLD ──
   const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
   const toastMsg=editing?'Saved ✓':'Checklist created ✓';
-  // ── Clear CLD FIRST so render() doesn't re-open modal ──
+  // ── Clear CLD FIRST so render() never re-opens the modal ──
   CLD=null;
   App._clQSel=null;
   closeModal();
   toast(toastMsg);
-  try{localStorage.setItem(LS_KEY,JSON.stringify({DB,uid:S.uid}));}catch(e){}
+  saveDB();
   render();
   // ── Sync to Supabase in background ──
   sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
-    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Not synced to server: '+error.message.slice(0,60),'warn');}
+    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Not synced: '+error.message.slice(0,60),'warn');}
   }).catch(e=>console.error('Checklist sync:',e));
+  }catch(err){
+    console.error('_saveCl error:',err);
+    toast('Error saving: '+err.message,'err');
+    const btn=document.getElementById('cl-save-btn');
+    if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
+  }
 };
 App.dupCl=async(id)=>{
   const src=clById(id);if(!src)return;
