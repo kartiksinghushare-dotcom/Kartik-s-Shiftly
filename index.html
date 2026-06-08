@@ -365,7 +365,12 @@ async function loadFromSB(){
   }
   DB.departments=(depts||[]).map(d=>({id:d.id,name:d.name}));
   DB.locations=(locs||[]).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
-  if(cls&&cls.length>0)DB.checklists=_mC(cls);
+  if(cls){
+    const mapped=_mC(cls);
+    // Preserve local deletes — don't restore items that were deleted locally
+    const locallyDeletedCls=new Set((DB.checklists_deleted||[]));
+    DB.checklists=mapped.filter(c=>!locallyDeletedCls.has(c.id));
+  }
   if(subs)DB.submissions=_mS(subs);
   if(appr&&appr.length>=0)DB.approvals=_mA(appr);
   DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
@@ -376,11 +381,20 @@ async function loadFromSB(){
   // Re-apply questionsAccess from local snapshot for users where Supabase returned false
   DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
   // Load questions from Supabase (shared across all accounts)
-  if(qRows)DB.questions=qRows.map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
+  if(qRows){
+    const locallyDeletedQs=new Set((DB.questions_deleted||[]));
+    DB.questions=qRows.filter(q=>!locallyDeletedQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
+  }
   DB.feedback=DB.feedback||[];
   if(feedbackRows)DB.feedback=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
-  if(docFolderRows)DB.folders=docFolderRows.map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
-  if(docRows)DB.documents=docRows.map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
+  if(docFolderRows){
+    const locallyDeletedFolders=new Set((DB.folders_deleted||[]));
+    DB.folders=docFolderRows.filter(f=>!locallyDeletedFolders.has(f.id)).map(f=>({id:f.id,name:f.name,parentId:f.parent_id||null,type:f.type,scope:f.scope,createdBy:f.created_by||null,createdAt:f.created_at}));
+  }
+  if(docRows){
+    const locallyDeletedDocs=new Set((DB.documents_deleted||[]));
+    DB.documents=docRows.filter(d=>!locallyDeletedDocs.has(d.id)).map(d=>({id:d.id,name:d.name,folderId:d.folder_id||null,type:d.type,scope:d.scope,url:d.url,storagePath:d.storage_path||null,fileType:d.file_type||null,fileSize:d.file_size||null,uploadedBy:d.uploaded_by||null,uploaderName:d.uploader_name||null,uploadedAt:d.uploaded_at}));
+  }
 }
 async function _sync(){try{
   const results=await Promise.allSettled([
@@ -478,7 +492,7 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted'].forEach(k=>{if(!DB[k])DB[k]=[];});
     DB.users.forEach(u=>{
       if(!u.rules)u.rules={past:true,future:true,edit:true};
       // Ensure individual rule fields have proper defaults (true, not false)
@@ -1316,7 +1330,7 @@ function deptsPage(){
 }
 App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveDept=async(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);await sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'});log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated':'Created');saveDB();closeModal();render();};
-App.delDept=async(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;await sb.from('departments').delete().eq('id',id);DB.departments=DB.departments.filter(x=>x.id!==id);// Clear dept from users and checklists (don't delete them)
+App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;DB.departments=DB.departments.filter(x=>x.id!==id);sb.from('departments').delete().eq('id',id).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});// Clear dept from users and checklists (don't delete them)
 DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
@@ -1710,19 +1724,20 @@ App.dupCl=async(id)=>{
   }).catch(e=>console.warn('dupCl sync:',e));
 };
 
-App.delCl=async(id)=>{
+App.delCl=(id)=>{
   const c=clById(id);if(!c)return;
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
-  // ── Delete from Supabase FIRST so refresh doesn't restore it ──
-  const{error}=await sb.from('checklists').delete().eq('id',id).catch(e=>({error:e}));
-  if(error){console.error('delCl error:',error.message||error);toast('Delete failed: '+(error.message||'unknown error').slice(0,60),'err');return;}
-  // ── Remove locally after server confirms ──
+  // ── Remove locally immediately for instant UI ──
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
   const clAssignees=c.assignees||[];
   clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});
   _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
   toast('Deleted','warn');saveDB();render();
+  // ── Sync to Supabase in background ──
+  sb.from('checklists').delete().eq('id',id).then(({error})=>{
+    if(error)console.error('delCl sync:',error.message);
+  }).catch(e=>console.error('delCl:',e));
 };
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
@@ -2445,14 +2460,18 @@ function questionsPage(){
 
 App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr();};
 
-App._delQuestion=async(id)=>{
+App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
   if(!confirm('Delete "'+q.text+'"?'))return;
-  // Delete from Supabase first
-  await sb.from('questions').delete().eq('id',id).catch(e=>console.error('delQuestion:',e));
+  if(!DB.questions_deleted)DB.questions_deleted=[];
+  if(!DB.questions_deleted.includes(id))DB.questions_deleted.push(id);
   DB.questions=(DB.questions||[]).filter(x=>x.id!==id);
   DB.checklists.forEach(c=>{c.questionIds=(c.questionIds||[]).filter(x=>x!==id);if(c.questionConfigs)delete c.questionConfigs[id];});
   toast('Deleted','warn');saveDB();render();
+  // Sync to Supabase in background
+  sb.from('questions').delete().eq('id',id).then(({error})=>{
+    if(error)console.error('delQuestion sync:',error.message);
+  }).catch(e=>console.error('delQuestion:',e));
 };
 
 App._editQuestion=(id)=>{
@@ -3391,30 +3410,26 @@ function _fmtSize(b){if(!b)return'';if(b<1024)return b+'B';if(b<1048576)return M
 App._docNav=(id)=>{S.filters.docFolder=id;rr();};  // alias kept for compatibility
 App._docNavId=(id)=>{App._docNav(id);}; // alias for clarity
 
-App._delFolder=async(id)=>{
+App._delFolder=(id)=>{
   const f=(DB.folders||[]).find(x=>x.id===id);
   if(!f)return;
   if(!confirm('Delete folder "'+f.name+'" and all its files?'))return;
-  // Collect all folder IDs to delete (recursive) BEFORE modifying DB
+  // Collect all folder IDs (recursive) and doc IDs BEFORE modifying DB
   const toDelete=[];
-  function collectRec(fid){
-    toDelete.push(fid);
-    (DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));
-  }
+  function collectRec(fid){toDelete.push(fid);(DB.folders||[]).filter(x=>x.parentId===fid).forEach(c=>collectRec(c.id));}
   collectRec(id);
-  // Collect doc IDs BEFORE filtering them out
   const docIds=(DB.documents||[]).filter(x=>toDelete.includes(x.folderId)).map(x=>x.id);
-  // Delete from Supabase FIRST so refresh doesn't bring them back
-  try{
-    const delOps=toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid));
-    if(docIds.length)delOps.push(sb.from('documents').delete().in('id',docIds));
-    await Promise.all(delOps);
-  }catch(e){console.warn('delFolder Supabase:',e);}
-  // Remove locally after server confirms
+  // Track deleted IDs
+  if(!DB.folders_deleted)DB.folders_deleted=[];
+  toDelete.forEach(fid=>{if(!DB.folders_deleted.includes(fid))DB.folders_deleted.push(fid);});
   DB.folders=(DB.folders||[]).filter(x=>!toDelete.includes(x.id));
   DB.documents=(DB.documents||[]).filter(x=>!toDelete.includes(x.folderId||''));
   log(fullName(me()),'Deleted folder',f.name);
   toast('Deleted','warn');saveDB();render();
+  // Sync to Supabase in background
+  const delOps=toDelete.map(fid=>sb.from('doc_folders').delete().eq('id',fid).then(({error})=>{if(error)console.error('delFolder sync:',error.message);}));
+  if(docIds.length)delOps.push(sb.from('documents').delete().in('id',docIds).then(({error})=>{if(error)console.error('delDoc sync:',error.message);}));
+  Promise.all(delOps).catch(e=>console.error('delFolder:',e));
 };
 
 // ── Upload file ──
@@ -3527,15 +3542,17 @@ App._previewDoc=async(id)=>{
   }
 };
 
-App._delDoc=async(id)=>{
+App._delDoc=(id)=>{
   const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc||!confirm('Delete "'+doc.name+'"?'))return;
-  // Delete from Supabase and storage first so refresh doesn't restore it
-  try{
-    await sb.from('documents').delete().eq('id',id);
-    if(doc.storagePath)await sb.storage.from('documents').remove([doc.storagePath]).catch(()=>{});
-  }catch(e){console.warn('delDoc Supabase:',e);}
+  if(!DB.documents_deleted)DB.documents_deleted=[];
+  if(!DB.documents_deleted.includes(id))DB.documents_deleted.push(id);
   DB.documents=(DB.documents||[]).filter(x=>x.id!==id);
   log(fullName(me()),'Deleted doc',doc.name);toast('Deleted','warn');saveDB();render();
+  // Sync to Supabase in background
+  sb.from('documents').delete().eq('id',id).then(({error})=>{
+    if(error)console.error('delDoc sync:',error.message);
+  }).catch(e=>console.error('delDoc:',e));
+  if(doc.storagePath)sb.storage.from('documents').remove([doc.storagePath]).catch(()=>{});
 };
 
 App._clearOperational=async()=>{
