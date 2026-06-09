@@ -348,6 +348,18 @@ function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.des
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
+  // Check and refresh session before queries — prevents 401 on stale tokens
+  try{
+    const {data:{session},error}=await sb.auth.getSession();
+    if(error||!session){
+      const {data:refreshData,error:refreshErr}=await sb.auth.refreshSession();
+      if(refreshErr||!refreshData?.session){
+        console.warn('[auth] no valid session, skipping loadFromSB');
+        return; // Don't loop — user needs to log in again
+      }
+    }
+  }catch(e){console.warn('[auth] session check:',e.message);}
+
   let depts,locs,allCls,subs,appr,audit,notifs,profiles,feedbackRows,docFolderRows,docRows,qRows,ticketRows;
   try{
     const res=await Promise.all([
@@ -496,9 +508,7 @@ async function loadFromSB(){
     console.log('[TK] loadFromSB tickets start — uid:',_uid,'isAdmin:',_isAdmin,'isMgr:',_isMgr,'ticketRows from Promise.all:',ticketRows?.length??'null');
     sb.from('tickets').select('*').order('created_at',{ascending:false})
       .then(({data,error})=>{
-        if(error){console.error('[TK] Supabase error:',error.message,error.code);return;}
-        console.log('[TK] Supabase returned',data?.length,'rows');
-        if(data&&data.length){console.log('[TK] First ticket:',JSON.stringify(data[0]).slice(0,200));}
+        if(error){console.error('[TK] error:',error.message);return;}
         const allTk=_mapTk(data||[]);
         let visible;
         if(_isAdmin){
@@ -507,20 +517,12 @@ async function loadFromSB(){
           visible=allTk.filter(t=>_teamIds.has(t.assignedTo)||_teamIds.has(t.submitterId));
         } else {
           visible=allTk.filter(t=>t.assignedTo===_uid||t.submitterId===_uid);
-          console.log('[TK] User filter: uid=',_uid,'allTk=',allTk.length,'visible=',visible.length);
-          if(allTk.length&&!visible.length){
-            console.warn('[TK] MISMATCH — tickets exist but none match uid. Ticket assignedTo values:',allTk.map(t=>t.assignedTo));
-          }
         }
-        // Preserve locally-created tickets not yet in SB
         const fromSB=new Set(allTk.map(t=>t.id));
         const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id));
         DB.tickets=[...visible,...localOnly];
-        console.log('[TK] DB.tickets set to',DB.tickets.length,'rows');
-        _invalidateNotifCache();
-        saveDB();
-        rr();
-      }).catch(e=>console.error('[TK] fetch exception:',e.message));
+        _invalidateNotifCache();saveDB();rr();
+      }).then(()=>{}).catch(e=>console.error('[TK] fetch failed:',e.message));
   }
 }
 async function _sync(){try{
@@ -2556,6 +2558,23 @@ App._viewSubFor=async(btn)=>{
   }catch(e){try{loadDB();}catch(e2){}S.uid=null;render();console.error('Boot error:',e);if(e.message&&!e.message.includes('JWT'))toast('Connection error — check your internet connection','err');}
 })();
 
+// ── Session keepalive: refresh token every 10 minutes to prevent 401 ──
+setInterval(async()=>{
+  if(!S.uid)return;
+  try{
+    const{data:{session},error}=await sb.auth.getSession();
+    if(error||!session){
+      // Session gone — try refresh
+      const{data,error:re}=await sb.auth.refreshSession();
+      if(re){console.warn('[auth] session expired, reloading');render();return;}
+    }
+    // Session valid — reload data silently
+    if(Date.now()-_lastUserAction>5000){
+      loadFromSB().then(()=>{if(Date.now()-_lastUserAction>5000)rr();}).catch(()=>{});
+    }
+  }catch(e){console.warn('[keepalive]',e.message);}
+},10*60*1000); // every 10 minutes
+
 /* ===== QUESTIONS PAGE ===== */
 let _QED=null;
 
@@ -3359,7 +3378,7 @@ function ticketsPage(){
     saveDB();
     // Sync viewed_by to Supabase in background — no rr() here (already in a render)
     (DB.tickets||[]).filter(t=>t.assignedTo===S.uid&&(t.viewedBy||[]).includes(S.uid)).forEach(t=>{
-      sb.from('tickets').update({viewed_by:t.viewedBy||[]}).eq('id',t.id).catch(()=>{});
+      sb.from('tickets').update({viewed_by:t.viewedBy||[]}).eq('id',t.id).then(()=>{}).catch(()=>{});
     });
     // Schedule badge refresh after render completes
     setTimeout(()=>{_invalidateNotifCache();const c=document.getElementById('content');if(c)c.innerHTML=pageContent();},50);
@@ -3530,6 +3549,83 @@ App._delTicket=(id)=>{
 };
 
 
+// ── Analytics clickable stat card ──
+App._aStatCard=(label,val,color,type,data)=>{
+  const colMap={sky:'#0EA5E9',brand:'#0E9F6E',rose:'#EF4444',orange:'#F97316'};
+  const c=colMap[color]||color;
+  return`<div onclick="App._aStatDrill('${type}')" style="background:#fff;border-radius:16px;border:1.5px solid #E5E7EB;padding:16px;cursor:pointer;transition:all .15s" onmouseover="this.style.borderColor='${c}';this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'" onmouseout="this.style.borderColor='#E5E7EB';this.style.boxShadow=''">`
+  +`<div style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:8px">${label}</div><div style="font-size:28px;font-weight:800;color:${c}">${val}</div><div style="font-size:11px;color:#D1D5DB;margin-top:4px">Click to see details</div></div>`;
+};
+
+App._aStatDrill=(type)=>{
+  const f=S.filters;
+  const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
+  let subs=DB.submissions;
+  if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
+  if(fArr('users').length)subs=subs.filter(s=>fArr('users').includes(s.userId));
+  if(fArr('deps').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return c&&fArr('deps').includes(c.department);});
+  if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);
+  if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
+  let aTickets=(DB.tickets||[]).slice();
+  if(!isAdmin())aTickets=aTickets.filter(t=>subTree(S.uid).some(u=>u.id===t.assignedTo||u.id===t.submitterId)||t.assignedTo===S.uid||t.submitterId===S.uid);
+  if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
+  if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
+  const today=todayISO();
+  let title='',rows='',emptyMsg='No data.';
+  const subRow=s=>{
+    const u=uById(s.userId),c=clById(s.checklistId);
+    const extra=s.submittedAt?' · '+new Date(s.submittedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'}):'';
+    return'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App.viewSub(\''+s.id+'\')" onmouseover="this.style.background=\'#FAFAFA\'" onmouseout="this.style.background=\'\'">'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+(c?esc(c.name):'<span style="color:#EF4444;font-style:italic">[Deleted checklist]</span>')+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+(u?esc(fullName(u)):'?')+' · '+fmtS(s.date)+extra+'</div>'
+      +'</div>'+chip(s.status)+'</div>';
+  };
+  if(type==='submitted'){
+    const list=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||''));
+    title='All Submissions ('+list.length+')';rows=list.map(subRow).join('');emptyMsg='No submissions in this period.';
+  } else if(type==='ontime'){
+    const list=subs.filter(s=>s.status==='On Time').sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||''));
+    title='On Time ('+list.length+')';rows=list.map(subRow).join('');emptyMsg='No on-time submissions.';
+  } else if(type==='late'){
+    const list=subs.filter(s=>s.status==='Late').sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||''));
+    title='Late ('+list.length+')';rows=list.map(subRow).join('');emptyMsg='No late submissions.';
+  } else if(type==='missed'){
+    const relevantUsers=isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean);
+    const dr1=f.dr1||(new Date(Date.now()-30*86400000).toISOString().slice(0,10));
+    const dr2=f.dr2||today;
+    const dateRange=[];
+    let d=new Date(dr1+'T00:00:00');const dEnd=new Date(dr2+'T00:00:00');
+    while(d<=dEnd&&dateRange.length<60){dateRange.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}
+    const missed=[];
+    relevantUsers.forEach(u=>{
+      dateRange.forEach(dt=>{
+        if(dt>=today)return;
+        DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt)&&c.status!=='Draft').forEach(c=>{
+          if(!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt))missed.push({u,c,dt});
+        });
+      });
+    });
+    title='Missed ('+missed.length+')';
+    rows=missed.slice(0,100).map(({u,c,dt})=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(c.name)+'</div><div style="font-size:11px;color:#9CA3AF">'+esc(fullName(u))+' · '+fmtS(dt)+'</div></div><span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 8px;border-radius:20px">Missed</span></div>').join('');
+    emptyMsg='No missed checklists in this period.';
+  } else {
+    const tkMap={tickets:aTickets,tkopen:aTickets.filter(t=>t.status==='Open'),tkhigh:aTickets.filter(t=>t.priority==='High'||t.priority==='Critical'),tkresolved:aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed')};
+    const tkLabels={tickets:'All Tickets',tkopen:'Open Tickets',tkhigh:'High Priority Tickets',tkresolved:'Resolved Tickets'};
+    const list=(tkMap[type]||[]).sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
+    title=(tkLabels[type]||'Tickets')+' ('+list.length+')';
+    const priClr={High:'#DC2626',Medium:'#F59E0B',Low:'#6B7280',Critical:'#7C3AED'};
+    rows=list.map(t=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(t.title)+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+(uById(t.submitterId)?'From '+esc(fullName(uById(t.submitterId))):'')+' → '+(uById(t.assignedTo)?esc(fullName(uById(t.assignedTo))):'?')+' · '+fmtS(t.date||t.createdAt?.slice(0,10)||'')+'</div></div><span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FEF2F2;color:'+(priClr[t.priority]||'#6B7280')+'">'+esc(t.priority)+'</span>'+chip(t.status)+'</div>').join('');
+    emptyMsg='No tickets in this category.';
+  }
+  openModal('<div style="display:flex;flex-direction:column;max-height:80vh">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between;padding:16px 20px;border-bottom:1px solid #F3F4F6;flex-shrink:0">'
+    +'<h2 style="font-size:16px;font-weight:800;font-family:var(--font-display)">'+title+'</h2>'
+    +'<button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">'+ic('x')+'</button>'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1">'+(rows||'<div style="padding:32px;text-align:center;color:#9CA3AF;font-size:13px">'+emptyMsg+'</div>')+'</div></div>','max-w-lg');
+};
+
 function analyticsPage(){
   const today=todayISO();
   // Collect all relevant submissions
@@ -3567,7 +3663,7 @@ function analyticsPage(){
   relevantUsers.forEach(u=>{
     if(fArr('users').length&&!fArr('users').includes(u.id))return;
     dateRange.forEach(dt=>{
-      const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt));
+      const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt)&&c.status!=='Draft');
       cls.forEach(c=>{
         totalAssigned++;
         if(!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt)&&dt<today){
@@ -3620,25 +3716,25 @@ function analyticsPage(){
         <span style="color:#9CA3AF">to</span>
         <input type="date" value="${f.dr2||''}" onchange="S.filters.dr2=this.value;rr()" style="flex:1;background:#F6F7F8;border:1.5px solid #E5E7EB;border-radius:8px;padding:6px 10px;font-size:13px;outline:none"/>
       </div>
-      <button onclick="S.filters.issue=f.issue==='yes'?'':'yes';rr()" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;border:1.5px solid ${f.issue==='yes'?'#FED7AA':'#E5E7EB'};background:${f.issue==='yes'?'#FFF7ED':'#fff'};font-size:13px;font-weight:${f.issue==='yes'?600:400};color:${f.issue==='yes'?'#C2410C':'#9CA3AF'};cursor:pointer">${ic('flag','w-3.5 h-3.5')} Issues only</button>
+
       ${activeCount?`<button onclick="S.filters={};S.afOpen=null;rr()" style="padding:6px 12px;border-radius:8px;border:1px solid #E5E7EB;font-size:13px;font-weight:600;color:#9CA3AF;background:#fff;cursor:pointer">Clear (${activeCount})</button>`:''}
       ${btnG('Export','App._exportCSV()','download')}
     </div>
   </div>
 
-  <!-- Stats row 1: submissions -->
+  <!-- Stats row 1: submissions (all clickable) -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
-    ${statCard('Submitted',subs.length,'sky')}
-    ${statCard('On time',byS['On Time']||0,'brand')}
-    ${statCard('Late',byS['Late']||0,'rose')}
-    ${statCard('Missed',totalMissed,'orange')}
+    ${App._aStatCard('Submitted',subs.length,'sky','submitted',subs)}
+    ${App._aStatCard('On time',byS['On Time']||0,'brand','ontime',subs.filter(s=>s.status==='On Time'))}
+    ${App._aStatCard('Late',byS['Late']||0,'rose','late',subs.filter(s=>s.status==='Late'&&!!clById(s.checklistId)))}
+    ${App._aStatCard('Missed',totalMissed,'orange','missed',null)}
   </div>
-  <!-- Stats row 2: tickets -->
+  <!-- Stats row 2: tickets (all clickable) -->
   <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
-    ${statCard('Tickets',aTickets.length,'#F97316')}
-    ${statCard('Open',tkOpen,'#F59E0B')}
-    ${statCard('High Priority',tkHigh,'#DC2626')}
-    ${statCard('Resolved',tkResolved,'#0E9F6E')}
+    ${App._aStatCard('Tickets',aTickets.length,'#F97316','tickets',aTickets)}
+    ${App._aStatCard('Open',tkOpen,'#F59E0B','tkopen',aTickets.filter(t=>t.status==='Open'))}
+    ${App._aStatCard('High Priority',tkHigh,'#DC2626','tkhigh',aTickets.filter(t=>t.priority==='High'||t.priority==='Critical'))}
+    ${App._aStatCard('Resolved',tkResolved,'#0E9F6E','tkresolved',aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed'))}
   </div>
 
 
