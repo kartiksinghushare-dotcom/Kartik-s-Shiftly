@@ -242,6 +242,9 @@ input,select,textarea{outline:none}
 
 /* Button click feedback */
 button:active{opacity:.75;transform:scale(.97);transition:transform .08s,opacity .08s}
+/* Clickable stat cards */
+.stat-card-click:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
+.stat-card-click:active{transform:scale(.98);opacity:.9}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -647,7 +650,20 @@ const selF=(l,id,opts,sv='')=>`<div><label class="block text-xs font-semibold te
 function mkTog(id,on,label){return`<div class="flex items-center justify-between py-1"><span class="text-sm">${label}</span><button id="${id}" class="tog ${on?'on':'off'}" onclick="this.classList.toggle('on');this.classList.toggle('off')"><span></span></button></div>`;}
 const togV=id=>{const el=$(`#${id}`);if(!el)return false;return el.classList?.contains('on')||false;};
 const STAT_C={sky:'#0284C7',brand:'#0E9F6E',rose:'#E11D48',amber:'#D97706',orange:'#EA580C',emerald:'#059669'};
-const statCard=(t,v,c='sky',onclick='')=>{const col=STAT_C[c]||c||'#0284C7';const clickable=!!onclick;return`<div ${clickable?`onclick="${onclick}" onmouseover="this.style.borderColor='${col}';this.style.boxShadow='0 4px 16px rgba(0,0,0,.08)'" onmouseout="this.style.borderColor='#ECEDF0';this.style.boxShadow='0 1px 3px rgba(16,24,40,.06)'"`:''} style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;box-shadow:0 1px 3px rgba(16,24,40,.06);padding:16px${clickable?';cursor:pointer;transition:all .15s':''}"><div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">${t}</div><div class="fd" style="font-size:30px;font-weight:800;color:${col}">${v}</div>${clickable?`<div style="font-size:11px;color:#D1D5DB;margin-top:4px">Click to see details</div>`:''}`;};
+const statCard=(t,v,c='sky',oc='')=>{
+  const col=STAT_C[c]||c||'#0284C7';
+  if(oc){
+    return '<div class="stat-card-click" onclick="'+oc+'" data-col="'+col+'" style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;box-shadow:0 1px 3px rgba(16,24,40,.06);padding:16px;cursor:pointer;transition:border-color .15s,box-shadow .15s">'
+      +'<div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">'+t+'</div>'
+      +'<div class="fd" style="font-size:30px;font-weight:800;color:'+col+'">'+v+'</div>'
+      +'<div style="font-size:11px;color:#D1D5DB;margin-top:4px">↗ Details</div>'
+      +'</div>';
+  }
+  return '<div style="background:#fff;border-radius:20px;border:1px solid #ECEDF0;box-shadow:0 1px 3px rgba(16,24,40,.06);padding:16px">'
+    +'<div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">'+t+'</div>'
+    +'<div class="fd" style="font-size:30px;font-weight:800;color:'+col+'">'+v+'</div>'
+    +'</div>';
+};
 const empty=(i,t,s)=>`<div style="text-align:center;padding:48px 24px"><div style="width:44px;height:44px;border-radius:16px;background:#F6F7F8;color:#D1D5DB;display:grid;place-items:center;margin:0 auto 12px">${ic(i,'w-5 h-5')}</div><p class="fd" style="font-weight:600;color:#6B7280;font-size:14px">${esc(t)}</p>${s?`<p style="font-size:12px;color:#9CA3AF;margin-top:4px">${esc(s)}</p>`:''}</div>`;
 
 /* ===== MODAL ===== */
@@ -4058,78 +4074,80 @@ App._delDoc=(id)=>{
 };
 
 App._clearOperational=()=>{
-  // Build counts for each category
   const cats=[
-    {key:'submissions',  label:'Submissions',   icon:'✓', count:DB.submissions.length,   color:'#0EA5E9', table:'submissions'},
-    {key:'checklists',   label:'Checklists',    icon:'☑', count:DB.checklists.length,    color:'#8B5CF6', table:'checklists'},
-    {key:'approvals',    label:'Approvals',     icon:'✅', count:DB.approvals.length,     color:'#F59E0B', table:'approvals'},
-    {key:'notifications',label:'Notifications', icon:'🔔', count:DB.notifications.length, color:'#6B7280', table:'notifications'},
-    {key:'tickets',      label:'Tickets',       icon:'🎫', count:(DB.tickets||[]).length,  color:'#F97316', table:'tickets'},
-    {key:'feedback',     label:'Feedback',      icon:'💬', count:(DB.feedback||[]).length,  color:'#EC4899', table:'feedback'},
-    {key:'questions',    label:'Questions',     icon:'❓', count:(DB.questions||[]).length, color:'#10B981', table:'questions'},
-    {key:'documents',    label:'Documents',     icon:'📄', count:(DB.documents||[]).length, color:'#0369A1', table:'documents'},
-    {key:'audit',        label:'Audit logs',    icon:'📋', count:(DB.audit||[]).length,     color:'#9CA3AF', table:'audit_logs'},
-    {key:'users',        label:'Users',         icon:'👥', count:DB.users.filter(u=>u.id!==S.uid).length, color:'#DC2626', table:'profiles'},
+    {key:'submissions',  label:'Submissions',    icon:'✅', desc:'All checklist submission records',    count:()=>DB.submissions.length},
+    {key:'checklists',   label:'Checklists',     icon:'☑️', desc:'All checklist configurations',        count:()=>DB.checklists.length},
+    {key:'tickets',      label:'Tickets',        icon:'🎫', desc:'All escalation tickets',              count:()=>(DB.tickets||[]).length},
+    {key:'approvals',    label:'Approvals',      icon:'✔️', desc:'All approval requests',               count:()=>DB.approvals.length},
+    {key:'notifications',label:'Notifications',  icon:'🔔', desc:'All in-app notifications',            count:()=>DB.notifications.length},
+    {key:'feedback',     label:'Feedback',       icon:'💬', desc:'All manager feedback',                count:()=>(DB.feedback||[]).length},
+    {key:'questions',    label:'Questions',      icon:'❓', desc:'Question library',                    count:()=>(DB.questions||[]).length},
+    {key:'documents',    label:'Documents',      icon:'📄', desc:'Documents and folders',               count:()=>(DB.documents||[]).length},
+    {key:'audit',        label:'Audit logs',     icon:'📋', desc:'System audit trail',                  count:()=>(DB.audit||[]).length},
+    {key:'users',        label:'Users (except you)', icon:'👥', desc:'All user accounts except yours', count:()=>DB.users.filter(u=>u.id!==S.uid).length},
   ];
-  const rows=cats.map(cat=>`
-    <label style="display:flex;align-items:center;gap:12px;padding:11px 16px;border-radius:10px;cursor:pointer;border:1.5px solid #F3F4F6;margin-bottom:6px" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
-      <input type="checkbox" id="clr-${cat.key}" style="width:16px;height:16px;accent-color:#EF4444;cursor:pointer"/>
-      <span style="font-size:18px">${cat.icon}</span>
-      <div style="flex:1">
-        <div style="font-size:13px;font-weight:700;color:#15171C">${cat.label}</div>
-        <div style="font-size:11px;color:#9CA3AF;margin-top:1px">${cat.count} record${cat.count!==1?'s':''} in database</div>
-      </div>
-      <span style="font-size:12px;font-weight:800;color:${cat.color};background:${cat.color}15;padding:2px 8px;border-radius:20px">${cat.count}</span>
-    </label>`).join('');
-  openModal(`<div style="display:flex;flex-direction:column;max-height:85vh">
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:18px 20px;border-bottom:1px solid #F3F4F6;flex-shrink:0">
-      <div>
-        <h2 style="font-size:17px;font-weight:800;font-family:var(--font-display)">🧹 Clear Data</h2>
-        <p style="font-size:12px;color:#9CA3AF;margin-top:2px">Select which data to permanently delete</p>
-      </div>
-      <button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">${ic('x')}</button>
-    </div>
-    <div style="padding:16px 20px;overflow-y:auto;flex:1">
-      <div style="display:flex;gap:8px;margin-bottom:12px">
-        <button onclick="document.querySelectorAll('[id^=clr-]').forEach(c=>c.checked=true)" style="padding:5px 12px;border-radius:7px;border:1.5px solid #E5E7EB;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Select all</button>
-        <button onclick="document.querySelectorAll('[id^=clr-]').forEach(c=>c.checked=false)" style="padding:5px 12px;border-radius:7px;border:1.5px solid #E5E7EB;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Deselect all</button>
-      </div>
-      ${rows}
-    </div>
-    <div style="padding:16px 20px;border-top:1px solid #F3F4F6;flex-shrink:0;display:flex;gap:10px">
-      <button onclick="App.closeModal()" style="flex:1;padding:11px;border-radius:10px;border:1.5px solid #E5E7EB;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>
-      <button onclick="App._execClear()" style="flex:2;padding:11px;border-radius:10px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">Delete selected data</button>
-    </div>
-  </div>`,'max-w-md');
+  const rows=cats.map(cat=>{
+    const n=cat.count();
+    return '<label id="lbl-clr-'+cat.key+'" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid #F3F4F6;margin-bottom:6px;transition:all .12s" onmouseover="this.style.background=\'#FAFAFA\'" onmouseout="this.style.background=\'\'">'
+      +'<input type="checkbox" id="clr-'+cat.key+'" onchange="this.closest(\'label\').style.borderColor=this.checked?\'#EF4444\':\'#F3F4F6\'" style="width:17px;height:17px;accent-color:#EF4444;cursor:pointer;flex-shrink:0"/>'
+      +'<span style="font-size:20px;flex-shrink:0">'+cat.icon+'</span>'
+      +'<div style="flex:1;min-width:0">'
+      +'<div style="font-size:13px;font-weight:700;color:#15171C">'+cat.label+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+cat.desc+'</div>'
+      +'</div>'
+      +'<span style="font-size:12px;font-weight:800;background:'+(n?'#FEF2F2':'#F6F7F8')+';color:'+(n?'#DC2626':'#9CA3AF')+';padding:3px 9px;border-radius:20px;flex-shrink:0">'+n+' records</span>'
+      +'</label>';
+  }).join('');
+
+  openModal(
+    '<div style="display:flex;flex-direction:column;max-height:88vh">'
+    +'<div style="padding:18px 20px 14px;border-bottom:1px solid #F3F4F6;flex-shrink:0">'
+    +'<div style="display:flex;align-items:center;justify-content:space-between">'
+    +'<div><div style="font-size:17px;font-weight:800;font-family:var(--font-display)">🧹 Clear Data</div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">Select categories to permanently delete</div></div>'
+    +'<button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#9CA3AF">'+ic('x')+'</button>'
+    +'</div>'
+    +'<div style="display:flex;gap:8px;margin-top:12px">'
+    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=true;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#EF4444\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #E5E7EB;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Select all</button>'
+    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=false;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#F3F4F6\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #E5E7EB;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Deselect all</button>'
+    +'</div>'
+    +'</div>'
+    +'<div style="overflow-y:auto;flex:1;padding:14px 20px">'+rows+'</div>'
+    +'<div style="padding:14px 20px;border-top:1px solid #F3F4F6;flex-shrink:0;display:flex;gap:10px">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #E5E7EB;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._execClear()" style="flex:2;padding:12px;border-radius:12px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">🗑 Delete selected</button>'
+    +'</div>'
+    +'</div>',
+    'max-w-md'
+  );
 };
 
 App._execClear=async()=>{
-  const sel=[];
   const catMap={
-    submissions:{db:'submissions',table:'submissions',deleteFn:()=>{DB.submissions=[];Object.keys(RUN).forEach(k=>delete RUN[k]);}},
-    checklists:{db:'checklists',table:'checklists',deleteFn:()=>{DB.checklists=[];DB.checklists_deleted=[];}},
-    approvals:{db:'approvals',table:'approvals',deleteFn:()=>{DB.approvals=[];}},
-    notifications:{db:'notifications',table:'notifications',deleteFn:()=>{DB.notifications=[];_invalidateNotifCache();}},
-    tickets:{db:'tickets',table:'tickets',deleteFn:()=>{DB.tickets=[];}},
-    feedback:{db:'feedback',table:'feedback',deleteFn:()=>{DB.feedback=[];}},
-    questions:{db:'questions',table:'questions',deleteFn:()=>{DB.questions=[];DB.questions_deleted=[];}},
-    documents:{db:'documents',table:'documents',deleteFn:()=>{DB.documents=[];DB.documents_deleted=[];DB.folders=[];DB.folders_deleted=[];}},
-    audit:{db:'audit',table:'audit_logs',deleteFn:()=>{DB.audit=[];}},
-    users:{db:'users',table:'profiles',deleteFn:()=>{DB.users=DB.users.filter(u=>u.id===S.uid);}},
+    submissions: {local:()=>{DB.submissions=[];Object.keys(RUN).forEach(k=>delete RUN[k]);},table:'submissions'},
+    checklists:  {local:()=>{DB.checklists=[];DB.checklists_deleted=[];},table:'checklists'},
+    tickets:     {local:()=>{DB.tickets=[];},table:'tickets'},
+    approvals:   {local:()=>{DB.approvals=[];},table:'approvals'},
+    notifications:{local:()=>{DB.notifications=[];_invalidateNotifCache();},table:'notifications'},
+    feedback:    {local:()=>{DB.feedback=[];},table:'feedback'},
+    questions:   {local:()=>{DB.questions=[];DB.questions_deleted=[];},table:'questions'},
+    documents:   {local:()=>{DB.documents=[];DB.folders=[];DB.documents_deleted=[];DB.folders_deleted=[];},table:'documents'},
+    audit:       {local:()=>{DB.audit=[];},table:'audit_logs'},
+    users:       {local:()=>{DB.users=DB.users.filter(u=>u.id===S.uid);},table:'profiles'},
   };
-  Object.keys(catMap).forEach(k=>{
-    if(document.getElementById('clr-'+k)?.checked)sel.push(k);
-  });
+  const sel=Object.keys(catMap).filter(k=>document.getElementById('clr-'+k)?.checked);
   if(!sel.length){toast('Select at least one category','warn');return;}
-  if(!confirm('Permanently delete '+sel.length+' categor'+(sel.length===1?'y':'ies')+'? This CANNOT be undone.'))return;
+  const labels=sel.map(k=>catMap[k].table).join(', ');
+  if(!confirm('Permanently delete: '+labels+'?\n\nThis cannot be undone.'))return;
   closeModal();
-  // Apply local deletions
-  sel.forEach(k=>catMap[k].deleteFn());
-  // Sync to Supabase
-  const sbOps=sel.map(k=>sb.from(catMap[k].table).delete().neq('id','00000000-0000-0000-0000-000000000000').then(()=>{}).catch(()=>{}));
-  await Promise.allSettled(sbOps);
-  log(fullName(me()),'Cleared data',sel.join(', '));
-  toast('Deleted: '+sel.map(k=>catMap[k].table).join(', ')+'  ✓','ok');
+  // Local deletion
+  sel.forEach(k=>catMap[k].local());
+  // Supabase deletion in background
+  await Promise.allSettled(
+    sel.map(k=>sb.from(catMap[k].table).delete().neq('id','00000000-0000-0000-0000-000000000000').then(()=>{}).catch(()=>{}))
+  );
+  log(fullName(me()),'Cleared data',labels);
+  toast('Deleted: '+sel.length+' categor'+(sel.length===1?'y':'ies')+' ✓','ok');
   saveDB();S.route='dashboard';render();
 };
 
