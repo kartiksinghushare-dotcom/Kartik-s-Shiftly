@@ -2934,6 +2934,20 @@ function _processEscalations(checklistId,date,responses){
       // Determine priority from question or response
       const _respLower=String(resp.response||'').toLowerCase();
       const ticketPriority=_respLower==='fail'||_respLower==='not done'||_respLower==='no'?'High':'Medium';
+      // ── Deduplication: don't create ticket if one already exists for same question+checklist
+      // that is still Open or In Progress (unresolved)
+      const existingOpenTicket=(DB.tickets||[]).find(t=>
+        t.questionId===q.id&&
+        t.checklistId===checklistId&&
+        t.submitterId===S.uid&&
+        (t.status==='Open'||t.status==='In Progress')
+      );
+      if(existingOpenTicket){
+        // Just update the notification so assignee knows it happened again
+        DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:'🔁 Repeat escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" again by '+fullName(u)+' — ticket #'+existingOpenTicket.id.slice(-6)+' still open',time:new Date().toISOString(),read:false,type:'escalation'});
+        _invalidateNotifCache();
+        return; // Skip creating a duplicate ticket
+      }
       // Create ticket
       const ticket={
         id:uid('tk'),
