@@ -232,6 +232,8 @@ const I={
   ticket:`<path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2z"/><path d="M13 5v2M13 17v2M13 11v2"/>`,
   eye:`<path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>`,
   user:`<path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/>`,
+  download:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>`,
+  upload:`<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>`,
   send:`<line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>`,
 };
 const ic=(n,cls='w-5 h-5',sw=2)=>`<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${I[n]||''}</svg>`;
@@ -2483,6 +2485,90 @@ setInterval(async()=>{
 /* ===== QUESTIONS PAGE ===== */
 let _QED=null;
 
+// ── Questions CSV template download ──
+App._downloadQTemplate=()=>{
+  const header='text,type,option1,option2,option3,option4,option5,photo_required,comment_required,approval_required';
+  const examples=[
+    'Is the area clean?,passfail,,,,,,FALSE,FALSE,FALSE',
+    'Was the task completed?,yesno,,,,,,FALSE,FALSE,FALSE',
+    'Rate the cleanliness (1-10),number,,,,,,FALSE,FALSE,FALSE',
+    'Check all items done?,tick,,,,,,FALSE,FALSE,FALSE',
+    'What is the shift status?,answer,Morning,Afternoon,Evening,Night,,FALSE,FALSE,FALSE',
+    'Describe any issues found?,answer,None,Minor issue,Major issue,,,TRUE,TRUE,FALSE',
+  ];
+  const csv=[header,...examples].join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  a.download='shiftly_questions_template.csv';
+  document.body.appendChild(a);a.click();document.body.removeChild(a);
+  URL.revokeObjectURL(a.href);
+  toast('Template downloaded ✓');
+};
+
+// ── Questions CSV import ──
+App._importQCSV=(input)=>{
+  const file=input.files?.[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    const lines=e.target.result.split('\n').map(l=>l.trim()).filter(Boolean);
+    if(!lines.length){toast('Empty file','err');return;}
+    // Skip header row
+    const start=lines[0].toLowerCase().startsWith('text')?1:0;
+    const rows=lines.slice(start);
+    if(!rows.length){toast('No data rows found','err');return;}
+    let added=0,skipped=0;
+    rows.forEach(line=>{
+      // Parse CSV properly (handle quoted commas)
+      const cols=[];let cur='',inQ=false;
+      for(let i=0;i<line.length;i++){
+        if(line[i]==='"'){inQ=!inQ;}
+        else if(line[i]===','&&!inQ){cols.push(cur.trim());cur='';}
+        else cur+=line[i];
+      }
+      cols.push(cur.trim());
+      const [text,type,o1,o2,o3,o4,o5,photo,comment,approval]=cols;
+      if(!text||!type){skipped++;return;}
+      const qtype=['passfail','yesno','tick','number','answer'].includes(type.toLowerCase().trim())?type.toLowerCase().trim():'answer';
+      // Build options
+      let options=[];
+      if(qtype==='answer'){
+        options=[o1,o2,o3,o4,o5].filter(Boolean).map(t=>({text:t.trim(),escalate:false}));
+        if(!options.length){skipped++;return;}
+      } else if(qtype==='number'){
+        // For number type, add a default condition if none specified
+        options=[];
+      }
+      const isTrue=s=>(s||'').toLowerCase().trim()==='true'||s==='1';
+      const q={
+        id:uid('q'),
+        text:text.trim(),
+        type:qtype,
+        options,
+        photo:isTrue(photo),
+        comment:isTrue(comment),
+        approval:isTrue(approval),
+        createdBy:S.uid,
+        createdAt:new Date().toISOString()
+      };
+      if(!DB.questions)DB.questions=[];
+      DB.questions.push(q);
+      added++;
+    });
+    if(added){
+      saveDB();
+      sb.from('questions').upsert(DB.questions.filter(q=>q.createdBy===S.uid).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}).then(()=>{}).catch(()=>{});
+      rr();
+      toast(added+' question'+(added===1?'':'s')+' imported'+(skipped?' ('+skipped+' skipped)':'')+'  ✓','ok');
+    } else {
+      toast('No valid questions found'+(skipped?' — '+skipped+' rows skipped':''),'err');
+    }
+    input.value=''; // Reset so same file can be uploaded again
+  };
+  reader.readAsText(file);
+};
+
+
 function questionsPage(){
   // Questions tab: admin sees all, manager sees only questions they created
   const allQ=isAdmin()?(DB.questions||[]):(DB.questions||[]).filter(q=>q.createdBy===S.uid);
@@ -2520,12 +2606,32 @@ function questionsPage(){
     h+=`</div>`;
     return h;
   }
-  return`<div class="fade">${hdr('Questions','')}
-    <div style="display:flex;justify-content:flex-end;margin-bottom:12px">
-      <button onclick="App._editQuestion(null)" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:14px;font-weight:600;padding:10px 16px;border-radius:12px;border:none;cursor:pointer">${ic('plus','w-4 h-4')}New Question</button>
+  return`<div class="fade">${hdr('Questions','Reusable question library for your checklists')}
+    <!-- Action bar: New + Search -->
+    <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
+      <input type="text" placeholder="Search questions…" value="${S.filters.qSearch||''}"
+        oninput="S.filters.qSearch=this.value;rr()"
+        style="flex:1;min-width:180px;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;background:#fff"/>
+      <button onclick="App._editQuestion(null)" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;border:none;cursor:pointer">${ic('plus','w-4 h-4')} New question</button>
     </div>
-    ${!allQ.length?empty('help','No questions yet','Create questions to attach to your checklists.')
-    :'<div class="space-y-2">'+allQ.map(q=>qCard(q)).join('')+'</div>'}
+    <!-- CSV Import / Export bar -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:#F9FAFB;border-radius:12px;border:1.5px solid #ECEDF0">
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:700;color:#374151;margin-bottom:1px">Bulk import via CSV</div>
+        <div style="font-size:11px;color:#9CA3AF">Download the template, fill it in, then upload to add multiple questions at once</div>
+      </div>
+      <button onclick="App._downloadQTemplate()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:9px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#374151;white-space:nowrap">${ic('download','w-3.5 h-3.5')} Download template</button>
+      <label style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:9px;border:1.5px solid #0E9F6E;background:#ECFDF5;font-size:12px;font-weight:600;cursor:pointer;color:#047857;white-space:nowrap">
+        ${ic('upload','w-3.5 h-3.5')} Upload CSV
+        <input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/>
+      </label>
+    </div>
+    ${(()=>{
+      const filtered=S.filters.qSearch?allQ.filter(q=>q.text.toLowerCase().includes((S.filters.qSearch||'').toLowerCase())):allQ;
+      return !filtered.length
+        ? empty('help','No questions yet','Create questions or upload a CSV template.')
+        : '<div class="space-y-2">'+filtered.map(q=>qCard(q)).join('')+'</div>';
+    })()}
   </div>`;
 }
 
