@@ -2185,7 +2185,7 @@ function teamViewPage(){
           <button onclick="S.tvCalWk++;rr()" style="width:28px;height:28px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">${ic('chevR','w-3.5 h-3.5')}</button>
         </div>
       </div>
-      <div class="cal4">
+      <div class="cal4" style="display:flex;flex-direction:row;flex-wrap:nowrap;width:100%">
         ${week.map(d=>{
           const dn=DAYS3[new Date(d+'T00:00:00').getDay()];const num=new Date(d+'T00:00:00').getDate();
           const isT=d===today;const isSel=d===selDate;
@@ -2193,9 +2193,9 @@ function teamViewPage(){
           const hasSub=dCls.some(c=>subFor(c.id,S.tvUser,d));
           const hasPend=dCls.some(c=>!subFor(c.id,S.tvUser,d));
           const hasLate=hasPend&&d<today;
-          return`<button onclick="S.tvCalDate='${d}';S.tvExpanded=null;rr()" class="cal4-d ${isSel?'sel':''}">
-            <span class="cal4-lbl">${dn.slice(0,3)}</span>
-            <span class="cal4-num ${isT&&!isSel?'tod':''}">${num}</span>
+          return`<button onclick="S.tvCalDate='${d}';S.tvExpanded=null;rr()" class="cal4-d ${isSel?'sel':''}" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;cursor:pointer;border:none;background:${isSel?'#15171C':'transparent'};gap:2px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${isSel?'rgba(255,255,255,.4)':'#B8B5AC'}">${dn.slice(0,3)}</span>
+            <span style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:${isSel?'#fff':isT?'#fff':'#15171C'};background:${isT&&!isSel?'#15171C':'transparent'}">${num}</span>
             <div style="display:flex;gap:2px;height:6px">
               ${hasSub?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,255,255,.8)':'#10B981'}"></span>`:'' }
               ${hasLate?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,180,180,.9)':'#F43F5E'}"></span>`:hasPend?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,220,120,.9)':'#F59E0B'}"></span>`:''}
