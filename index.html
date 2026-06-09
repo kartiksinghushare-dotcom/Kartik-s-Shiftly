@@ -2185,6 +2185,7 @@ App._submitRun=async(clId,date)=>{
     Promise.allSettled([
       DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
       sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
+      DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
     ]).catch(()=>{});
   }).catch(e=>console.warn('sub upsert failed:',e.message));
 };
@@ -3039,6 +3040,29 @@ function _processEscalations(checklistId,date,responses){
         viewedBy:[]
       };
       DB.tickets.unshift(ticket);
+      // Insert ticket directly to Supabase — don't rely on debounced _sync
+      sb.from('tickets').insert({
+        id:ticket.id,
+        title:ticket.title,
+        description:ticket.description,
+        priority:ticket.priority,
+        status:ticket.status,
+        assigned_to:ticket.assignedTo,
+        created_by:ticket.createdBy,
+        checklist_id:ticket.checklistId,
+        question_id:ticket.questionId,
+        question_text:ticket.questionText,
+        answer_given:ticket.answerGiven,
+        submitter_id:ticket.submitterId,
+        date:ticket.date,
+        created_at:ticket.createdAt,
+        resolved_at:null,
+        resolve_note:'',
+        viewed_by:[]
+      }).then(({error})=>{
+        if(error)console.error('[ticket insert]',error.message);
+        else console.log('[ticket]',ticket.id,'inserted for',ticket.assignedTo);
+      }).catch(e=>console.error('[ticket insert failed]',e.message));
       // In-app notification to assignee
       DB.notifications.unshift({id:uid('n'),userId:escalateTo,text:escMsg,time:new Date().toISOString(),read:false,type:'escalation'});
       // In-app notification to admin
