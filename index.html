@@ -408,15 +408,11 @@ async function loadFromSB(){
     } else if(_isAdmin){
       DB.checklists=mapped;
     } else if(_isMgr){
-      // Manager sees: checklists he created OR checklists assigned to him/his team
-      DB.checklists=mapped.filter(c=>
-        c.createdBy===_uid||
-        (c.assignees||[]).includes(_uid)||
-        (c.assignees||[]).some(aid=>_teamIds.has(aid))
-      );
+      // Manager: checklists he created OR assigned to him
+      DB.checklists=mapped.filter(c=>c.createdBy===_uid||(c.assignees||[]).includes(_uid));
     } else {
-      // User sees only checklists assigned to them
-      DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(_uid));
+      // User: checklists assigned to them OR created by them
+      DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(_uid)||c.createdBy===_uid);
     }
   }
 
@@ -475,7 +471,9 @@ async function loadFromSB(){
     DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
   }
 
-  // ── Questions: all roles see all (global shared library) ──
+  // ── Questions: load ALL for everyone — needed so checklist cards can show questions ──
+  // Questions tab visibility is controlled by nav (users have no tab, manager needs questionsAccess)
+  // Questions tab content is filtered by createdBy in questionsPage()
   if(qRows){
     const _delQs=new Set(DB.questions_deleted||[]);
     DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
@@ -516,8 +514,8 @@ async function loadFromSB(){
         if(_isAdmin){
           visible=allTk;
         } else if(_isMgr){
-          // Manager: tickets assigned to them OR tickets they created
-          visible=allTk.filter(t=>t.assignedTo===_uid||t.createdBy===_uid);
+          // Manager: only tickets assigned to them
+          visible=allTk.filter(t=>t.assignedTo===_uid);
         } else {
           // User: ONLY tickets directly assigned to them
           visible=allTk.filter(t=>t.assignedTo===_uid);
@@ -1558,7 +1556,7 @@ const NUM_CONDITIONS=[
 /* ===== CHECKLIST ADMIN PAGE ===== */
 function clsPage(){
   const myTeamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
-let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>(c.assignees||[]).some(a=>myTeamIds.has(a))||c.department===me()?.department||c.createdBy===S.uid);
+let list=isAdmin()?DB.checklists:DB.checklists.filter(c=>c.createdBy===S.uid||(c.assignees||[]).includes(S.uid));
   if(S.search)list=list.filter(c=>c.name.toLowerCase().includes(S.search.toLowerCase())||c.department.toLowerCase().includes(S.search.toLowerCase()));
   return`<div class="fade">${hdr('Checklists',list.length+' configured',(isAdmin()||isMgr())?btnP('New checklist','App.editCl()','plus'):'')}
   <div class="space-y-2.5">
@@ -2596,7 +2594,8 @@ setInterval(async()=>{
 let _QED=null;
 
 function questionsPage(){
-  const allQ=DB.questions||[];
+  // Questions tab: admin sees all, manager sees only questions they created
+  const allQ=isAdmin()?(DB.questions||[]):(DB.questions||[]).filter(q=>q.createdBy===S.uid);
   function qCard(q){
     const exp=S.filters.expandedQ===q.id;
     const clr=Q_TYPE_CLR[q.type]||'#6B7280';
@@ -3409,7 +3408,7 @@ function ticketsPage(){
     // all tickets — no filter
   } else if(isMgr()){
     // Manager sees: assigned to them + tickets they personally created
-    tickets=tickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
+    tickets=tickets.filter(t=>t.assignedTo===S.uid);
   } else {
     // Regular user: ONLY tickets assigned directly to them
     tickets=tickets.filter(t=>t.assignedTo===S.uid);
@@ -3589,8 +3588,8 @@ App._aStatDrill=(type)=>{
   if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
   let aTickets=(DB.tickets||[]).slice();
   if(!isAdmin()){
-    if(isMgr())aTickets=aTickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
-    else aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
+    // Both manager and user: only tickets assigned to them
+    aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
   }
   if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
   if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
@@ -3667,8 +3666,8 @@ function analyticsPage(){
   // Ticket stats for analytics
   let aTickets=(DB.tickets||[]).slice();
   if(!isAdmin()){
-    if(isMgr())aTickets=aTickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
-    else aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
+    // Both manager and user: only tickets assigned to them
+    aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
   }
   if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
   if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
