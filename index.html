@@ -508,7 +508,6 @@ async function loadFromSB(){
   // ── Tickets: fetch fresh every time, log everything ──
   {
     const _mapTk=rows=>(rows||[]).map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||'',viewedBy:t.viewed_by||[]}));
-    console.log('[TK] loadFromSB tickets start — uid:',_uid,'isAdmin:',_isAdmin,'isMgr:',_isMgr,'ticketRows from Promise.all:',ticketRows?.length??'null');
     sb.from('tickets').select('*').order('created_at',{ascending:false})
       .then(({data,error})=>{
         if(error){console.error('[TK] error:',error.message);return;}
@@ -517,9 +516,11 @@ async function loadFromSB(){
         if(_isAdmin){
           visible=allTk;
         } else if(_isMgr){
-          visible=allTk.filter(t=>_teamIds.has(t.assignedTo)||_teamIds.has(t.submitterId));
+          // Manager: tickets assigned to them OR tickets they created
+          visible=allTk.filter(t=>t.assignedTo===_uid||t.createdBy===_uid);
         } else {
-          visible=allTk.filter(t=>t.assignedTo===_uid||t.submitterId===_uid);
+          // User: ONLY tickets directly assigned to them
+          visible=allTk.filter(t=>t.assignedTo===_uid);
         }
         const fromSB=new Set(allTk.map(t=>t.id));
         const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id));
@@ -3399,15 +3400,19 @@ function ticketsPage(){
     // Schedule badge refresh after render completes
     setTimeout(()=>{_invalidateNotifCache();const c=document.getElementById('content');if(c)c.innerHTML=pageContent();},50);
   }
-  // Visibility: admin sees all, manager sees team's, user sees only assigned to them
+  // Visibility:
+  // Admin — sees all tickets
+  // Manager — sees tickets assigned to them OR tickets they created (so they can track)
+  // User — sees ONLY tickets assigned to them
   let tickets=(DB.tickets||[]).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
   if(isAdmin()){
-    // all tickets
+    // all tickets — no filter
   } else if(isMgr()){
-    const teamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
-    tickets=tickets.filter(t=>teamIds.has(t.assignedTo)||teamIds.has(t.submitterId));
+    // Manager sees: assigned to them + tickets they personally created
+    tickets=tickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
   } else {
-    tickets=tickets.filter(t=>t.assignedTo===S.uid||t.submitterId===S.uid);
+    // Regular user: ONLY tickets assigned directly to them
+    tickets=tickets.filter(t=>t.assignedTo===S.uid);
   }
 
   const f=S.filters;
@@ -3583,7 +3588,10 @@ App._aStatDrill=(type)=>{
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);
   if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
   let aTickets=(DB.tickets||[]).slice();
-  if(!isAdmin())aTickets=aTickets.filter(t=>subTree(S.uid).some(u=>u.id===t.assignedTo||u.id===t.submitterId)||t.assignedTo===S.uid||t.submitterId===S.uid);
+  if(!isAdmin()){
+    if(isMgr())aTickets=aTickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
+    else aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
+  }
   if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
   if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
   const today=todayISO();
@@ -3658,7 +3666,10 @@ function analyticsPage(){
 
   // Ticket stats for analytics
   let aTickets=(DB.tickets||[]).slice();
-  if(!isAdmin())aTickets=aTickets.filter(t=>subTree(S.uid).some(u=>u.id===t.assignedTo||u.id===t.submitterId)||t.assignedTo===S.uid||t.submitterId===S.uid);
+  if(!isAdmin()){
+    if(isMgr())aTickets=aTickets.filter(t=>t.assignedTo===S.uid||t.createdBy===S.uid);
+    else aTickets=aTickets.filter(t=>t.assignedTo===S.uid);
+  }
   if(f.dr1)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')>=f.dr1);
   if(f.dr2)aTickets=aTickets.filter(t=>(t.date||t.createdAt?.slice(0,10)||'')<=f.dr2);
   const tkOpen=aTickets.filter(t=>t.status==='Open').length;
