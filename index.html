@@ -94,7 +94,6 @@ input,select,textarea{outline:none}
 .csd-lbl{font-size:9px;font-weight:800;letter-spacing:.08em;color:#B8B5AC;text-transform:uppercase}
 .csd.act .csd-lbl{color:rgba(255,255,255,.4)}
 .csd-n{width:32px;height:32px;display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:15px;font-weight:800;color:#111110}
-.csd-n
 .csd.act .csd-n{color:#fff}
 .csd-dots{display:flex;gap:2px;height:5px;align-items:center}
 /* Checklist card */
@@ -1778,7 +1777,7 @@ function myClsPage(){
   const ref=new Date(today+'T00:00:00');
   const dow=ref.getDay();
   ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.calWk*7);
-  const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10);});
+  const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');});
   // Ensure calDate is within the displayed week; if not, snap to today's weekday in the displayed week
   if(!week.includes(S.calDate)){S.calDate=week.find(d=>d===today)||week[0];}
   const sel=S.calDate;
@@ -1795,9 +1794,9 @@ function myClsPage(){
       <p style="font-size:13px;color:#B8B5AC;margin-top:2px">${new Date(sel+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'})}</p>
     </div>
     <div style="display:flex;gap:3px;align-items:center;margin-top:2px">
-      <button onclick="(()=>{S.calWk--;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.toISOString().slice(0,10);S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
+      <button onclick="(()=>{S.calWk--;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0')+'-'+String(nd.getDate()).padStart(2,'0');S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
       <button onclick="S.calWk=0;S.calDate='${today}';S.expandedCl=null;rr()" style="padding:0 12px;height:30px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${S.calWk===0&&sel===today?'#111110':'#F5F4F0'};color:${S.calWk===0&&sel===today?'#fff':'#9CA3AF'}">Today</button>
-      <button onclick="(()=>{S.calWk++;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.toISOString().slice(0,10);S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
+      <button onclick="(()=>{S.calWk++;const ref2=new Date(todayISO()+'T00:00:00');const dow2=ref2.getDay();ref2.setDate(ref2.getDate()+(dow2===0?-6:1-dow2)+S.calWk*7);const oldDow=new Date(S.calDate+'T00:00:00').getDay()||7;const nd=new Date(ref2);nd.setDate(nd.getDate()+oldDow-1);S.calDate=nd.getFullYear()+'-'+String(nd.getMonth()+1).padStart(2,'0')+'-'+String(nd.getDate()).padStart(2,'0');S.expandedCl=null;rr()})()" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
     </div>
   </div>
 
@@ -2154,7 +2153,7 @@ function teamViewPage(){
   const ref=new Date(today+'T00:00:00');
   const dow=ref.getDay();
   ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.tvCalWk*7);
-  const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.toISOString().slice(0,10);});
+  const week=Array.from({length:7},(_,i)=>{const d=new Date(ref);d.setDate(d.getDate()+i);return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');});
   // Snap tvCalDate to displayed week if out of sync
   if(!week.includes(S.tvCalDate)){S.tvCalDate=week.find(d=>d===today)||week[0];}
   const selDate=S.tvCalDate;
