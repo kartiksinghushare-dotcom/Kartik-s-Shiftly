@@ -243,7 +243,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:c.selected_dates||[],customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -1588,10 +1588,12 @@ function _freqUI(freq){
   if(freq==='Monthly'){
     // Include 'L' = Last day of month
     const nums=[...Array.from({length:31},(_,i)=>i+1),'L'];
+    // Normalise sdt: always compare as numbers (Supabase may return strings)
+    const sdtNorm=sdt.map(x=>x==='L'?'L':Number(x));
     return`<div>
       <div style="font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.06em;margin-bottom:6px">Days of month</div>
       <div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px">
-        ${nums.map(n=>{const on=sdt.includes(n);return`<button type="button" onclick="App._togDN('${n}',this)"
+        ${nums.map(n=>{const on=sdtNorm.includes(n);return`<button type="button" onclick="App._togDN('${n}',this)"
           style="min-width:${n==='L'?48:32}px;height:32px;border-radius:50%;border:1.5px solid;font-size:12px;font-weight:600;cursor:pointer;transition:all .12s;background:${on?'#15171C':'#fff'};color:${on?'#fff':'#6B7280'};border-color:${on?'#15171C':'#ECEDF0'};${n==='L'?'border-radius:8px;padding:0 8px':''}" title="${n==='L'?'Last day of month':n}">${n==='L'?'Last':n}</button>`;}).join('')}
       </div>
       <p style="font-size:11px;color:#9CA3AF">Tip: Select "Last" to always run on the last day of any month (handles 28/29/30/31 automatically)</p>
@@ -1653,6 +1655,8 @@ App._togDay=(d,el)=>{const i=CLD.selectedDays.indexOf(d);if(i>-1)CLD.selectedDay
 App._togDN=(n,el)=>{
   if(!CLD.selectedDates)CLD.selectedDates=[];
   const val=isNaN(n)?n:Number(n);
+  // Normalise existing array to same type to avoid duplicates from type mismatch
+  CLD.selectedDates=CLD.selectedDates.map(x=>x==='L'?'L':Number(x));
   const i=CLD.selectedDates.indexOf(val);
   if(i>-1)CLD.selectedDates.splice(i,1);else CLD.selectedDates.push(val);
   const on=CLD.selectedDates.includes(val);
