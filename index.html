@@ -2487,16 +2487,23 @@ let _QED=null;
 
 // ── Questions CSV template download ──
 App._downloadQTemplate=()=>{
-  const header='text,type,option1,option2,option3,option4,option5,photo_required,comment_required,approval_required';
-  const examples=[
-    'Is the area clean?,passfail,,,,,,FALSE,FALSE,FALSE',
-    'Was the task completed?,yesno,,,,,,FALSE,FALSE,FALSE',
-    'Rate the cleanliness (1-10),number,,,,,,FALSE,FALSE,FALSE',
-    'Check all items done?,tick,,,,,,FALSE,FALSE,FALSE',
-    'What is the shift status?,answer,Morning,Afternoon,Evening,Night,,FALSE,FALSE,FALSE',
-    'Describe any issues found?,answer,None,Minor issue,Major issue,,,TRUE,TRUE,FALSE',
+  // Clean template — just header + examples (no instruction rows to delete)
+  const rows=[
+    // header
+    'text,type,option1,option2,option3,option4,option5,condition,condition_value,condition_value2,photo_required,comment_required,approval_required',
+    // predefined types — leave options blank, they are auto-filled on import
+    'Is the area clean?,passfail,,,,,,,,,FALSE,FALSE,FALSE',
+    'Was the handover completed?,yesno,,,,,,,,,FALSE,FALSE,FALSE',
+    'Were all items checked?,tick,,,,,,,,,FALSE,FALSE,FALSE',
+    // answer type — fill option1..5 with your choices
+    'What is the shift status?,answer,Normal,Understaffed,Overstaffed,,,,,,,FALSE,FALSE,FALSE',
+    'Describe any issues found?,answer,None,Minor issue,Major issue,,,,,TRUE,TRUE,FALSE',
+    // number type — fill condition + value (lt/lte/gt/gte/eq/neq/between)
+    'Temperature reading (flag if < 18),number,,,,,,lt,18,,,FALSE,FALSE,FALSE',
+    'Compliance score % (flag if < 80),number,,,,,,lt,80,,,FALSE,FALSE,FALSE',
+    'Staff count (flag if between 0 and 4),number,,,,,,between,0,4,,FALSE,FALSE,FALSE',
   ];
-  const csv=[header,...examples].join('\n');
+  const csv=rows.join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -2527,17 +2534,31 @@ App._importQCSV=(input)=>{
         else cur+=line[i];
       }
       cols.push(cur.trim());
-      const [text,type,o1,o2,o3,o4,o5,photo,comment,approval]=cols;
+      const [text,type,o1,o2,o3,o4,o5,condition,cval,cval2,photo,comment,approval]=cols;
       if(!text||!type){skipped++;return;}
-      const qtype=['passfail','yesno','tick','number','answer'].includes(type.toLowerCase().trim())?type.toLowerCase().trim():'answer';
+      const qtRaw=(type||'').toLowerCase().trim();
+      const qtype=['passfail','yesno','tick','number','answer'].includes(qtRaw)?qtRaw:'answer';
       // Build options
       let options=[];
-      if(qtype==='answer'){
+      if(qtype==='passfail'){
+        options=[{text:'Pass',escalate:false},{text:'Fail',escalate:false}];
+      } else if(qtype==='yesno'){
+        options=[{text:'Yes',escalate:false},{text:'No',escalate:false}];
+      } else if(qtype==='tick'){
+        options=[{text:'Done',escalate:false},{text:'Not done',escalate:false}];
+      } else if(qtype==='answer'){
         options=[o1,o2,o3,o4,o5].filter(Boolean).map(t=>({text:t.trim(),escalate:false}));
         if(!options.length){skipped++;return;}
       } else if(qtype==='number'){
-        // For number type, add a default condition if none specified
-        options=[];
+        // Parse condition if provided
+        const validConds=['lt','lte','gt','gte','eq','neq','between'];
+        const cond=(condition||'').toLowerCase().trim();
+        if(cond&&validConds.includes(cond)){
+          const condObj={condition:cond,value:parseFloat(cval)||0};
+          if(cond==='between')condObj.value2=parseFloat(cval2)||condObj.value;
+          options=[condObj];
+        }
+        // number questions can have 0 conditions (manual entry) so don't skip
       }
       const isTrue=s=>(s||'').toLowerCase().trim()==='true'||s==='1';
       const q={
