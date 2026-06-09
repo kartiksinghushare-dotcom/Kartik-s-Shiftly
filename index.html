@@ -2489,19 +2489,15 @@ let _QED=null;
 App._downloadQTemplate=()=>{
   // Clean template — just header + examples (no instruction rows to delete)
   const rows=[
-    // header
-    'text,type,option1,option2,option3,option4,option5,condition,condition_value,condition_value2,photo_required,comment_required,approval_required',
-    // predefined types — leave options blank, they are auto-filled on import
-    'Is the area clean?,passfail,,,,,,,,,FALSE,FALSE,FALSE',
-    'Was the handover completed?,yesno,,,,,,,,,FALSE,FALSE,FALSE',
-    'Were all items checked?,tick,,,,,,,,,FALSE,FALSE,FALSE',
-    // answer type — fill option1..5 with your choices
-    'What is the shift status?,answer,Normal,Understaffed,Overstaffed,,,,,,,FALSE,FALSE,FALSE',
-    'Describe any issues found?,answer,None,Minor issue,Major issue,,,,,TRUE,TRUE,FALSE',
-    // number type — fill condition + value (lt/lte/gt/gte/eq/neq/between)
-    'Temperature reading (flag if < 18),number,,,,,,lt,18,,,FALSE,FALSE,FALSE',
-    'Compliance score % (flag if < 80),number,,,,,,lt,80,,,FALSE,FALSE,FALSE',
-    'Staff count (flag if between 0 and 4),number,,,,,,between,0,4,,FALSE,FALSE,FALSE',
+    // header — simple columns only, no number condition fields
+    'text,type,option1,option2,option3,option4,option5,photo_required,comment_required,approval_required',
+    // passfail / yesno / tick — options auto-filled, leave blank
+    'Is the area clean?,passfail,,,,,,FALSE,FALSE,FALSE',
+    'Was the handover completed?,yesno,,,,,,FALSE,FALSE,FALSE',
+    'Were all items checked?,tick,,,,,,FALSE,FALSE,FALSE',
+    // answer — fill option1..option5 with your choices
+    'What is the shift status?,answer,Normal,Understaffed,Overstaffed,,,FALSE,FALSE,FALSE',
+    'Describe any issues found?,answer,None,Minor issue,Major issue,,TRUE,TRUE,FALSE',
   ];
   const csv=rows.join('\n');
   const blob=new Blob([csv],{type:'text/csv'});
