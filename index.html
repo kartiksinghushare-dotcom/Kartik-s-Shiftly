@@ -491,16 +491,36 @@ async function loadFromSB(){
   }
 
   // ── Tickets: role-scoped ──
+  // Always fetch tickets with explicit user filter so RLS doesn't block them
+  // This runs in background after the main load — merges into DB.tickets
+  if(!_isAdmin){
+    const _tkQuery=_isMgr
+      ? sb.from('tickets').select('*').or('assigned_to.in.('+[..._teamIds].join(',')+')'+(([..._teamIds].length?',submitter_id.in.('+[..._teamIds].join(',')+')'  :''))).order('created_at',{ascending:false})
+      : sb.from('tickets').select('*').or('assigned_to.eq.'+_uid+',submitter_id.eq.'+_uid).order('created_at',{ascending:false});
+    _tkQuery.then(({data})=>{
+      if(data&&data.length){
+        const mapped=data.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||'',viewedBy:t.viewed_by||[]}));
+        // Merge with any local tickets not yet synced
+        const fromSB=new Set(mapped.map(t=>t.id));
+        const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id));
+        DB.tickets=[...mapped,...localOnly];
+        _invalidateNotifCache();saveDB();rr();
+      }
+    }).catch(e=>console.warn('[tickets fetch]',e.message));
+  }
   if(ticketRows){
     const allTk=ticketRows.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assignedTo:t.assigned_to||null,createdBy:t.created_by||null,checklistId:t.checklist_id||null,questionId:t.question_id||null,questionText:t.question_text||'',answerGiven:t.answer_given||'',submitterId:t.submitter_id||null,date:t.date||null,createdAt:t.created_at,resolvedAt:t.resolved_at||null,resolveNote:t.resolve_note||'',viewedBy:t.viewed_by||[]}));
     if(_isAdmin){
       DB.tickets=allTk;
     } else if(_isMgr){
-      // Manager sees tickets where assignedTo or submitterId is in his team
       DB.tickets=allTk.filter(t=>_teamIds.has(t.assignedTo)||_teamIds.has(t.submitterId));
+      // If Supabase returned nothing but local has data, keep local cache
+      if(allTk.length===0&&(DB.tickets||[]).length>0){/* keep local */}
     } else {
-      // User sees only tickets assigned to them or submitted by them
-      DB.tickets=allTk.filter(t=>t.assignedTo===_uid||t.submitterId===_uid);
+      const mine=allTk.filter(t=>t.assignedTo===_uid||t.submitterId===_uid);
+      // If Supabase returned nothing (RLS blocked), keep local cache
+      if(allTk.length===0&&(DB.tickets||[]).length>0){/* keep local — background fetch above will refresh */}
+      else DB.tickets=mine;
     }
   }
 }
