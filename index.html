@@ -245,7 +245,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 async function loadFromSB(){
@@ -421,7 +421,7 @@ async function _sync(){try{
   const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',created_by:c.createdBy||null})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',any_one:c.anyOne||false,created_by:c.createdBy||null})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -525,6 +525,13 @@ function myCls(uid,date){
   });
 }
 const subFor=(clId,uid,date)=>DB.submissions.find(s=>s.checklistId===clId&&s.userId===uid&&s.date===date);
+// Checklist-aware lookup: own submission first; in "any one can complete" mode,
+// a completed submission by ANY assignee counts for everyone (someone else's mid-edit doesn't block you)
+const subForCl=(c,uid,date)=>{
+  const own=subFor(c.id,uid,date);
+  if(own||!c.anyOne)return own||null;
+  return DB.submissions.find(s=>s.checklistId===c.id&&s.date===date&&s.status!=='Editing')||null;
+};
 
 /* ===== AVATARS ===== */
 const PAL=['bg-rose-100 text-rose-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-sky-100 text-sky-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700'];
@@ -831,15 +838,78 @@ App.login=async()=>{
   }
 };
 
+/* ===== DASHBOARD HELPERS: date range filter + tickets panel ===== */
+const DASH_RANGES=[['all','All time'],['today','Today'],['yesterday','Yesterday'],['cweek','Current week'],['lweek','Last week'],['cmonth','Current month'],['lmonth','Last month'],['custom','Custom range']];
+function _dashRangeBounds(){
+  const r=S.filters.dashRange||'all';
+  const today=todayISO();
+  const t=new Date(today+'T00:00:00');
+  const iso=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  if(r==='today')return{from:today,to:today};
+  if(r==='yesterday'){const d=new Date(t);d.setDate(d.getDate()-1);const y=iso(d);return{from:y,to:y};}
+  if(r==='cweek'){const d=new Date(t);const dow=d.getDay();d.setDate(d.getDate()+(dow===0?-6:1-dow));return{from:iso(d),to:today};}
+  if(r==='lweek'){const d=new Date(t);const dow=d.getDay();d.setDate(d.getDate()+(dow===0?-6:1-dow)-7);const e=new Date(d);e.setDate(e.getDate()+6);return{from:iso(d),to:iso(e)};}
+  if(r==='cmonth'){return{from:iso(new Date(t.getFullYear(),t.getMonth(),1)),to:today};}
+  if(r==='lmonth'){return{from:iso(new Date(t.getFullYear(),t.getMonth()-1,1)),to:iso(new Date(t.getFullYear(),t.getMonth(),0))};}
+  if(r==='custom'){
+    const f=S.filters.dashFrom||'',e=S.filters.dashTo||'';
+    if(!f&&!e)return null;
+    return{from:f||'0000-01-01',to:e||'9999-12-31'};
+  }
+  return null; // 'all'
+}
+const _inDashRange=date=>{const b=_dashRangeBounds();if(!b)return true;return !!date&&date>=b.from&&date<=b.to;};
+function _dashFilterBar(){
+  const r=S.filters.dashRange||'all';
+  const b=_dashRangeBounds();
+  return`<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:#fff;border-radius:14px;border:1.5px solid #ECEDF0">
+    <span style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em">📅 Date range</span>
+    <select onchange="S.filters.dashRange=this.value;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
+      ${DASH_RANGES.map(([id,lbl])=>`<option value="${id}" ${r===id?'selected':''}>${lbl}</option>`).join('')}
+    </select>
+    ${r==='custom'?`
+      <input type="date" value="${esc(S.filters.dashFrom||'')}" onchange="S.filters.dashFrom=this.value;rr()" style="border:1.5px solid #E5E7EB;border-radius:9px;padding:5px 8px;font-size:13px;outline:none"/>
+      <span style="font-size:12px;color:#9CA3AF">to</span>
+      <input type="date" value="${esc(S.filters.dashTo||'')}" onchange="S.filters.dashTo=this.value;rr()" style="border:1.5px solid #E5E7EB;border-radius:9px;padding:5px 8px;font-size:13px;outline:none"/>
+    `:''}
+    ${b?`<span style="font-size:12px;color:#6B7280;font-weight:600">${b.from===b.to?new Date(b.from+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):new Date(b.from+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' – '+new Date(b.to+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</span>`:''}
+  </div>`;
+}
+function _dashTicketsPanel(scopeUsers){
+  const open=(DB.tickets||[]).filter(t=>t.status==='Open'||t.status==='In Progress');
+  const ids=scopeUsers?new Set(scopeUsers.map(u=>u.id)):null;
+  const counts={};let unassigned=0;
+  open.forEach(t=>{
+    if(!t.assignedTo){if(!ids)unassigned++;return;}
+    if(ids&&!ids.has(t.assignedTo))return;
+    counts[t.assignedTo]=(counts[t.assignedTo]||0)+1;
+  });
+  const rows=Object.entries(counts).map(([uid2,n])=>({u:uById(uid2),n})).filter(r=>r.u).sort((a,b)=>b.n-a.n);
+  const total=rows.reduce((s,r)=>s+r.n,0)+unassigned;
+  return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
+    <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center">
+      <h3 class="fd font-semibold text-sm">Open tickets by user</h3>
+      <button onclick="App.go('tickets')" class="text-xs font-semibold text-brand-700">View all →</button>
+    </div>
+    <div class="divide-y divide-ink-50">
+      ${rows.map(({u,n})=>`<div class="px-4 py-2.5 flex items-center gap-2.5" style="cursor:pointer" onclick="App.go('tickets')">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400">not completed</div></div><span style="font-size:12px;font-weight:800;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:13px;background:${n>=5?'#FFEDED':'#FEF7E6'};color:${n>=5?'#C92C2C':'#B36A00'};padding:0 8px">${n}</span></div>`).join('')}
+      ${unassigned?`<div class="px-4 py-2.5 flex items-center gap-2.5"><div style="width:28px;height:28px;border-radius:50%;background:#F3F4F6;display:grid;place-items:center;font-size:11px">？</div><div class="flex-1 min-w-0"><div class="text-xs font-semibold">Unassigned</div></div><span style="font-size:12px;font-weight:800;min-width:26px;height:26px;display:inline-flex;align-items:center;justify-content:center;border-radius:13px;background:#F3F4F6;color:#6B7280;padding:0 8px">${unassigned}</span></div>`:''}
+      ${!total?'<div class="px-4 py-8 text-center text-sm text-ink-400">No open tickets 🎉</div>':''}
+    </div>
+  </div>`;
+}
+
 /* ===== ADMIN DASHBOARD ===== */
 function adminDash(){
   const today=todayISO();
+  const fSubs=DB.submissions.filter(s=>_inDashRange(s.date));
   const active=DB.users.filter(u=>u.status==='Active').length;
   const pendA=DB.approvals.filter(a=>a.status==='Pending').length;
-  const late=DB.submissions.filter(s=>s.status==='Late').length;
-  const depts=DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name).length;const cls=DB.checklists.filter(c=>c.department===d.name).length;const ss=DB.submissions.filter(s=>{const c=clById(s.checklistId);return c?.department===d.name;});return{name:d.name,us,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};}).filter(d=>d.us||d.cls);
-  const recent=DB.submissions.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
+  const late=fSubs.filter(s=>s.status==='Late').length;
+  const depts=DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name).length;const cls=DB.checklists.filter(c=>c.department===d.name).length;const ss=fSubs.filter(s=>{const c=clById(s.checklistId);return c?.department===d.name;});return{name:d.name,us,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};}).filter(d=>d.us||d.cls);
+  const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
   return`<div class="fade">${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
+  ${_dashFilterBar()}
   <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
     ${statCard('Active users',active,'sky',"App.go('users')")}${statCard('Pending approvals',pendA,'amber',"App.go('approvals')")}${statCard('Late submissions',late,'rose',"S.filters={stats:['Late']};App.go('analytics')")}
   </div>
@@ -848,24 +918,31 @@ function adminDash(){
       <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Department performance</h3></div>
       <div class="divide-y divide-ink-50">${depts.map(d=>`<div class="px-5 py-3 flex items-center gap-4"><span class="text-sm font-semibold w-32 truncate">${esc(d.name)}</span><div class="flex-1"><div class="pg"><div class="pgf" style="width:${d.total?Math.round(d.onTime/d.total*100):0}%"></div></div></div><span class="text-xs text-ink-400 w-24 text-right shrink-0">${d.us}u · ${d.cls}cl · ${d.late?`<span class="text-rose-600 font-semibold">${d.late} late</span>`:d.total+' sub'}</span></div>`).join('')||'<div class="px-5 py-8 text-center text-sm text-ink-400">No data yet</div>'}</div>
     </div>
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
-      <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center"><h3 class="fd font-semibold text-sm">Recent submissions</h3><button onclick="App.go('analytics')" class="text-xs font-semibold text-brand-700">View all →</button></div>
-      <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const cName=c?c.name:'[Deleted]';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400 truncate">${esc(cName)}</div></div>${chip(s.status)}</div>`;}).join('')||'<div class="px-4 py-8 text-center text-sm text-ink-400">No submissions yet</div>'}</div>
+    <div class="space-y-4">
+      <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
+        <div class="px-4 py-3 border-b border-ink-100 flex justify-between items-center"><h3 class="fd font-semibold text-sm">Recent submissions</h3><button onclick="App.go('analytics')" class="text-xs font-semibold text-brand-700">View all →</button></div>
+        <div class="divide-y divide-ink-50">${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const cName=c?c.name:'[Deleted]';return`<div class="px-4 py-2.5 flex items-center gap-2.5">${avatar(u,'w-7 h-7','text-[10px]')}<div class="flex-1 min-w-0"><div class="text-xs font-semibold truncate">${esc(fullName(u))}</div><div class="text-[11px] text-ink-400 truncate">${esc(cName)}</div></div>${chip(s.status)}</div>`;}).join('')||'<div class="px-4 py-8 text-center text-sm text-ink-400">No submissions yet</div>'}</div>
+      </div>
+      ${_dashTicketsPanel(null)}
     </div>
   </div></div>`;}
 
 /* ===== MANAGER DASHBOARD ===== */
 function mgrDash(){
   const team=subTree(S.uid);if(!team.length)return myClsPage();
-  const rows=team.map(u=>{const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;const ss=DB.submissions.filter(s=>s.userId===u.id);const late=ss.filter(s=>s.status==='Late').length;const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;const todaySS=ss.filter(s=>s.date===todayISO());const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;return{u,asgn,total:ss.length,late,pend,pct};});
+  const rows=team.map(u=>{const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;const ss=DB.submissions.filter(s=>s.userId===u.id&&_inDashRange(s.date));const late=ss.filter(s=>s.status==='Late').length;const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;return{u,asgn,total:ss.length,late,pend,pct};});
   return`<div class="fade">${hdr('Team Dashboard',team.length+' member'+(team.length>1?'s':''))}
+  ${_dashFilterBar()}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
     ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Late submissions',rows.reduce((n,r)=>n+r.late,0),'rose',"S.filters={stats:['Late']};App.go('analytics')")}${statCard('Avg completion',Math.round(rows.reduce((n,r)=>n+r.pct,0)/Math.max(rows.length,1))+'%','brand',"App.go('analytics')")}
   </div>
-  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
+  <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mb-4">
     <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Team performance</h3></div>
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
     <tbody class="divide-y divide-ink-50">${rows.map(({u,asgn,total,late,pend,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
+  </div>
+  <div class="grid lg:grid-cols-2 gap-4">
+    ${_dashTicketsPanel([me(),...team].filter(Boolean))}
   </div></div>`;}
 
 /* ===== USERS ===== */
@@ -1466,7 +1543,7 @@ App.editCl=(id=null)=>{
     CLD=c?JSON.parse(JSON.stringify(c)):{
       id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
       frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
-      startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,createdBy:S.uid
+      startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,anyOne:false,createdBy:S.uid
     };
     _renderClModal(!!c);
   }catch(err){console.error('editCl error:',err);toast('Error opening checklist: '+err.message,'err');}
@@ -1544,6 +1621,10 @@ function _renderClModal(editing){
       <!-- Assign -->
       <div>
         <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-2">Assign to</label>
+        <div class="bg-ink-50 rounded-xl p-3 mb-2">
+          ${mkTog('cn-anyone',c.anyOne||false,'Any one assignee can complete')}
+          <p style="font-size:11px;color:#9CA3AF;margin-top:2px">On: one submission by any assignee completes it for everyone. Off: every assignee must submit individually.</p>
+        </div>
         <div class="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-1">
           ${cands.map(u=>`<label class="flex items-center gap-2.5 p-2.5 rounded-xl border-2 cursor-pointer transition ${(c.assignees||[]).includes(u.id)?'border-brand-400 bg-brand-50':'border-ink-100 hover:border-ink-200'}">
             <input type="checkbox" class="sr-only" ${(c.assignees||[]).includes(u.id)?'checked':''} onchange="App._togAsgn('${u.id}',this.checked,this)"/>
@@ -1685,6 +1766,7 @@ App._saveCl=(editing)=>{
   CLD.department=$('#cn-dep')?.value||CLD.department;CLD.frequency=$('#cn-freq')?.value||CLD.frequency;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
+  if($('#cn-anyone'))CLD.anyOne=$('#cn-anyone').classList.contains('on');
   if(!CLD.name){toast('Name required','err');
     const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
     return;}
@@ -1703,7 +1785,7 @@ App._saveCl=(editing)=>{
   if(newlyAssigned.length)_invalidateNotifCache();
   log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
   // ── Capture row before clearing CLD ──
-  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',created_by:CLD.createdBy||null};
+  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',any_one:CLD.anyOne||false,created_by:CLD.createdBy||null};
   const toastMsg=editing?'Saved ✓':'Checklist created ✓';
   // ── Clear CLD FIRST so render() never re-opens the modal ──
   CLD=null;
@@ -1748,7 +1830,7 @@ App.dupCl=async(id)=>{
     schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
     selected_dates:copy.selectedDates||[],custom_dates:copy.customDates||[],
     start_date:null,end_date:null,
-    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:JSON.parse(JSON.stringify(copy.questionConfigs||{})),schedule_time:copy.scheduleTime||null,
+    location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:JSON.parse(JSON.stringify(copy.questionConfigs||{})),schedule_time:copy.scheduleTime||null,any_one:copy.anyOne||false,
     status:'Draft',created_by:S.uid
   }).then(()=>{}).catch(e=>console.warn('dupCl sync:',e));
 };
@@ -1788,9 +1870,9 @@ function myClsPage(){
   if(!week.includes(S.calDate)){S.calDate=week.find(d=>d===today)||week[0];}
   const sel=S.calDate;
   const dayCls=myCls(S.uid,sel);
-  const doneN=dayCls.filter(c=>subFor(c.id,S.uid,sel)).length;
-  const lateN=sel>today?0:dayCls.filter(c=>!subFor(c.id,S.uid,sel)&&(sel<today||(sel===today&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)))).length;
-  const pendN=dayCls.filter(c=>!subFor(c.id,S.uid,sel)).length-lateN;
+  const doneN=dayCls.filter(c=>subForCl(c,S.uid,sel)).length;
+  const lateN=sel>today?0:dayCls.filter(c=>!subForCl(c,S.uid,sel)&&(sel<today||(sel===today&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)))).length;
+  const pendN=dayCls.filter(c=>!subForCl(c,S.uid,sel)).length-lateN;
 
   return`<div class="fade">
   <!-- Title row -->
@@ -1813,8 +1895,8 @@ function myClsPage(){
       const num=new Date(d+'T00:00:00').getDate();
       const isT=d===today;const isSel=d===sel;
       const dCls=myCls(S.uid,d);
-      const hasDone=dCls.some(c=>subFor(c.id,S.uid,d));
-      const hasPend=dCls.some(c=>!subFor(c.id,S.uid,d));
+      const hasDone=dCls.some(c=>subForCl(c,S.uid,d));
+      const hasPend=dCls.some(c=>!subForCl(c,S.uid,d));
       const hasLate=hasPend&&d<today;
       return`<button class="csd ${isSel?'act':''}" onclick="S.calDate='${d}';S.expandedCl=null;rr()">
         <span class="csd-lbl">${dn.slice(0,3)}</span>
@@ -1850,6 +1932,12 @@ function myClsPage(){
 
 function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   const cid=c.id;
+  // "Any one can complete" mode: submission was made by another assignee — read-only for me
+  if(sub&&sub.status!=='Editing'&&sub.userId&&sub.userId!==S.uid){
+    const by=uById(sub.userId);
+    const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
+    return '<span style="font-size:12px;color:#0D7A4E;font-weight:600">✓ Completed by '+esc(by?fullName(by):'a teammate')+(st?' · '+st:'')+'</span><span></span>';
+  }
   // Guard: never show Submit if already submitted (catches stale RUN state)
   if(sub&&sub.status!=='Editing'){
     const st=sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'';
@@ -1874,7 +1962,7 @@ function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   return '';
 }
 function _clCard(c,date){
-  const sub=subFor(c.id,S.uid,date);
+  const sub=subForCl(c,S.uid,date);
   const today=todayISO();
   const isPast=date<today;const isFuture=date>today;const u=me();
   const st=sub?sub.status:isFuture?'Upcoming':isPast?'Late':c.scheduleTime&&nowHM()>hm2m(c.scheduleTime)?'Late':'Pending';
@@ -1884,7 +1972,7 @@ function _clCard(c,date){
   // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
   if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
     // Restore questionResponses from existing submission if available
-    const _existSub=subFor(c.id,S.uid,date);
+    const _existSub=subForCl(c,S.uid,date);
     RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(_existSub?.questionResponses||[]))};
   }
   const run=RUN[c.id];
@@ -1900,6 +1988,7 @@ function _clCard(c,date){
         <div class="fd" style="font-size:15px;font-weight:800;color:#111110">${esc(c.name)}</div>
         <div style="display:flex;align-items:center;gap:8px;margin-top:3px;flex-wrap:wrap">
           ${c.department?`<span style="font-size:12px;color:#B8B5AC">${esc(c.department)}</span>`:''}
+          ${c.anyOne?`<span title="Any one assignee can complete this" style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;background:#EEF2FF;color:#4338CA;flex-shrink:0">👥 Any one</span>`:''}
           ${c.description?`<span style="font-size:11px;color:#B8B5AC;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:200px">${esc(c.description)}</span>`:''}
           ${(()=>{
             const total=(c.questionIds||[]).length;if(!total)return'';
@@ -2565,7 +2654,7 @@ App._importQCSV=(input)=>{
         photo:isTrue(photo),
         comment:isTrue(comment),
         approval:isTrue(approval),
-        isPublic:true,
+        isPublic:false,
         createdBy:S.uid,
         createdAt:new Date().toISOString()
       };
@@ -2628,7 +2717,7 @@ function questionsPage(){
     const mine=canManageQ(q);
     h+=`<div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">`;
     if(mine){
-      h+=`<button onclick="App._togQPublic('${q.id}')" title="${isPub?'Click to make Private (only you + assigned users)':'Click to make Public (everyone with Questions access)'}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid ${isPub?'#A7F3D0':'#FDE68A'};background:${isPub?'#ECFDF5':'#FFFBEB'};font-size:11px;font-weight:700;color:${isPub?'#047857':'#B45309'};cursor:pointer">${isPub?'🌐 Public':'🔒 Private'}</button>`;
+      h+=`<span title="Change via Edit" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid ${isPub?'#A7F3D0':'#FDE68A'};background:${isPub?'#ECFDF5':'#FFFBEB'};font-size:11px;font-weight:700;color:${isPub?'#047857':'#B45309'}">${isPub?'🌐 Public':'🔒 Private'}</span>`;
       h+=`<button onclick="App._editQuestion('${q.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Edit</button>`;
       h+=`<button onclick="App._delQuestion('${q.id}')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-4 h-4')}</button>`;
     } else {
@@ -2703,7 +2792,7 @@ App._delQuestion=(id)=>{
 App._editQuestion=(id)=>{
   const existing=id?(DB.questions||[]).find(x=>x.id===id):null;
   _QED=existing?JSON.parse(JSON.stringify(existing)):{
-    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:true
+    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:false
   };
   if(_QED.isPublic===undefined)_QED.isPublic=true;
   App._renderQModal();
@@ -2795,7 +2884,7 @@ App._renderQModal=()=>{
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Options</label>
-        ${togRow('isPublic','🌐 Public question','Visible to everyone with Questions access — turn off to keep it private (only you + assigned users)')}
+        ${togRow('isPublic','🌐 Public question','Off = Private (default): only you and assigned users see it. On: everyone with Questions access sees it')}
         ${togRow('photo','📷 Photo mandatory','Upload button always shown — this makes it required')}
         ${togRow('approval','✓ Approval required','Response needs manager approval')}
         ${togRow('comment','💬 Comment mandatory','Comment box always shown — this makes it required')}
@@ -3015,6 +3104,7 @@ function _snapshotCLD(){
   if(el('cn-sd'))CLD.startDate=el('cn-sd').value||null;
   if(el('cn-ed'))CLD.endDate=el('cn-ed').value||null;
   if(el('cn-time'))CLD.scheduleTime=el('cn-time').value||null;
+  if(el('cn-anyone'))CLD.anyOne=el('cn-anyone').classList.contains('on');
 }
 
 
