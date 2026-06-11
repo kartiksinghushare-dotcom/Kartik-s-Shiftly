@@ -2559,7 +2559,25 @@ function allClsPage(){
     </div>`;
   }
 
+  // ── DEBUG PANEL (remove after fixing) ──
+  const _dbgRole=me()?.role||'none';
+  const _dbgAllCls=DB.checklists.filter(c=>clOn(c,d));
+  const _dbgMyScope=scopeUsers.slice(0,10).map(u=>fullName(u)).join(', ');
+  const _dbgClsOnDate=_dbgAllCls.length;
+  const _dbgMatched=cls.length;
+  const _dbgUsers=userIds.length;
+  const _dbgSample=_dbgAllCls.slice(0,3).map(c=>`${c.name} → assignees:[${(c.assignees||[]).join(',')}]`).join(' | ');
+
   return`<div class="fade">
+    <!-- DEBUG — remove once working -->
+    <div style="background:#1e1b4b;color:#a5f3fc;font-size:11px;font-family:monospace;padding:12px 16px;border-radius:12px;margin-bottom:12px;line-height:1.8">
+      <strong style="color:#fbbf24">🔍 Debug (remove later)</strong><br>
+      role: <b style="color:#fff">${_dbgRole}</b> · isAdmin: <b>${isAdmin()}</b> · isSubAdmin: <b>${isSubAdmin()}</b><br>
+      scopeUsers (first 10): <b style="color:#fff">${_dbgMyScope||'EMPTY'}</b><br>
+      DB.checklists total: <b>${DB.checklists.length}</b> · scheduled on ${d}: <b>${_dbgClsOnDate}</b> · after dept/loc filter: <b>${_dbgMatched}</b><br>
+      userMap entries: <b>${_dbgUsers}</b> · grp checklists: <b>${grp.length}</b><br>
+      sample checklists on date: <b style="color:#fff">${_dbgSample||'none'}</b>
+    </div>
     ${hdr('All Checklists',"Everyone's checklists and responses")}
     <!-- Filters row -->
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
