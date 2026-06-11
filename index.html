@@ -7,7 +7,7 @@
 <script>(()=>{const w=console.warn;console.warn=(...a)=>{if(typeof a[0]==='string'&&a[0].includes('cdn.tailwind'))return;w(...a)};window.addEventListener('error',e=>{if(!e.filename||e.filename.includes('cdn.tailwind')||e.filename.includes('fonts.google'))e.stopImmediatePropagation();},true);})();</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script>if(typeof tailwind!=='undefined')tailwind.config={theme:{extend:{fontFamily:{display:['"Schibsted Grotesk"'],sans:['"Hanken Grotesk"']},colors:{ink:{DEFAULT:'#15171C',50:'#F6F7F8',100:'#ECEDF0',200:'#D6D8DE',300:'#A9ADB8',400:'#6B7280',500:'#3A3E48',600:'#262A33',700:'#1C1F26',800:'#15171C'},brand:{DEFAULT:'#0E9F6E',50:'#ECFDF5',100:'#D1FAE5',400:'#34D399',500:'#10B981',600:'#0E9F6E',700:'#0B7A55'},paper:'#F7F6F2'},boxShadow:{soft:'0 1px 2px rgba(16,24,40,.04),0 4px 16px -6px rgba(16,24,40,.10)',pop:'0 8px 40px -8px rgba(16,24,40,.28)'}}}}}</script>
+<script>if(typeof tailwind!=='undefined')tailwind.config={theme:{extend:{fontFamily:{display:['"Schibsted Grotesk"'],sans:['"Hanken Grotesk"']},colors:{ink:{DEFAULT:'#15171C',50:'#F6F7F8',100:'#ECEDF0',200:'#D6D8DE',300:'#A9ADB8',400:'#6B7280',500:'#3A3E48',600:'#262A33',700:'#1C1F26',800:'#15171C'},brand:{DEFAULT:'#0E9F6E',50:'#ECFDF5',100:'#D1FAE5',400:'#34D399',500:'#10B981',600:'#0E9F6E',700:'#0B7A55'},paper:'#F7F6F2'},boxShadow:{soft:'0 1px 2px rgba(16,24,40,.04),0 4px 16px -6px rgba(16,24,40,.10)',pop:'0 8px 40px -8px rgba(16,24,40,.28)'}}}}</script>
 <style>
 /* ─ Shiftly base ─ */
 html,body{height:100%}
@@ -366,7 +366,7 @@ async function loadFromSB(){
   // Questions tab content is filtered by createdBy in questionsPage()
   if(qRows){
     const _delQs=new Set(DB.questions_deleted||[]);
-    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,createdBy:q.created_by||null,createdAt:q.created_at}));
+    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at}));
   }
 
   // ── Feedback: role-scoped ──
@@ -429,7 +429,7 @@ async function _sync(){try{
     sb.from('feedback').upsert((DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
-    sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
   const failed=results.filter(r=>r.status==='rejected');
@@ -2565,6 +2565,7 @@ App._importQCSV=(input)=>{
         photo:isTrue(photo),
         comment:isTrue(comment),
         approval:isTrue(approval),
+        isPublic:true,
         createdBy:S.uid,
         createdAt:new Date().toISOString()
       };
@@ -2574,7 +2575,7 @@ App._importQCSV=(input)=>{
     });
     if(added){
       saveDB();
-      sb.from('questions').upsert(DB.questions.filter(q=>q.createdBy===S.uid).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}).then(()=>{}).catch(()=>{});
+      sb.from('questions').upsert(DB.questions.filter(q=>q.createdBy===S.uid).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}).then(()=>{}).catch(()=>{});
       rr();
       toast(added+' question'+(added===1?'':'s')+' imported'+(skipped?' ('+skipped+' skipped)':'')+'  ✓','ok');
     } else {
@@ -2586,9 +2587,33 @@ App._importQCSV=(input)=>{
 };
 
 
+// ── Question visibility ──
+// Public (isPublic !== false): visible to everyone with Questions access.
+// Private: visible only to the creator (assigned users still see it inside their checklists).
+// Admin always sees everything.
+function visibleQuestions(){
+  const all=DB.questions||[];
+  if(isAdmin())return all;
+  return all.filter(q=>q.isPublic!==false||q.createdBy===S.uid);
+}
+// Creator (or admin) can manage a question
+function canManageQ(q){return isAdmin()||q.createdBy===S.uid;}
+
+App._togQPublic=(id)=>{
+  const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
+  if(!canManageQ(q)){toast('Only the creator can change this','warn');return;}
+  q.isPublic=q.isPublic===false?true:false;
+  toast(q.isPublic?'Question is now Public — visible to everyone with Questions access':'Question is now Private — visible only to you and assigned users','ok');
+  saveDB();rr();
+  // Sync to Supabase in background
+  sb.from('questions').update({is_public:q.isPublic}).eq('id',id).then(({error})=>{
+    if(error)console.error('togQPublic sync:',error.message);
+  }).catch(e=>console.error('togQPublic:',e));
+};
+
 function questionsPage(){
-  // Questions tab: admin sees all, manager sees only questions they created
-  const allQ=isAdmin()?(DB.questions||[]):(DB.questions||[]).filter(q=>q.createdBy===S.uid);
+  // Questions tab: admin sees all; others see public questions + their own private questions
+  const allQ=visibleQuestions();
   function qCard(q){
     const exp=S.filters.expandedQ===q.id;
     const clr=Q_TYPE_CLR[q.type]||'#6B7280';
@@ -2599,9 +2624,16 @@ function questionsPage(){
     h+=`<span style="color:#C8C5BD;transition:transform .2s;transform:rotate(${exp?90:0}deg)">${ic('chevR','w-4 h-4')}</span>`;
     h+=`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${bg};color:${clr}">${tl}</span>`;
     h+=`<div style="flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</div>`;
-    h+=`<div style="display:flex;gap:4px" onclick="event.stopPropagation()">`;
-    h+=`<button onclick="App._editQuestion('${q.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Edit</button>`;
-    h+=`<button onclick="App._delQuestion('${q.id}')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-4 h-4')}</button>`;
+    const isPub=q.isPublic!==false;
+    const mine=canManageQ(q);
+    h+=`<div style="display:flex;gap:4px;align-items:center" onclick="event.stopPropagation()">`;
+    if(mine){
+      h+=`<button onclick="App._togQPublic('${q.id}')" title="${isPub?'Click to make Private (only you + assigned users)':'Click to make Public (everyone with Questions access)'}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid ${isPub?'#A7F3D0':'#FDE68A'};background:${isPub?'#ECFDF5':'#FFFBEB'};font-size:11px;font-weight:700;color:${isPub?'#047857':'#B45309'};cursor:pointer">${isPub?'🌐 Public':'🔒 Private'}</button>`;
+      h+=`<button onclick="App._editQuestion('${q.id}')" style="padding:5px 12px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Edit</button>`;
+      h+=`<button onclick="App._delQuestion('${q.id}')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='#D1D5DB'">${ic('trash','w-4 h-4')}</button>`;
+    } else {
+      h+=`<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;border:1.5px solid #E5E7EB;background:#F9FAFB;font-size:11px;font-weight:700;color:#6B7280">🌐 Public</span>`;
+    }
     h+=`</div></div>`;
     if(exp){
       h+=`<div style="padding:0 14px 12px 40px;border-top:1px solid #F5F4F0">`;
@@ -2671,8 +2703,9 @@ App._delQuestion=(id)=>{
 App._editQuestion=(id)=>{
   const existing=id?(DB.questions||[]).find(x=>x.id===id):null;
   _QED=existing?JSON.parse(JSON.stringify(existing)):{
-    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false
+    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:true
   };
+  if(_QED.isPublic===undefined)_QED.isPublic=true;
   App._renderQModal();
 };
 
@@ -2762,6 +2795,7 @@ App._renderQModal=()=>{
       </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Options</label>
+        ${togRow('isPublic','🌐 Public question','Visible to everyone with Questions access — turn off to keep it private (only you + assigned users)')}
         ${togRow('photo','📷 Photo mandatory','Upload button always shown — this makes it required')}
         ${togRow('approval','✓ Approval required','Response needs manager approval')}
         ${togRow('comment','💬 Comment mandatory','Comment box always shown — this makes it required')}
@@ -2804,7 +2838,7 @@ App._saveQuestion=()=>{
   saveDB();
   render();
   // ── Sync to Supabase in background ──
-  const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString()};
+  const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,is_public:savedQ.isPublic!==false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString()};
   sb.from('questions').upsert(qRow,{onConflict:'id'}).then(({error})=>{
     if(error){console.error('Question sync error:',error.message);toast('⚠ Question saved locally but not synced: '+error.message.slice(0,60),'warn');}
   }).catch(e=>console.error('Question sync:',e));
@@ -2815,15 +2849,16 @@ App._openClQuestionPicker=()=>{
   if(!CLD)return;
   // CRITICAL: Snapshot form values NOW while checklist modal is still open
   _snapshotCLD();
-  const allQ=DB.questions||[];
+  const allQ=visibleQuestions();
   const sel=new Set(CLD.questionIds||[]);
   App._clQSel=new Set(sel);
   App._showClQPicker();
 };
 
 App._showClQPicker=()=>{
-  const allQ=DB.questions||[];
   const sel=App._clQSel||new Set();
+  // Show questions the user can see, plus any already selected on this checklist (so existing private picks aren't lost)
+  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||sel.has(q.id));
   openModal(`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #ECEDF0">
       <div>
@@ -2845,6 +2880,7 @@ App._showClQPicker=()=>{
               ${on?`<svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5"><path d="M20 6 9 17l-5-5"/></svg>`:''}
             </div>
             <span style="font-size:10px;font-weight:700;padding:2px 7px;border-radius:5px;background:${bg};color:${clr};flex-shrink:0">${tl}</span>
+            ${q.isPublic===false?`<span style="font-size:10px;flex-shrink:0" title="Private question">🔒</span>`:''}
             <div style="flex:1;min-width:0">
               <div style="font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${q.text}</div>
               <div style="font-size:11px;color:#9CA3AF">${(q.options||[]).length} option${(q.options||[]).length!==1?'s':''}</div>
