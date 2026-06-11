@@ -799,14 +799,14 @@ function pageContent(){
   if(r==='departments')return deptsPage();
   if(r==='locations')return locsPage();
   if(r==='checklists')return clsPage();
-  if(r==='approvals'){if(isAdmin()||isMgr())return approvalsPage();S.route='notifications';return notificationsPage();}
+  if(r==='approvals'){if(isAdmin()||isSubAdmin()||isMgr())return approvalsPage();S.route='notifications';return notificationsPage();}
   if(r==='notifications')return notificationsPage();
   if(r==='tickets')return ticketsPage();
   if(r==='hierarchy')return hierarchyPage();
   if(r==='analytics')return analyticsPage();
   if(r==='audit')return auditPage();
   if(r==='settings')return settingsPage();
-  if(r==='questions'){if(isAdmin()||me()?.questionsAccess)return questionsPage();return myClsPage();}
+  if(r==='questions'){if(isAdmin()||isSubAdmin()||me()?.questionsAccess)return questionsPage();return myClsPage();}
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
   if(r==='allcl'){if(isAdmin()||isSubAdmin())return allClsPage();return myClsPage();}
@@ -2448,27 +2448,37 @@ function _roResponses(c,sub,date){
   return h;
 }
 
-App._aclDay=(delta)=>{
-  const d=new Date((S.filters.aclDate||todayISO())+'T00:00:00');
-  d.setDate(d.getDate()+delta);
-  S.filters.aclDate=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
-  S.filters.aclExp=null;S.filters.aclU=S.filters.aclU||null;rr();
-};
-
 function allClsPage(){
   const today=todayISO();
-  if(!S.filters.aclDate)S.filters.aclDate=today;
+  if(S.filters.aclWk===undefined)S.filters.aclWk=0;
+  // Week strip (Mon–Sun) — same as Team view
+  const ref=new Date(today+'T00:00:00');
+  const dow=ref.getDay();
+  ref.setDate(ref.getDate()+(dow===0?-6:1-dow)+S.filters.aclWk*7);
+  const week=Array.from({length:7},(_,i)=>{const dd=new Date(ref);dd.setDate(dd.getDate()+i);return dd.getFullYear()+'-'+String(dd.getMonth()+1).padStart(2,'0')+'-'+String(dd.getDate()).padStart(2,'0');});
+  if(!S.filters.aclDate||!week.includes(S.filters.aclDate)){S.filters.aclDate=week.find(x=>x===today)||week[0];}
   const d=S.filters.aclDate;
   const dep=S.filters.aclDep||'';
   const loc=S.filters.aclLoc||'';
-  // All checklists scheduled on this date, filtered by department / location
-  const cls=DB.checklists.filter(c=>clOn(c,d)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
+  const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
+  const cls=filtCls(d);
   const grp=cls.filter(c=>c.anyOne);
   const ind=cls.filter(c=>!c.anyOne);
   // Map: user → their individual checklists for this date
   const userMap={};
   ind.forEach(c=>(c.assignees||[]).forEach(uid2=>{const u=uById(uid2);if(!u||u.status!=='Active')return;(userMap[uid2]=userMap[uid2]||[]).push(c);}));
   const userIds=Object.keys(userMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
+
+  // Strip dots: aggregated across ALL users/checklists (respecting filters)
+  const dayDots=dd=>{
+    const dcls=filtCls(dd);
+    let sub=false,pend=false;
+    dcls.forEach(c=>{
+      if(c.anyOne){if(DB.submissions.some(x=>x.checklistId===c.id&&x.date===dd&&x.status!=='Editing'))sub=true;else pend=true;}
+      else (c.assignees||[]).forEach(a=>{if(subFor(c.id,a,dd))sub=true;else pend=true;});
+    });
+    return{sub,pend,late:pend&&dd<today};
+  };
 
   const BC={'Late':'#F43F5E','Pending Approval':'#F97316','On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','Rejected':'#9F1239','Editing':'#0EA5E9'};
 
@@ -2496,7 +2506,7 @@ function allClsPage(){
   // ── Group ("any one") checklists: shown once each ──
   let grpHtml='';
   if(grp.length){
-    grpHtml=`<div style="margin-bottom:18px">
+    grpHtml=`<div style="margin-bottom:18px;margin-top:8px">
       <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Group checklists — any one can complete</div>
       <div style="display:flex;flex-direction:column;gap:8px">
         ${grp.map(c=>{
@@ -2512,7 +2522,7 @@ function allClsPage(){
   // ── Individual checklists: user by user ──
   let usrHtml='';
   if(userIds.length){
-    usrHtml=`<div>
+    usrHtml=`<div style="margin-top:${grp.length?'0':'8px'}">
       <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Individual checklists — user by user</div>
       <div style="display:flex;flex-direction:column;gap:8px">
       ${userIds.map(uid2=>{
@@ -2541,14 +2551,9 @@ function allClsPage(){
   }
 
   return`<div class="fade">
-    ${hdr('All Checklists',new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}
-    <!-- Date + filters -->
-    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:#fff;border-radius:14px;border:1.5px solid #ECEDF0">
-      <button onclick="App._aclDay(-1)" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
-      <input type="date" value="${esc(d)}" onchange="S.filters.aclDate=this.value||todayISO();S.filters.aclExp=null;rr()" style="border:1.5px solid #E5E7EB;border-radius:9px;padding:5px 8px;font-size:13px;outline:none"/>
-      <button onclick="App._aclDay(1)" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
-      <button onclick="S.filters.aclDate='${today}';S.filters.aclExp=null;rr()" style="padding:0 12px;height:30px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${d===today?'#111110':'#F5F4F0'};color:${d===today?'#fff':'#9CA3AF'}">Today</button>
-      <span style="flex:1"></span>
+    ${hdr('All Checklists',"Everyone's checklists and responses")}
+    <!-- Filters row -->
+    <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
       <select onchange="S.filters.aclDep=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
         <option value="">All departments</option>
         ${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
@@ -2558,11 +2563,37 @@ function allClsPage(){
         ${DB.locations.map(x=>`<option value="${x.id}" ${loc===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
       </select>
     </div>
+    <!-- Sticky calendar strip (same as Team view) -->
+    <div style="position:sticky;top:52px;z-index:10;background:rgba(247,246,242,.95);backdrop-filter:blur(12px);margin:0 -16px;padding:0 16px 10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0">
+        <span style="font-size:13px;font-weight:600;color:#B8B5AC">${d===today?'Today · ':''}${fmtD(d)}</span>
+        <div style="display:flex;gap:4px;align-items:center">
+          <button onclick="S.filters.aclWk--;S.filters.aclExp=null;rr()" style="width:28px;height:28px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">${ic('back','w-3.5 h-3.5')}</button>
+          <button onclick="S.filters.aclWk=0;S.filters.aclDate='${today}';S.filters.aclExp=null;rr()" style="padding:5px 10px;border-radius:8px;font-size:11px;font-weight:700;cursor:pointer;border:none;background:${S.filters.aclWk===0&&d===today?'#15171C':'#F6F7F8'};color:${S.filters.aclWk===0&&d===today?'#fff':'#6B7280'}">Today</button>
+          <button onclick="S.filters.aclWk++;S.filters.aclExp=null;rr()" style="width:28px;height:28px;border-radius:8px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">${ic('chevR','w-3.5 h-3.5')}</button>
+        </div>
+      </div>
+      <div class="cal4" style="display:flex;flex-direction:row;flex-wrap:nowrap;width:100%">
+        ${week.map(dd=>{
+          const dn=DAYS3[new Date(dd+'T00:00:00').getDay()];const num=new Date(dd+'T00:00:00').getDate();
+          const isT=dd===today;const isSel=dd===d;
+          const dots=dayDots(dd);
+          return`<button onclick="S.filters.aclDate='${dd}';S.filters.aclExp=null;rr()" class="cal4-d ${isSel?'sel':''}" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;cursor:pointer;border:none;background:${isSel?'#15171C':'transparent'};gap:2px">
+            <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${isSel?'rgba(255,255,255,.4)':'#B8B5AC'}">${dn.slice(0,3)}</span>
+            <span style="width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:800;color:${isSel?'#fff':isT?'#fff':'#15171C'};background:${isT&&!isSel?'#15171C':'transparent'}">${num}</span>
+            <div style="display:flex;gap:2px;height:6px">
+              ${dots.sub?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,255,255,.8)':'#10B981'}"></span>`:''}
+              ${dots.late?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,180,180,.9)':'#F43F5E'}"></span>`:dots.pend?`<span style="width:5px;height:5px;border-radius:50%;background:${isSel?'rgba(255,220,120,.9)':'#F59E0B'}"></span>`:''}
+            </div>
+          </button>`;
+        }).join('')}
+      </div>
+    </div>
     ${grpHtml}${usrHtml}
-    ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8">
+    ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8;margin-top:8px">
       <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
-      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">Nothing scheduled</div>
-      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">No checklists match this date${dep||loc?' and the selected filters':''}</p>
+      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">No checklists</div>
+      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">No checklists scheduled for this date${dep||loc?' with the selected filters':''}</p>
     </div>`:''}
   </div>`;
 }
