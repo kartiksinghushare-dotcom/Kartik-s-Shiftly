@@ -2461,12 +2461,15 @@ function allClsPage(){
   const dep=S.filters.aclDep||'';
   const loc=S.filters.aclLoc||'';
   const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
+  // ── Hierarchy scope: Super Admin sees everyone; Admin (SubAdmin) / managers see themselves + their tree (users under them, and users under those users) ──
+  const scopeUsers=(isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean)).filter(u=>u.status==='Active');
+  const scopeIds=new Set(scopeUsers.map(u=>u.id));
   const cls=filtCls(d);
-  const grp=cls.filter(c=>c.anyOne);
+  const grp=cls.filter(c=>c.anyOne&&(isAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
   const ind=cls.filter(c=>!c.anyOne);
-  // Map: user → their individual checklists for this date
+  // Map: user → their individual checklists for this date (scoped to hierarchy)
   const userMap={};
-  ind.forEach(c=>(c.assignees||[]).forEach(uid2=>{const u=uById(uid2);if(!u||u.status!=='Active')return;(userMap[uid2]=userMap[uid2]||[]).push(c);}));
+  ind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;const u=uById(uid2);if(!u||u.status!=='Active')return;(userMap[uid2]=userMap[uid2]||[]).push(c);}));
   const userIds=Object.keys(userMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
 
   // Strip dots: aggregated across ALL users/checklists (respecting filters)
@@ -2474,8 +2477,11 @@ function allClsPage(){
     const dcls=filtCls(dd);
     let sub=false,pend=false;
     dcls.forEach(c=>{
-      if(c.anyOne){if(DB.submissions.some(x=>x.checklistId===c.id&&x.date===dd&&x.status!=='Editing'))sub=true;else pend=true;}
-      else (c.assignees||[]).forEach(a=>{if(subFor(c.id,a,dd))sub=true;else pend=true;});
+      if(c.anyOne){
+        if(!isAdmin()&&!(c.assignees||[]).some(a=>scopeIds.has(a)))return;
+        if(DB.submissions.some(x=>x.checklistId===c.id&&x.date===dd&&x.status!=='Editing'))sub=true;else pend=true;
+      }
+      else (c.assignees||[]).forEach(a=>{if(!scopeIds.has(a))return;if(subFor(c.id,a,dd))sub=true;else pend=true;});
     });
     return{sub,pend,late:pend&&dd<today};
   };
@@ -2537,7 +2543,7 @@ function allClsPage(){
             ${avatar(u,'w-9 h-9','text-xs')}
             <div style="flex:1;min-width:0">
               <div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div>
-              <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}</div>
+              <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}${(()=>{const mg=u.managerId?uById(u.managerId):null;return mg?' · under '+esc(fullName(mg)):'';})()}</div>
             </div>
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${allDone?'#E8FAF3':'#FEF7E6'};color:${allDone?'#0D7A4E':'#B36A00'}">${done}/${ucls.length} done</span>
           </button>
