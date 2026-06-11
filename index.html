@@ -2598,8 +2598,10 @@ function allClsPage(){
     ${grpHtml}${usrHtml}
     ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8;margin-top:8px">
       <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
-      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">No checklists</div>
-      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">No checklists scheduled for this date${dep||loc?' with the selected filters':''}</p>
+      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">${!isAdmin()&&scopeUsers.length<=1?'No users under you':'No checklists'}</div>
+      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${!isAdmin()&&scopeUsers.length<=1
+        ?'This tab shows checklists for users in your reporting tree, but nobody reports to this account. Ask a Super Admin to set "Reports to" on your team members — or give the Admin role to the manager they already report to.'
+        :`No checklists scheduled for this date${dep||loc?' with the selected filters':''}`}</p>
     </div>`:''}
   </div>`;
 }
