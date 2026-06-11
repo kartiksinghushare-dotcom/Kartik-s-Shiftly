@@ -507,6 +507,10 @@ function loadDB(){
 let S={uid:null,route:'dashboard',search:'',calDate:todayISO(),calWk:0,expandedCl:null,filters:{},filterOpen:false,tvUser:null,tvCalDate:null,tvCalWk:0,tvExpanded:null,afOpen:null};
 const me=()=>DB.users.find(u=>u.id===S.uid);
 const isAdmin=()=>me()?.role==='Admin';
+// 'Admin' (internal value, unchanged in DB) is displayed as "Super Admin".
+// 'SubAdmin' (new internal value) is displayed as "Admin": manager powers + the All Checklists tab.
+const isSubAdmin=()=>me()?.role==='SubAdmin';
+const roleLabel=r=>r==='Admin'?'Super Admin':r==='SubAdmin'?'Admin':(r||'User');
 const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
 // ── Date-aware manager lookup (uses managerHistory; falls back to current managerId) ──
@@ -632,7 +636,7 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
 const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['teamview','users','Team'],['users','user','My Users'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
@@ -640,7 +644,12 @@ const MOB_USR=['mychecklists','tickets','notifications','more'];
 const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
 const navFor=()=>{
   if(isAdmin())return NAV_ADM;
-  const base=isMgr()?[...NAV_MGR]:[...NAV_USR];
+  const base=(isMgr()||isSubAdmin())?[...NAV_MGR]:[...NAV_USR];
+  // SubAdmin ("Admin" role): manager nav + All Checklists tab
+  if(isSubAdmin()&&!base.find(n=>n[0]==='allcl')){
+    const after=base.findIndex(n=>n[0]==='checklists');
+    base.splice(after>-1?after+1:base.length,0,['allcl','list','All Checklists']);
+  }
   // Users with questionsAccess see the Questions tab
   if(!isAdmin()&&me()?.questionsAccess){
     if(!base.find(n=>n[0]==='questions')){const after=base.findIndex(n=>n[0]==='mychecklists');base.splice(after>-1?after+1:1,0,['questions','help','Questions']);}
@@ -681,7 +690,7 @@ App.rr=rr;
 function shell(content){
   const u=me();const nav=navFor();
   // Mobile nav: base array; add 'questions' for questionsAccess non-admin users
-  let mob=isAdmin()?[...MOB_ADM]:isMgr()?[...MOB_MGR]:[...MOB_USR];
+  let mob=isAdmin()?[...MOB_ADM]:(isMgr()||isSubAdmin())?[...MOB_MGR]:[...MOB_USR];
 
   const notifBadge=_notifCount();
   const sideLinks=nav.map(([r,i,l])=>{
@@ -800,6 +809,7 @@ function pageContent(){
   if(r==='questions'){if(isAdmin()||me()?.questionsAccess)return questionsPage();return myClsPage();}
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview')return teamViewPage();
+  if(r==='allcl'){if(isAdmin()||isSubAdmin())return allClsPage();return myClsPage();}
   if(r==='profile')return profilePage();
   return empty('grid','Not found','');
 }
@@ -945,7 +955,27 @@ function adminDash(){
       </div>
       ${_dashTicketsPanel(null)}
     </div>
-  </div></div>`;}
+  </div>
+  <!-- All users performance (range-aware) -->
+  ${(()=>{
+    const aRows=DB.users.filter(u=>u.status==='Active').map(u=>{
+      const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
+      const ss=fSubs.filter(s=>s.userId===u.id);
+      const lateU=ss.filter(s=>s.status==='Late').length;
+      const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;
+      const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
+      const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());
+      const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;
+      const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
+      return{u,asgn,total:ss.length,late:lateU,pend,tk,pct};
+    }).sort((a,b)=>fullName(a.u).localeCompare(fullName(b.u)));
+    return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mt-4">
+    <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">All users performance</h3></div>
+    <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold" title="Open + In Progress tickets assigned to this member">Tickets</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
+    <tbody class="divide-y divide-ink-50">${aRows.map(({u,asgn,total,late:lt,pend,tk,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${lt?'text-rose-600 font-semibold':''} text-sm">${lt}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5">${tk?`<span onclick="App.go('tickets')" title="${tk} open ticket${tk>1?'s':''} — not completed" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;background:${tk>=5?'#FFEDED':'#FEF7E6'};color:${tk>=5?'#C92C2C':'#B36A00'}">${tk}</span>`:`<span class="text-sm text-ink-300">0</span>`}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
+  </div>`;
+  })()}
+  </div>`;}
 
 /* ===== MANAGER DASHBOARD ===== */
 function mgrDash(){
@@ -1001,7 +1031,7 @@ function usersPage(){
   </div>
   <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
     <table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-5 py-3 font-semibold">Name</th><th class="px-5 py-3 font-semibold">Department</th><th class="px-5 py-3 font-semibold">Role</th><th class="px-5 py-3 font-semibold">Reports to</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3"></th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${u.role==='Admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Admin</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">User</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${isAdmin()?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>${_disableBtn(u)}${u.role!=='Admin'?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
+    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const isMgrUser=subTree(u.id).length>0;return`<tr class="hover:bg-ink-50/50"><td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${u.role==='Admin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#15171C;color:#fff">Super Admin</span>':u.role==='SubAdmin'?'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEF2FF;color:#4338CA">Admin</span>':isMgrUser?'<span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700">Manager</span>':'<span class="text-xs text-ink-400">User</span>'}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${isAdmin()?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button><button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F3F4F6'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>${_disableBtn(u)}${u.role!=='Admin'?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#9CA3AF;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#FFF1F2';this.style.color='#BE123C'" onmouseout="this.style.background='transparent';this.style.color='#9CA3AF'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
     ${list.length?'':empty('users','No users','')}
   </div>
   <div class="md:hidden space-y-2">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4" ${isAdmin()?`onclick="App.editUser('${u.id}')" style="cursor:pointer"`:''}>
@@ -1055,7 +1085,7 @@ App.editUser=(id=null)=>{
     <div class="grid grid-cols-2 gap-3">${fld('First name','u-fn',v('firstName'))}${fld('Last name','u-ln',v('lastName'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Email','u-email',v('email'),'email')}${fld('Phone','u-phone',v('phone'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',DB.departments.map(d=>d.name),u?.department||'')}</div>
-    <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',['User','Admin'],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
+    <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',[['User','User'],['SubAdmin','Admin'],['Admin','Super Admin']],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??true,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??true,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??false,'Past entries')}${mkTog('u-af',u?.approval?.future??false,'Future entries')}${mkTog('u-ae',u?.approval?.edited??false,'Edited entries')}</div>
@@ -2393,6 +2423,150 @@ function teamViewPage(){
     </div>
   </div>`;
 }
+/* ===== ALL CHECKLISTS (Super Admin + Admin role) ===== */
+// Read-only question responses block (adapted from team view)
+function _roResponses(c,sub,date){
+  if(!sub)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No submission for ${fmtD(date)}</div>`;
+  const qResps=sub.questionResponses||[];
+  const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+  if(!qs.length)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No questions in this checklist</div>`;
+  let h=qs.map(q=>{
+    const qr=qResps.find(r=>r.questionId===q.id)||{};
+    const resp=qr.response;const hasR=resp!==null&&resp!==undefined&&resp!=='';
+    return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px">
+      <div style="width:18px;height:18px;border-radius:5px;background:${hasR?'#10B981':'#E5E7EB'};display:grid;place-items:center;flex-shrink:0">${hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':''}</div>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}</div>
+        ${hasR?`<div style="font-size:11px;font-weight:700;color:#0E9F6E;margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
+        ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
+        ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+  const by=sub.userId?uById(sub.userId):null;
+  h+=`<div style="padding:10px 16px;font-size:11px;color:#9CA3AF;border-top:1px solid #F3F4F6">Submitted${by?' by <strong>'+esc(fullName(by))+'</strong>':''} ${sub.submittedAt?new Date(sub.submittedAt).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):''}</div>`;
+  return h;
+}
+
+App._aclDay=(delta)=>{
+  const d=new Date((S.filters.aclDate||todayISO())+'T00:00:00');
+  d.setDate(d.getDate()+delta);
+  S.filters.aclDate=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  S.filters.aclExp=null;S.filters.aclU=S.filters.aclU||null;rr();
+};
+
+function allClsPage(){
+  const today=todayISO();
+  if(!S.filters.aclDate)S.filters.aclDate=today;
+  const d=S.filters.aclDate;
+  const dep=S.filters.aclDep||'';
+  const loc=S.filters.aclLoc||'';
+  // All checklists scheduled on this date, filtered by department / location
+  const cls=DB.checklists.filter(c=>clOn(c,d)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
+  const grp=cls.filter(c=>c.anyOne);
+  const ind=cls.filter(c=>!c.anyOne);
+  // Map: user → their individual checklists for this date
+  const userMap={};
+  ind.forEach(c=>(c.assignees||[]).forEach(uid2=>{const u=uById(uid2);if(!u||u.status!=='Active')return;(userMap[uid2]=userMap[uid2]||[]).push(c);}));
+  const userIds=Object.keys(userMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
+
+  const BC={'Late':'#F43F5E','Pending Approval':'#F97316','On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','Rejected':'#9F1239','Editing':'#0EA5E9'};
+
+  // One read-only expandable card
+  const roCard=(c,sub,key,metaExtra)=>{
+    const st=sub?sub.status:(d<today?'Late':'Pending');
+    const exp=S.filters.aclExp===key;
+    const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;
+    return`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
+      <button onclick="S.filters.aclExp=S.filters.aclExp==='${key}'?null:'${key}';rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:14px;font-weight:700">${esc(c.name)}${c.anyOne?' <span title="Any one assignee can complete" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#EEF2FF;color:#4338CA">\ud83d\udc65 Any one</span>':''}</div>
+          <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''}${c.department?' · '+esc(c.department):''}${metaExtra||''}</div>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
+          ${sub?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">${ansN}/${(c.questionIds||[]).length} ans</span>`:''}
+          ${chip(st)}
+          <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
+        </div>
+      </button>
+      ${exp?`<div style="border-top:1px solid #F3F4F6">${_roResponses(c,sub,d)}</div>`:''}
+    </div>`;
+  };
+
+  // ── Group ("any one") checklists: shown once each ──
+  let grpHtml='';
+  if(grp.length){
+    grpHtml=`<div style="margin-bottom:18px">
+      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Group checklists — any one can complete</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+        ${grp.map(c=>{
+          const sub=DB.submissions.find(x=>x.checklistId===c.id&&x.date===d&&x.status!=='Editing')||null;
+          const names=(c.assignees||[]).map(a=>uById(a)).filter(Boolean).map(u=>fullName(u));
+          const meta=' · '+((c.assignees||[]).length)+' assignee'+((c.assignees||[]).length!==1?'s':'')+(names.length?' ('+esc(names.slice(0,3).join(', '))+(names.length>3?' +'+(names.length-3):'')+')':'');
+          return roCard(c,sub,'grp|'+c.id,meta);
+        }).join('')}
+      </div>
+    </div>`;
+  }
+
+  // ── Individual checklists: user by user ──
+  let usrHtml='';
+  if(userIds.length){
+    usrHtml=`<div>
+      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Individual checklists — user by user</div>
+      <div style="display:flex;flex-direction:column;gap:8px">
+      ${userIds.map(uid2=>{
+        const u=uById(uid2);
+        const ucls=userMap[uid2].slice().sort((a,b)=>(a.scheduleTime||'99:99').localeCompare(b.scheduleTime||'99:99')||(a.name||'').localeCompare(b.name||''));
+        const done=ucls.filter(c=>subFor(c.id,uid2,d)).length;
+        const uExp=S.filters.aclU===uid2;
+        const allDone=done===ucls.length;
+        return`<div style="background:#fff;border-radius:16px;border:1.5px solid ${uExp?'#C7D2FE':'#ECEDF0'};overflow:hidden">
+          <button onclick="S.filters.aclU=S.filters.aclU==='${uid2}'?null:'${uid2}';S.filters.aclExp=null;rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
+            <span style="color:#C8C5BD;transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
+            ${avatar(u,'w-9 h-9','text-xs')}
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div>
+              <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}</div>
+            </div>
+            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${allDone?'#E8FAF3':'#FEF7E6'};color:${allDone?'#0D7A4E':'#B36A00'}">${done}/${ucls.length} done</span>
+          </button>
+          ${uExp?`<div style="padding:0 14px 12px 38px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #F5F4F0;padding-top:10px">
+            ${ucls.map(c=>roCard(c,subFor(c.id,uid2,d)||null,uid2+'|'+c.id,'')).join('')}
+          </div>`:''}
+        </div>`;
+      }).join('')}
+      </div>
+    </div>`;
+  }
+
+  return`<div class="fade">
+    ${hdr('All Checklists',new Date(d+'T00:00:00').toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long',year:'numeric'}))}
+    <!-- Date + filters -->
+    <div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:#fff;border-radius:14px;border:1.5px solid #ECEDF0">
+      <button onclick="App._aclDay(-1)" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('back','w-4 h-4')}</button>
+      <input type="date" value="${esc(d)}" onchange="S.filters.aclDate=this.value||todayISO();S.filters.aclExp=null;rr()" style="border:1.5px solid #E5E7EB;border-radius:9px;padding:5px 8px;font-size:13px;outline:none"/>
+      <button onclick="App._aclDay(1)" style="width:30px;height:30px;border-radius:8px;border:1px solid #EEECE8;background:#fff;cursor:pointer;display:grid;place-items:center;color:#9CA3AF">${ic('chevR','w-4 h-4')}</button>
+      <button onclick="S.filters.aclDate='${today}';S.filters.aclExp=null;rr()" style="padding:0 12px;height:30px;border-radius:8px;font-size:12px;font-weight:700;border:none;cursor:pointer;background:${d===today?'#111110':'#F5F4F0'};color:${d===today?'#fff':'#9CA3AF'}">Today</button>
+      <span style="flex:1"></span>
+      <select onchange="S.filters.aclDep=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
+        <option value="">All departments</option>
+        ${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
+      </select>
+      <select onchange="S.filters.aclLoc=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
+        <option value="">All locations</option>
+        ${DB.locations.map(x=>`<option value="${x.id}" ${loc===x.id?'selected':''}>${esc(x.name)}</option>`).join('')}
+      </select>
+    </div>
+    ${grpHtml}${usrHtml}
+    ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8">
+      <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
+      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">Nothing scheduled</div>
+      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">No checklists match this date${dep||loc?' and the selected filters':''}</p>
+    </div>`:''}
+  </div>`;
+}
+
 App._bigImg=(src)=>{openModal(`<div style="padding:10px;position:relative"><button onclick="App.closeModal()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:26px;height:26px;color:#fff;cursor:pointer;display:grid;place-items:center;z-index:1;font-size:14px">×</button><img src="${src}" style="width:100%;border-radius:10px;max-height:80vh;object-fit:contain;display:block"/></div>`,'max-w-xl');};
 
 
@@ -2573,7 +2747,7 @@ App._viewSubFor=async(btn)=>{
 /* ===== BOOT ===== */
 (async function boot(){
   const _hashRoute=(window.location.hash||'').replace('#','').trim();
-  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile'];
+  const VALID_ROUTES=['dashboard','mychecklists','users','hierarchy','checklists','allcl','questions','approvals','notifications','analytics','locations','departments','settings','audit','teamview','profile'];
   const _deepLink=VALID_ROUTES.includes(_hashRoute)?_hashRoute:null;
   try{const{data:{session}}=await sb.auth.getSession();if(session){
       // Load local cache first for instant UI
@@ -3572,7 +3746,7 @@ App._saveSendFeedback=(userId)=>{
 };
 /* ===== HIERARCHY ===== */
 function hierarchyPage(){const roots=isAdmin()?DB.users.filter(u=>!u.managerId):[me()].filter(Boolean);return`<div class="fade">${hdr(isAdmin()?'Organisation':'My Team','Reporting structure')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 overflow-x-auto"><div class="min-w-fit">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;}
-function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col=COLL[u.id];return`<div class="${d>0?'ml-5 pl-1 relative before:absolute before:left-[-14px] before:top-0 before:bottom-0 before:w-px before:bg-ink-100 after:absolute after:left-[-14px] after:top-6 after:w-3 after:h-px after:bg-ink-100':''}"><div class="flex items-center gap-2 py-1.5"><span class="w-5">${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" class="w-5 h-5 grid place-items-center rounded text-ink-400 hover:bg-ink-100">${ic(col?'chevR':'chevD','w-3.5 h-3.5')}</button>`:''}</span><div class="flex items-center gap-2.5 bg-paper border border-ink-100 rounded-xl pl-1.5 pr-3 py-1.5 hover:border-brand-200 transition">${avatar(u,'w-8 h-8','text-[11px]')}<div><div class="text-sm font-semibold">${esc(fullName(u))}${u.role==='Admin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#15171C;color:#fff;margin-left:4px">ADMIN</span>`:''}</div><div class="text-[11px] text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${kids.length?`<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700">${kids.length}</span>`:''}</div></div>${kids.length&&!col?`<div>${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}</div>`;}
+function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col=COLL[u.id];return`<div class="${d>0?'ml-5 pl-1 relative before:absolute before:left-[-14px] before:top-0 before:bottom-0 before:w-px before:bg-ink-100 after:absolute after:left-[-14px] after:top-6 after:w-3 after:h-px after:bg-ink-100':''}"><div class="flex items-center gap-2 py-1.5"><span class="w-5">${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" class="w-5 h-5 grid place-items-center rounded text-ink-400 hover:bg-ink-100">${ic(col?'chevR':'chevD','w-3.5 h-3.5')}</button>`:''}</span><div class="flex items-center gap-2.5 bg-paper border border-ink-100 rounded-xl pl-1.5 pr-3 py-1.5 hover:border-brand-200 transition">${avatar(u,'w-8 h-8','text-[11px]')}<div><div class="text-sm font-semibold">${esc(fullName(u))}${u.role==='Admin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#15171C;color:#fff;margin-left:4px">SUPER ADMIN</span>`:u.role==='SubAdmin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#EEF2FF;color:#4338CA;margin-left:4px">ADMIN</span>`:''}</div><div class="text-[11px] text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${kids.length?`<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700">${kids.length}</span>`:''}</div></div>${kids.length&&!col?`<div>${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}</div>`;}
 
 /* ===== ANALYTICS ===== */
 
