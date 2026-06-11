@@ -244,7 +244,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
-function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
@@ -509,6 +509,26 @@ const me=()=>DB.users.find(u=>u.id===S.uid);
 const isAdmin=()=>me()?.role==='Admin';
 const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
+// ── Date-aware manager lookup (uses managerHistory; falls back to current managerId) ──
+function _mgrOfOn(u,date){
+  const h=u?.managerHistory;
+  if(Array.isArray(h)&&h.length){
+    let hit;for(const p of h){if((p.from||'0001-01-01')<=date&&(!p.to||date<p.to))hit=p;}
+    if(hit!==undefined)return hit.managerId||null;
+  }
+  return u?.managerId||null;
+}
+// Was user uid2 under mgrId (directly or via chain) on a given date?
+function _underOn(uid2,mgrId,date){
+  let cur=uById(uid2);let g=0;
+  while(cur&&g++<12){
+    const m=_mgrOfOn(cur,date);
+    if(!m)return false;
+    if(m===mgrId)return true;
+    cur=uById(m);
+  }
+  return false;
+}
 const isMgr=()=>DB.users.some(u=>u.managerId===S.uid&&u.id!==S.uid)&&!isAdmin();
 function visU(){if(isAdmin())return DB.users;return[me(),...subTree(S.uid)].filter(Boolean);}
 function isDesc(a,b){return subTree(b).some(u=>u.id===a);}
@@ -822,7 +842,7 @@ App.login=async()=>{
     const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
     if(!profile){await sb.auth.signOut();S.uid=null;render();throw new Error('Profile not found');}
     if(profile.status==='Inactive'){await sb.auth.signOut();S.uid=null;render();throw new Error('Account inactive — contact admin');}
-    const u={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};
+    const u={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,managerHistory:profile.manager_history||[],rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,password:'***'};
     const idx=DB.users.findIndex(x=>x.id===u.id);
     if(idx>-1)DB.users[idx]=u;else DB.users.push(u);
     S.uid=u.id;
@@ -930,16 +950,33 @@ function adminDash(){
 /* ===== MANAGER DASHBOARD ===== */
 function mgrDash(){
   const team=subTree(S.uid);if(!team.length)return myClsPage();
-  const rows=team.map(u=>{const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;const ss=DB.submissions.filter(s=>s.userId===u.id&&_inDashRange(s.date));const late=ss.filter(s=>s.status==='Late').length;const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;return{u,asgn,total:ss.length,late,pend,tk,pct};});
+  const teamIds=new Set(team.map(u=>u.id));
+  // Former direct reports (manager changed away) — shown only if they have in-range data from their time under me
+  const former=DB.users.filter(u=>!teamIds.has(u.id)&&u.id!==S.uid&&Array.isArray(u.managerHistory)&&u.managerHistory.some(p=>p.managerId===S.uid));
+  const mkRow=(u,cur)=>{
+    // Only count submissions from dates the user was actually under me (handles transfers in AND out)
+    const ss=DB.submissions.filter(s=>s.userId===u.id&&_inDashRange(s.date)&&_underOn(u.id,S.uid,s.date));
+    const late=ss.filter(s=>s.status==='Late').length;
+    const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;
+    if(!cur)return ss.length?{u,cur,asgn:null,total:ss.length,late,pend,tk:null,pct:null}:null;
+    const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
+    const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
+    const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());
+    const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;
+    const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
+    return{u,cur,asgn,total:ss.length,late,pend,tk,pct};
+  };
+  const rows=[...team.map(u=>mkRow(u,true)),...former.map(u=>mkRow(u,false))].filter(Boolean);
+  const curRows=rows.filter(r=>r.cur);
   return`<div class="fade">${hdr('Team Dashboard',team.length+' member'+(team.length>1?'s':''))}
   ${_dashFilterBar()}
   <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
-    ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Late submissions',rows.reduce((n,r)=>n+r.late,0),'rose',"S.filters={stats:['Late']};App.go('analytics')")}${statCard('Avg completion',Math.round(rows.reduce((n,r)=>n+r.pct,0)/Math.max(rows.length,1))+'%','brand',"App.go('analytics')")}
+    ${statCard('Team members',team.length,'sky',"App.go('teamview')")}${statCard('Late submissions',rows.reduce((n,r)=>n+r.late,0),'rose',"S.filters={stats:['Late']};App.go('analytics')")}${statCard('Avg completion',Math.round(curRows.reduce((n,r)=>n+r.pct,0)/Math.max(curRows.length,1))+'%','brand',"App.go('analytics')")}
   </div>
   <div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mb-4">
     <div class="px-5 py-3 border-b border-ink-100"><h3 class="fd font-semibold text-sm">Team performance</h3></div>
     <div class="overflow-x-auto"><table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left"><th class="px-4 py-2.5 font-semibold">Member</th><th class="px-4 py-2.5 font-semibold">Assigned</th><th class="px-4 py-2.5 font-semibold">Submitted</th><th class="px-4 py-2.5 font-semibold">Late</th><th class="px-4 py-2.5 font-semibold">Pending</th><th class="px-4 py-2.5 font-semibold" title="Open + In Progress tickets assigned to this member">Tickets</th><th class="px-4 py-2.5 font-semibold">Completion</th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${rows.map(({u,asgn,total,late,pend,tk,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span></div></td><td class="px-4 py-2.5 text-sm">${asgn}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5">${tk?`<span onclick="App.go('tickets')" title="${tk} open ticket${tk>1?'s':''} — not completed" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;background:${tk>=5?'#FFEDED':'#FEF7E6'};color:${tk>=5?'#C92C2C':'#B36A00'}">${tk}</span>`:`<span class="text-sm text-ink-300">0</span>`}</td><td class="px-4 py-2.5"><div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div></td></tr>`).join('')}</tbody></table></div>
+    <tbody class="divide-y divide-ink-50">${rows.map(({u,cur,asgn,total,late,pend,tk,pct})=>`<tr class="hover:bg-ink-50/50"><td class="px-4 py-2.5"><div class="flex items-center gap-2">${avatar(u,'w-7 h-7','text-[10px]')}<span class="font-semibold text-sm">${esc(fullName(u))}</span>${cur?'':'<span title="No longer reports to you — showing data from when they did" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#F3F4F6;color:#6B7280">former</span>'}</div></td><td class="px-4 py-2.5 text-sm">${cur?asgn:'<span class="text-ink-300">—</span>'}</td><td class="px-4 py-2.5 text-emerald-700 font-medium text-sm">${total}</td><td class="px-4 py-2.5 ${late?'text-rose-600 font-semibold':''} text-sm">${late}</td><td class="px-4 py-2.5 text-amber-600 text-sm">${pend}</td><td class="px-4 py-2.5">${cur?(tk?`<span onclick="App.go('tickets')" title="${tk} open ticket${tk>1?'s':''} — not completed" style="display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;padding:0 8px;border-radius:12px;font-size:12px;font-weight:800;cursor:pointer;background:${tk>=5?'#FFEDED':'#FEF7E6'};color:${tk>=5?'#C92C2C':'#B36A00'}">${tk}</span>`:`<span class="text-sm text-ink-300">0</span>`):'<span class="text-ink-300">—</span>'}</td><td class="px-4 py-2.5">${cur?`<div class="flex items-center gap-2"><div style="width:64px;height:6px;border-radius:3px;background:#ECEDF0;overflow:hidden"><div style="height:100%;border-radius:2px;width:${pct}%;background:${pct>=80?'#0E9F6E':pct>=50?'#F59E0B':'#F43F5E'}"></div></div><span class="text-xs font-semibold">${pct}%</span></div>`:'<span class="text-ink-300">—</span>'}</td></tr>`).join('')}</tbody></table></div>
   </div></div>`;}
 
 /* ===== USERS ===== */
@@ -1063,6 +1100,17 @@ App.saveUser=async(id)=>{
   if(id){
     // Update local state immediately
     const u=uById(id);
+    // ── Manager change: record history so dashboards can scope by date ──
+    // Rule: dates BEFORE the change belong to the old manager; the change date onwards belongs to the new one
+    if(u&&(u.managerId||null)!==(mId||null)){
+      const chDate=todayISO();
+      let h=Array.isArray(u.managerHistory)?JSON.parse(JSON.stringify(u.managerHistory)):[];
+      if(!h.length)h.push({managerId:u.managerId||null,from:'0001-01-01',to:chDate});
+      else{const open=h.find(p=>!p.to);if(open)open.to=chDate;}
+      h.push({managerId:mId||null,from:chDate,to:null});
+      u.managerHistory=h;
+      pd.manager_history=h;
+    }
     if(u)Object.assign(u,{firstName:fn,lastName:ln,email,
       phone:pd.phone,position:pd.position,department:pd.department,
       role:pd.role,status:pd.status,managerId:mId,
