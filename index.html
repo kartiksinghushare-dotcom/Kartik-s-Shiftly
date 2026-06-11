@@ -2462,10 +2462,13 @@ function allClsPage(){
   const loc=S.filters.aclLoc||'';
   const filtCls=dd=>DB.checklists.filter(c=>clOn(c,dd)&&(!dep||c.department===dep)&&(!loc||(c.locationIds||[]).includes(loc)));
   // ── Hierarchy scope: Super Admin sees everyone; Admin (SubAdmin) / managers see themselves + their tree (users under them, and users under those users) ──
-  const scopeUsers=(isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean)).filter(u=>u.status==='Active');
+  const scopeUsers=(isAdmin()||isSubAdmin()
+    ? DB.users
+    : [me(),...subTree(S.uid)].filter(Boolean)
+  ).filter(u=>u.status==='Active');
   const scopeIds=new Set(scopeUsers.map(u=>u.id));
   const cls=filtCls(d);
-  const grp=cls.filter(c=>c.anyOne&&(isAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
+  const grp=cls.filter(c=>c.anyOne&&(isAdmin()||isSubAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
   const ind=cls.filter(c=>!c.anyOne);
   // Map: user → their individual checklists for this date (scoped to hierarchy)
   const userMap={};
@@ -2478,7 +2481,7 @@ function allClsPage(){
     let sub=false,pend=false;
     dcls.forEach(c=>{
       if(c.anyOne){
-        if(!isAdmin()&&!(c.assignees||[]).some(a=>scopeIds.has(a)))return;
+        if(!isAdmin()&&!isSubAdmin()&&!(c.assignees||[]).some(a=>scopeIds.has(a)))return;
         if(DB.submissions.some(x=>x.checklistId===c.id&&x.date===dd&&x.status!=='Editing'))sub=true;else pend=true;
       }
       else (c.assignees||[]).forEach(a=>{if(!scopeIds.has(a))return;if(subFor(c.id,a,dd))sub=true;else pend=true;});
@@ -2598,8 +2601,8 @@ function allClsPage(){
     ${grpHtml}${usrHtml}
     ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8;margin-top:8px">
       <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
-      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">${!isAdmin()&&scopeUsers.length<=1?'No users under you':'No checklists'}</div>
-      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${!isAdmin()&&scopeUsers.length<=1
+      <div class="fd" style="font-size:17px;font-weight:800;color:#111110">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1?'No users under you':'No checklists'}</div>
+      <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1
         ?'This tab shows checklists for users in your reporting tree, but nobody reports to this account. Ask a Super Admin to set "Reports to" on your team members — or give the Admin role to the manager they already report to.'
         :`No checklists scheduled for this date${dep||loc?' with the selected filters':''}`}</p>
     </div>`:''}
