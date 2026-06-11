@@ -288,6 +288,7 @@ async function loadFromSB(){
   // Use the already-loaded DB.users from local cache for role checks here.
   const _uid=S.uid;
   const _isAdmin=isAdmin();
+  const _isSubAdmin=isSubAdmin();
   const _isMgr=isMgr();
   const _teamIds=(_isMgr&&!_isAdmin)?new Set([_uid,...subTree(_uid).map(u=>u.id)]):null;
 
@@ -303,11 +304,11 @@ async function loadFromSB(){
     const mapped=_mC(allCls||[]).filter(c=>!_delCls.has(c.id));
     if(mapped.length===0&&DB.checklists.length>0){
       // Nothing from Supabase — keep local cache (RLS may be blocking)
-    } else if(_isAdmin){
+    } else if(_isAdmin||_isSubAdmin){
       DB.checklists=mapped;
     } else if(_isMgr){
-      // Manager: checklists he created OR assigned to him
-      DB.checklists=mapped.filter(c=>c.createdBy===_uid||(c.assignees||[]).includes(_uid));
+      // Manager: checklists he created OR assigned to him OR assigned to his team
+      DB.checklists=mapped.filter(c=>c.createdBy===_uid||(c.assignees||[]).includes(_uid)||(_teamIds&&(c.assignees||[]).some(a=>_teamIds.has(a))));
     } else {
       // User: checklists assigned to them OR created by them
       DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(_uid)||c.createdBy===_uid);
@@ -317,7 +318,7 @@ async function loadFromSB(){
   // ── Submissions ──
   {
     const allSubs=_mS(subs||[]);
-    if(_isAdmin){
+    if(_isAdmin||_isSubAdmin){
       DB.submissions=allSubs;
     } else if(_isMgr){
       // Manager sees: his own + all team members' submissions
@@ -331,7 +332,7 @@ async function loadFromSB(){
   // ── Approvals ──
   {
     const allAppr=_mA(appr||[]);
-    if(_isAdmin){
+    if(_isAdmin||_isSubAdmin){
       DB.approvals=allAppr;
     } else if(_isMgr){
       // Manager sees approvals for his team (requesterId in team) or where he is involved
@@ -342,8 +343,8 @@ async function loadFromSB(){
     }
   }
 
-  // ── Audit logs: admin only ──
-  if(_isAdmin){
+  // ── Audit logs: admin + subadmin ──
+  if(_isAdmin||_isSubAdmin){
     DB.audit=(audit||[]).map(l=>({id:l.id,actor:l.actor||'',action:l.action||'',target:l.target||'',time:l.created_at}));
   } else {
     DB.audit=[];
@@ -372,7 +373,7 @@ async function loadFromSB(){
   // ── Feedback: role-scoped ──
   if(feedbackRows){
     const allFb=feedbackRows.map(fb=>({id:fb.id,checklistId:fb.checklist_id||null,userId:fb.user_id,managerId:fb.manager_id,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',taskName:fb.task_name||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledgedAt:fb.acknowledged_at||null,reply:fb.reply||null,repliedAt:fb.replied_at||null,replies:fb.replies||[],createdAt:fb.created_at}));
-    if(_isAdmin){
+    if(_isAdmin||_isSubAdmin){
       DB.feedback=allFb;
     } else if(_isMgr){
       // Manager sees feedback he sent or feedback for his team members
