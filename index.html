@@ -2944,11 +2944,11 @@ App._importQCSV=(input)=>{
 // Admin always sees everything.
 function visibleQuestions(){
   const all=DB.questions||[];
-  if(isAdmin())return all;
+  if(isAdmin()||isSubAdmin())return all;
   return all.filter(q=>q.isPublic!==false||q.createdBy===S.uid);
 }
 // Creator (or admin) can manage a question
-function canManageQ(q){return isAdmin()||q.createdBy===S.uid;}
+function canManageQ(q){return isAdmin()||isSubAdmin()||q.createdBy===S.uid;}
 
 App._togQPublic=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
@@ -3209,7 +3209,7 @@ App._openClQuestionPicker=()=>{
 App._showClQPicker=()=>{
   const sel=App._clQSel||new Set();
   // Show questions the user can see, plus any already selected on this checklist (so existing private picks aren't lost)
-  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||sel.has(q.id));
+  const allQ=(DB.questions||[]).filter(q=>q.isPublic!==false||q.createdBy===S.uid||isAdmin()||isSubAdmin()||sel.has(q.id));
   openModal(`
     <div style="display:flex;align-items:center;justify-content:space-between;padding:14px 16px 10px;border-bottom:1px solid #ECEDF0">
       <div>
