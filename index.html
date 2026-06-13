@@ -2962,10 +2962,7 @@ App._togQPublic=(id)=>{
   }).catch(e=>console.error('togQPublic:',e));
 };
 
-function questionsPage(){
-  // Questions tab: admin sees all; others see public questions + their own private questions
-  const allQ=visibleQuestions();
-  function qCard(q){
+function qCard(q){
     const exp=S.filters.expandedQ===q.id;
     const clr=Q_TYPE_CLR[q.type]||'#6B7280';
     const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
@@ -3006,11 +3003,15 @@ function questionsPage(){
     h+=`</div>`;
     return h;
   }
+
+function questionsPage(){
+  // Questions tab: admin sees all; others see public questions + their own private questions
+  const allQ=visibleQuestions();
   return`<div class="fade">${hdr('Questions','Reusable question library for your checklists')}
     <!-- Action bar: New + Search -->
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
-      <input type="text" placeholder="Search questions…" value="${S.filters.qSearch||''}"
-        oninput="S.filters.qSearch=this.value;rr()"
+      <input id="qSearchInput" type="text" placeholder="Search questions…" value="${S.filters.qSearch||''}"
+        oninput="App._filterQuestions(this.value)"
         style="flex:1;min-width:180px;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;background:#fff"/>
       <button onclick="App._editQuestion(null)" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;border:none;cursor:pointer">${ic('plus','w-4 h-4')} New question</button>
     </div>
@@ -3026,16 +3027,27 @@ function questionsPage(){
         <input type="file" accept=".csv" onchange="App._importQCSV(this)" style="display:none"/>
       </label>
     </div>
-    ${(()=>{
+    <div id="qResults">${(()=>{
       const filtered=S.filters.qSearch?allQ.filter(q=>q.text.toLowerCase().includes((S.filters.qSearch||'').toLowerCase())):allQ;
       return !filtered.length
         ? empty('help','No questions yet','Create questions or upload a CSV template.')
         : '<div class="space-y-2">'+filtered.map(q=>qCard(q)).join('')+'</div>';
-    })()}
+    })()}</div>
   </div>`;
 }
 
 App._togExpandQ=(id)=>{S.filters.expandedQ=S.filters.expandedQ===id?null:id;rr();};
+
+App._filterQuestions=(val)=>{
+  S.filters.qSearch=val;
+  const box=document.getElementById('qResults');
+  if(!box)return;
+  const allQ=visibleQuestions();
+  const filtered=val?allQ.filter(q=>q.text.toLowerCase().includes(val.toLowerCase())):allQ;
+  box.innerHTML=!filtered.length
+    ? empty('help','No questions yet','Create questions or upload a CSV template.')
+    : '<div class="space-y-2">'+filtered.map(q=>qCard(q)).join('')+'</div>';
+};
 
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
