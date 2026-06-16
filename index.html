@@ -2474,14 +2474,18 @@ function teamViewPage(){
               const qResps=sub.questionResponses||[];
               const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
               if(!qs.length)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No questions in this checklist</div>`;
+              const escSet=_subEscalatedQids(c,sub);
               return qs.map(q=>{
                 const qr=qResps.find(r=>r.questionId===q.id)||{};
                 const resp=qr.response;const hasR=resp!==null&&resp!==undefined&&resp!=='';
-                return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px">
-                  <div style="width:18px;height:18px;border-radius:5px;background:${hasR?'#10B981':'#E5E7EB'};display:grid;place-items:center;flex-shrink:0">${hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':''}</div>
+                const esc1=escSet.has(q.id);
+                const boxBg=esc1?'#EF4444':(hasR?'#10B981':'#E5E7EB');
+                const ansClr=esc1?'#BE123C':'#0E9F6E';
+                return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px;${esc1?'background:#FFF5F5':''}">
+                  <div style="width:18px;height:18px;border-radius:5px;background:${boxBg};display:grid;place-items:center;flex-shrink:0">${esc1?'<span style="color:#fff;font-size:12px;font-weight:800;line-height:1">!</span>':(hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':'')}</div>
                   <div style="flex:1;min-width:0">
-                    <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}</div>
-                    ${hasR?`<div style="font-size:11px;font-weight:700;color:#0E9F6E;margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
+                    <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
+                    ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
                     ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
                     ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
                   </div>
@@ -2502,14 +2506,18 @@ function _roResponses(c,sub,date){
   const qResps=sub.questionResponses||[];
   const qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
   if(!qs.length)return`<div style="padding:14px 16px;font-size:13px;color:#9CA3AF">No questions in this checklist</div>`;
+  const _escSetRo=_subEscalatedQids(c,sub);
   let h=qs.map(q=>{
     const qr=qResps.find(r=>r.questionId===q.id)||{};
     const resp=qr.response;const hasR=resp!==null&&resp!==undefined&&resp!=='';
-    return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px">
-      <div style="width:18px;height:18px;border-radius:5px;background:${hasR?'#10B981':'#E5E7EB'};display:grid;place-items:center;flex-shrink:0">${hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':''}</div>
+    const esc1=_escSetRo.has(q.id);
+    const boxBg=esc1?'#EF4444':(hasR?'#10B981':'#E5E7EB');
+    const ansClr=esc1?'#BE123C':'#0E9F6E';
+    return`<div style="padding:10px 14px;border-bottom:1px solid #F9FAFB;display:flex;align-items:center;gap:10px;${esc1?'background:#FFF5F5':''}">
+      <div style="width:18px;height:18px;border-radius:5px;background:${boxBg};display:grid;place-items:center;flex-shrink:0">${esc1?'<span style="color:#fff;font-size:12px;font-weight:800;line-height:1">!</span>':(hasR?'<svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3.5" stroke-linecap="round"><path d="M20 6 9 17l-5-5"/></svg>':'')}</div>
       <div style="flex:1;min-width:0">
-        <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}</div>
-        ${hasR?`<div style="font-size:11px;font-weight:700;color:#0E9F6E;margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
+        <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
+        ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
         ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
         ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
       </div>
@@ -3491,27 +3499,25 @@ App._editClQuestionEscalation=(qid)=>{
 
 
 // ── Compliance check (Fix #3, revised) ──
-// Counts how many REAL escalation tickets exist for a given submission — i.e. answers
-// that actually triggered an escalation (a ticket was created), not merely answers that
-// landed on an option which has a target configured. Matching is by checklist + date +
-// the submission's own submitter, and de-duplicated by question so a question that
-// escalated counts once. Returns an integer (0 = compliant).
-function _subEscalationCount(c,sub){
-  if(!c||!sub)return 0;
+// Returns the Set of question IDs that actually triggered a REAL escalation ticket for a
+// given submission — matched by checklist + date + the submission's own submitter (so
+// "any one" group submissions match whoever submitted). This is the single source of
+// truth for both the card badge (count) and the per-question red highlight.
+function _subEscalatedQids(c,sub){
+  const out=new Set();
+  if(!c||!sub)return out;
   const submitterId=sub.userId; // for "any one" group checklists this is whoever submitted
-  const tickets=(DB.tickets||[]).filter(t=>
-    t.checklistId===c.id&&
-    t.date===sub.date&&
-    t.submitterId===submitterId
-  );
-  if(!tickets.length)return 0;
-  // De-dupe by question (repeat escalations on the same question shouldn't inflate the count)
-  const qids=new Set(tickets.map(t=>t.questionId||t.id));
-  return qids.size;
+  (DB.tickets||[]).forEach(t=>{
+    if(t.checklistId===c.id&&t.date===sub.date&&t.submitterId===submitterId&&t.questionId){
+      out.add(t.questionId);
+    }
+  });
+  return out;
 }
+// Count of distinct questions that escalated (0 = compliant).
+function _subEscalationCount(c,sub){return _subEscalatedQids(c,sub).size;}
 // Back-compat boolean wrapper (kept in case anything references the old name)
 function _subHasEscalation(c,subOrResponses){
-  // Accept either a submission object or a raw responses array (legacy callers)
   if(subOrResponses&&!Array.isArray(subOrResponses))return _subEscalationCount(c,subOrResponses)>0;
   return false;
 }
