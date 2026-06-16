@@ -965,9 +965,12 @@ function adminDash(){
       const lateU=ss.filter(s=>s.status==='Late').length;
       const pend=ss.filter(s=>['Pending','Pending Approval'].includes(s.status)).length;
       const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
-      const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());
-      const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;
-      const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
+      const todayAsgnCls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO()));
+      const todayAsgn=todayAsgnCls.length;
+      // Effective completions for today: own submission, OR for "any one" group checklists
+      // any assignee's completed submission counts as done for this user (Fix #2).
+      const todayDone=todayAsgnCls.filter(c=>subForCl(c,u.id,todayISO())).length;
+      const pct=todayAsgn?Math.round(todayDone/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
       return{u,asgn,total:ss.length,late:lateU,pend,tk,pct};
     }).sort((a,b)=>fullName(a.u).localeCompare(fullName(b.u)));
     return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden mt-4">
@@ -992,9 +995,10 @@ function mgrDash(){
     if(!cur)return ss.length?{u,cur,asgn:null,total:ss.length,late,pend,tk:null,pct:null}:null;
     const asgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)).length;
     const tk=(DB.tickets||[]).filter(t=>t.assignedTo===u.id&&(t.status==='Open'||t.status==='In Progress')).length;
-    const todaySS=DB.submissions.filter(s=>s.userId===u.id&&s.date===todayISO());
-    const todayAsgn=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO())).length;
-    const pct=todayAsgn?Math.round(todaySS.length/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
+    const todayAsgnCls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,todayISO()));
+    const todayAsgn=todayAsgnCls.length;
+    const todayDone=todayAsgnCls.filter(c=>subForCl(c,u.id,todayISO())).length;
+    const pct=todayAsgn?Math.round(todayDone/todayAsgn*100):ss.length?Math.round(Math.min(ss.length,asgn)/Math.max(asgn,1)*100):0;
     return{u,cur,asgn,total:ss.length,late,pend,tk,pct};
   };
   const rows=[...team.map(u=>mkRow(u,true)),...former.map(u=>mkRow(u,false))].filter(Boolean);
@@ -2154,7 +2158,18 @@ App._setQR=(clId,qId,val,skipRr)=>{
   if(!RUN[clId])return;
   if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
   const existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
-  if(existing){existing.response=val;}
+  if(existing){
+    // If the answer is changing to a DIFFERENT value, clear any photo/comment that
+    // belonged to the previous answer — otherwise a stale photo from the old answer
+    // could wrongly satisfy a "photo required" check for the new answer (Fix #1).
+    // Only do this for discrete-choice questions (tapping a different option = a real
+    // answer switch). Number inputs fire per-keystroke, so we must NOT wipe their photo.
+    const _q=(DB.questions||[]).find(x=>x.id===qId);
+    const _discrete=_q&&_q.type!=='number';
+    const _changed=String(existing.response??'')!==String(val??'');
+    existing.response=val;
+    if(_discrete&&_changed){existing.photo=null;existing.comment='';}
+  }
   else{RUN[clId].questionResponses.push({questionId:qId,response:val,comment:''});}
   if(!skipRr)rr();
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
@@ -2193,6 +2208,41 @@ App._setQRComment=(clId,qId,val)=>{
 };
 App._resubmit=(clId,date)=>{const sub=DB.submissions.find(s=>s.checklistId===clId&&s.userId===S.uid&&s.date===date);const ea=DB.approvals.find(a=>a.type==='Edit Request'&&a.checklistId===clId&&a.requesterId===S.uid&&a.date===date&&a.status==='Approved');if(ea){ea.status='Used';ea.usedAt=new Date().toISOString();ea.isResubmit=true;}if(sub){sub.editCount=(sub.editCount||0)+1;sub.editHistory=sub.editHistory||[];sub.editHistory.push({startedAt:new Date().toISOString(),editNumber:sub.editCount,by:S.uid});sub.status='Editing';RUN[clId]={id:sub.id,checklistId:clId,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(sub.questionResponses||[])),status:'Editing',editCount:sub.editCount,editHistory:sub.editHistory};}else{delete RUN[clId];}log(fullName(me()),'Started resubmit',clById(clId)?.name||'');toast('Edit mode — make changes and resubmit');saveDB();render();};
 App._ackFb=(id)=>{const f=DB.feedback.find(x=>x.id===id);if(f){f.acknowledged=true;f.acknowledgedAt=new Date().toISOString();f.status=f.status==='Sent'?'Acknowledged':f.status;}saveDB();toast('Acknowledged ✓');render();};
+
+// ── Photo persistence (Fix #5) ──
+// Uploads any base64 ("data:") question photos to Supabase Storage (reusing the existing
+// "documents" bucket, which already works in production) and returns a NEW responses array
+// with each uploaded photo replaced by its durable public URL. This is fail-safe: if a
+// given upload fails for ANY reason, that photo falls back to '[photo]' and the submission
+// still succeeds. Existing http(s) URLs and already-stripped placeholders are left as-is.
+// Helper for converting a data URL to a Blob without fetch() (more reliable on mobile).
+function _dataUrlToBlob(dataUrl){
+  try{
+    const [head,b64]=dataUrl.split(',');
+    const mime=(head.match(/data:([^;]+)/)||[,'image/jpeg'])[1];
+    const bin=atob(b64);const len=bin.length;const arr=new Uint8Array(len);
+    for(let i=0;i<len;i++)arr[i]=bin.charCodeAt(i);
+    return new Blob([arr],{type:mime});
+  }catch(e){return null;}
+}
+async function _uploadSubmissionPhotos(clId,userId,date,responses){
+  const out=(responses||[]).map(r=>({...r}));
+  for(const r of out){
+    const p=r.photo;
+    if(!p||typeof p!=='string'||!p.startsWith('data:'))continue; // nothing to upload
+    try{
+      const blob=_dataUrlToBlob(p);
+      if(!blob){r.photo='[photo]';continue;}
+      const ext=(blob.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/gi,'')||'jpg';
+      const path='submissions/'+clId+'/'+userId+'/'+date+'/'+r.questionId+'_'+Date.now()+'.'+ext;
+      const {error}=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
+      if(error){console.warn('[photo upload]',error.message);r.photo='[photo]';continue;}
+      const {data:urlData}=sb.storage.from('documents').getPublicUrl(path);
+      r.photo=urlData?.publicUrl||'[photo]';
+    }catch(e){console.warn('[photo upload failed]',e.message);r.photo='[photo]';}
+  }
+  return out;
+}
 
 App._submitRun=async(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
@@ -2235,6 +2285,11 @@ App._submitRun=async(clId,date)=>{
   // Process escalations — only on first submission, not resubmits
   if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
   // questionResponses already in run — will be included in push/update below
+  // Capture the original responses (may contain base64 photos) so we can persist photos
+  // to Storage in the background after the instant render (Fix #5).
+  const _origQR=JSON.parse(JSON.stringify(run.questionResponses||[]));
+  const _subId=run.id;
+  const _hasInlinePhoto=_origQR.some(r=>typeof r.photo==='string'&&r.photo.startsWith('data:'));
   // Strip base64 photos before sending to Supabase (store URL reference instead)
   const srQR=(run.questionResponses||[]).map(r=>({...r,photo:r.photo&&r.photo.startsWith('data:')?'[photo]':r.photo||null}));
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:srQR,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
@@ -2245,6 +2300,22 @@ App._submitRun=async(clId,date)=>{
   // 3. Save ONLY this submission to Supabase (targeted — not full _sync of 11 tables)
   sb.from('submissions').upsert(sr,{onConflict:'id'}).then(({error})=>{
     if(error)console.warn('sub upsert:',error.message);
+    // 3a. Persist photos to Storage in the background, then re-save the submission with
+    // durable URLs (Fix #5). Entirely optional — submission already succeeded above.
+    if(_hasInlinePhoto){
+      _uploadSubmissionPhotos(clId,S.uid,date,_origQR).then(uploadedQR=>{
+        const anyUrl=uploadedQR.some(r=>typeof r.photo==='string'&&r.photo.startsWith('http'));
+        if(!anyUrl)return; // nothing persisted (all failed) — leave placeholders, no-op
+        // Patch the in-memory record so managers see the real photo without a reload
+        const rec=DB.submissions.find(s=>s.id===_subId);
+        if(rec)rec.questionResponses=uploadedQR;
+        saveDB();
+        // Re-upsert just this submission with the URL-bearing responses
+        sb.from('submissions').upsert({id:_subId,checklist_id:clId,user_id:S.uid,date,status:sr.status,submitted_at:sr.submitted_at,tasks:sr.tasks,question_responses:uploadedQR,edit_count:sr.edit_count,edit_history:sr.edit_history},{onConflict:'id'})
+          .then(({error})=>{if(error)console.warn('[photo re-upsert]',error.message);})
+          .catch(e=>console.warn('[photo re-upsert failed]',e.message));
+      }).catch(e=>console.warn('[photo persist]',e.message));
+    }
     // After submission saved, sync notifications/approvals/issues in background
     Promise.allSettled([
       DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
@@ -2361,8 +2432,8 @@ function teamViewPage(){
           const dn=DAYS3[new Date(d+'T00:00:00').getDay()];const num=new Date(d+'T00:00:00').getDate();
           const isT=d===today;const isSel=d===selDate;
           const dCls=myCls(S.tvUser,d);
-          const hasSub=dCls.some(c=>subFor(c.id,S.tvUser,d));
-          const hasPend=dCls.some(c=>!subFor(c.id,S.tvUser,d));
+          const hasSub=dCls.some(c=>subForCl(c,S.tvUser,d));
+          const hasPend=dCls.some(c=>!subForCl(c,S.tvUser,d));
           const hasLate=hasPend&&d<today;
           return`<button onclick="S.tvCalDate='${d}';S.tvExpanded=null;rr()" class="cal4-d ${isSel?'sel':''}" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;cursor:pointer;border:none;background:${isSel?'#15171C':'transparent'};gap:2px">
             <span style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;color:${isSel?'rgba(255,255,255,.4)':'#B8B5AC'}">${dn.slice(0,3)}</span>
@@ -2379,7 +2450,7 @@ function teamViewPage(){
     <!-- Checklist cards for this user/date -->
     <div style="display:flex;flex-direction:column;gap:10px;margin-top:8px">
       ${dayCls.length?dayCls.map(c=>{
-        const sub=subFor(c.id,S.tvUser,selDate);
+        const sub=subForCl(c,S.tvUser,selDate);
         const st=sub?sub.status:selDate<today?'Late':'Pending';
         const BC={'Late':'#F43F5E','Pending Approval':'#F97316','On Time':'#10B981','Submitted':'#10B981','Pending':'#F59E0B','Rejected':'#9F1239'};
         const exp=S.tvExpanded===c.id;
@@ -2391,7 +2462,7 @@ function teamViewPage(){
               <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''} · ${esc(c.department)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${sub&&(sub.questionResponses||[]).length?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">${(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length}/${(c.questionIds||[]).length} ans</span>`:''}
+              ${sub&&(sub.questionResponses||[]).length?(()=>{const _nc=_subHasEscalation(c,sub.questionResponses||[]);const _an=(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;return`<span title="${_nc?'Non-compliant — an answer triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${_nc?'#FFF1F2':'#ECFDF5'};color:${_nc?'#BE123C':'#059669'}">${_nc?'⚠ ':''}${_an}/${(c.questionIds||[]).length}${_nc?' flagged':' ans'}</span>`;})():''}
               ${chip(st)}
               <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
             </div>
@@ -2497,6 +2568,7 @@ function allClsPage(){
     const st=sub?sub.status:(d<today?'Late':'Pending');
     const exp=S.filters.aclExp===key;
     const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;
+    const nonComp=sub&&_subHasEscalation(c,sub.questionResponses||[]);
     return`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
       <button onclick="S.filters.aclExp=S.filters.aclExp==='${key}'?null:'${key}';rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
@@ -2504,7 +2576,7 @@ function allClsPage(){
           <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''}${c.department?' · '+esc(c.department):''}${metaExtra||''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          ${sub?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">${ansN}/${(c.questionIds||[]).length} ans</span>`:''}
+          ${sub?`<span title="${nonComp?'Non-compliant — an answer triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${nonComp?'#FFF1F2':'#ECFDF5'};color:${nonComp?'#BE123C':'#059669'}">${nonComp?'⚠ ':''}${ansN}/${(c.questionIds||[]).length}${nonComp?' flagged':' ans'}</span>`:''}
           ${chip(st)}
           <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
         </div>
@@ -2541,6 +2613,7 @@ function allClsPage(){
         const done=ucls.filter(c=>subFor(c.id,uid2,d)).length;
         const uExp=S.filters.aclU===uid2;
         const allDone=done===ucls.length;
+        const flaggedN=ucls.filter(c=>{const s=subFor(c.id,uid2,d);return s&&_subHasEscalation(c,s.questionResponses||[]);}).length;
         return`<div style="background:#fff;border-radius:16px;border:1.5px solid ${uExp?'#C7D2FE':'#ECEDF0'};overflow:hidden">
           <button onclick="S.filters.aclU=S.filters.aclU==='${uid2}'?null:'${uid2}';S.filters.aclExp=null;rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
             <span style="color:#C8C5BD;transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
@@ -2549,6 +2622,7 @@ function allClsPage(){
               <div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div>
               <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}${(()=>{const mg=u.managerId?uById(u.managerId):null;return mg?' · under '+esc(fullName(mg)):'';})()}</div>
             </div>
+            ${flaggedN?`<span title="${flaggedN} non-compliant submission${flaggedN>1?'s':''}" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FFF1F2;color:#BE123C;margin-right:6px">⚠ ${flaggedN}</span>`:''}
             <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${allDone?'#E8FAF3':'#FEF7E6'};color:${allDone?'#0D7A4E':'#B36A00'}">${done}/${ucls.length} done</span>
           </button>
           ${uExp?`<div style="padding:0 14px 12px 38px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #F5F4F0;padding-top:10px">
@@ -3416,6 +3490,47 @@ App._editClQuestionEscalation=(qid)=>{
 };
 
 
+// ── Compliance check (Fix #3) ──
+// Returns true if any answer in `responses` matched an escalation-configured option
+// for checklist `c`. Mirrors the matching logic in _processEscalations, but read-only
+// (no tickets/notifications). A configured escalation target need NOT be set for the
+// answer to count as "non-compliant" — a triggering answer is non-compliant regardless.
+function _subHasEscalation(c,responses){
+  if(!c||!Array.isArray(responses))return false;
+  const configs=c.questionConfigs||{};
+  for(const resp of responses){
+    const q=(DB.questions||[]).find(x=>x.id===resp.questionId);if(!q)continue;
+    const qCfg=configs[resp.questionId]||{};
+    // A question only escalates if at least one option has a target configured.
+    const hasAnyTarget=Object.keys(qCfg).some(k=>k.startsWith('opt_')&&qCfg[k]);
+    if(!hasAnyTarget)continue;
+    let matchedIdx=-1;
+    if(q.type==='answer'){
+      const _r=String(resp.response||'').trim();
+      matchedIdx=(q.options||[]).findIndex(o=>String(o.text||'').trim()===_r);
+    } else if(q.type==='number'){
+      const val=parseFloat(resp.response);
+      for(let i=0;i<(q.options||[]).length;i++){
+        const cond=q.options[i];let m=false;
+        if(cond.condition==='lt')m=val<cond.value;
+        else if(cond.condition==='lte')m=val<=cond.value;
+        else if(cond.condition==='gt')m=val>cond.value;
+        else if(cond.condition==='gte')m=val>=cond.value;
+        else if(cond.condition==='eq')m=val===cond.value;
+        else if(cond.condition==='neq')m=val!==cond.value;
+        else if(cond.condition==='between')m=val>=cond.value&&val<=(cond.value2||cond.value);
+        if(m){matchedIdx=i;break;}
+      }
+    } else {
+      const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
+      const lbs=labels[q.type]||[];
+      matchedIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response||'').trim().toLowerCase());
+    }
+    if(matchedIdx>-1&&qCfg['opt_'+matchedIdx])return true;
+  }
+  return false;
+}
+
 // ── Escalation on submit ──
 function _processEscalations(checklistId,date,responses){
   const c=clById(checklistId);if(!c)return;
@@ -3450,7 +3565,7 @@ function _processEscalations(checklistId,date,responses){
       const optIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response||'').trim().toLowerCase());
       if(optIdx>-1)escalateTo=qCfg['opt_'+optIdx]||null;
     }
-    if(escalateTo&&escalateTo!==S.uid){
+    if(escalateTo){
       if(!DB.notifications)DB.notifications=[];
       if(!DB.tickets)DB.tickets=[];
       const escMsg='⚠️ Escalation: "'+q.text+'" answered "'+String(resp.response||'')+'" by '+fullName(u)+' on '+c.name+' ('+date+')';
@@ -4119,7 +4234,12 @@ function analyticsPage(){
       const cls=DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt)&&c.status!=='Draft');
       cls.forEach(c=>{
         totalAssigned++;
-        if(!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt)&&dt<today){
+        // For "any one" group checklists, a submission by ANY assignee completes it for
+        // everyone — so it's only "missed" if nobody submitted (Fix #2).
+        const _done=c.anyOne
+          ? DB.submissions.some(s=>s.checklistId===c.id&&s.date===dt&&s.status!=='Editing')
+          : !!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt);
+        if(!_done&&dt<today){
           totalMissed++;
         }
       });
