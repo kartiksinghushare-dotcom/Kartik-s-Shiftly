@@ -402,7 +402,7 @@ async function loadFromSB(){
         if(error){console.error('[TK] error:',error.message);return;}
         const allTk=_mapTk(data||[]);
         let visible;
-        if(_isAdmin){
+        if(_isAdmin||_isSubAdmin){
           visible=allTk;
         } else if(_isMgr){
           // Manager: only tickets assigned to them
@@ -2462,7 +2462,7 @@ function teamViewPage(){
               <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''} · ${esc(c.department)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${sub&&(sub.questionResponses||[]).length?(()=>{const _nc=_subHasEscalation(c,sub.questionResponses||[]);const _an=(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;return`<span title="${_nc?'Non-compliant — an answer triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${_nc?'#FFF1F2':'#ECFDF5'};color:${_nc?'#BE123C':'#059669'}">${_nc?'⚠ ':''}${_an}/${(c.questionIds||[]).length}${_nc?' flagged':' ans'}</span>`;})():''}
+              ${sub&&(sub.questionResponses||[]).length?(()=>{const _fc=_subEscalationCount(c,sub);const _an=(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;return`<span title="${_fc?_fc+' answer'+(_fc>1?'s':'')+' triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${_fc?'#FFF1F2':'#ECFDF5'};color:${_fc?'#BE123C':'#059669'}">${_fc?'⚠ '+_fc+' flagged':_an+'/'+(c.questionIds||[]).length+' ans'}</span>`;})():''}
               ${chip(st)}
               <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
             </div>
@@ -2568,7 +2568,7 @@ function allClsPage(){
     const st=sub?sub.status:(d<today?'Late':'Pending');
     const exp=S.filters.aclExp===key;
     const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;
-    const nonComp=sub&&_subHasEscalation(c,sub.questionResponses||[]);
+    const flaggedC=sub?_subEscalationCount(c,sub):0;
     return`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
       <button onclick="S.filters.aclExp=S.filters.aclExp==='${key}'?null:'${key}';rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
@@ -2576,7 +2576,7 @@ function allClsPage(){
           <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''}${c.department?' · '+esc(c.department):''}${metaExtra||''}</div>
         </div>
         <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          ${sub?`<span title="${nonComp?'Non-compliant — an answer triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${nonComp?'#FFF1F2':'#ECFDF5'};color:${nonComp?'#BE123C':'#059669'}">${nonComp?'⚠ ':''}${ansN}/${(c.questionIds||[]).length}${nonComp?' flagged':' ans'}</span>`:''}
+          ${sub?`<span title="${flaggedC?flaggedC+' answer'+(flaggedC>1?'s':'')+' triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${flaggedC?'#FFF1F2':'#ECFDF5'};color:${flaggedC?'#BE123C':'#059669'}">${flaggedC?'⚠ '+flaggedC+' flagged':ansN+'/'+(c.questionIds||[]).length+' ans'}</span>`:''}
           ${chip(st)}
           <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
         </div>
@@ -2613,7 +2613,7 @@ function allClsPage(){
         const done=ucls.filter(c=>subFor(c.id,uid2,d)).length;
         const uExp=S.filters.aclU===uid2;
         const allDone=done===ucls.length;
-        const flaggedN=ucls.filter(c=>{const s=subFor(c.id,uid2,d);return s&&_subHasEscalation(c,s.questionResponses||[]);}).length;
+        const flaggedN=ucls.filter(c=>{const s=subForCl(c,uid2,d);return s&&_subEscalationCount(c,s)>0;}).length;
         return`<div style="background:#fff;border-radius:16px;border:1.5px solid ${uExp?'#C7D2FE':'#ECEDF0'};overflow:hidden">
           <button onclick="S.filters.aclU=S.filters.aclU==='${uid2}'?null:'${uid2}';S.filters.aclExp=null;rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
             <span style="color:#C8C5BD;transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
@@ -3490,44 +3490,29 @@ App._editClQuestionEscalation=(qid)=>{
 };
 
 
-// ── Compliance check (Fix #3) ──
-// Returns true if any answer in `responses` matched an escalation-configured option
-// for checklist `c`. Mirrors the matching logic in _processEscalations, but read-only
-// (no tickets/notifications). A configured escalation target need NOT be set for the
-// answer to count as "non-compliant" — a triggering answer is non-compliant regardless.
-function _subHasEscalation(c,responses){
-  if(!c||!Array.isArray(responses))return false;
-  const configs=c.questionConfigs||{};
-  for(const resp of responses){
-    const q=(DB.questions||[]).find(x=>x.id===resp.questionId);if(!q)continue;
-    const qCfg=configs[resp.questionId]||{};
-    // A question only escalates if at least one option has a target configured.
-    const hasAnyTarget=Object.keys(qCfg).some(k=>k.startsWith('opt_')&&qCfg[k]);
-    if(!hasAnyTarget)continue;
-    let matchedIdx=-1;
-    if(q.type==='answer'){
-      const _r=String(resp.response||'').trim();
-      matchedIdx=(q.options||[]).findIndex(o=>String(o.text||'').trim()===_r);
-    } else if(q.type==='number'){
-      const val=parseFloat(resp.response);
-      for(let i=0;i<(q.options||[]).length;i++){
-        const cond=q.options[i];let m=false;
-        if(cond.condition==='lt')m=val<cond.value;
-        else if(cond.condition==='lte')m=val<=cond.value;
-        else if(cond.condition==='gt')m=val>cond.value;
-        else if(cond.condition==='gte')m=val>=cond.value;
-        else if(cond.condition==='eq')m=val===cond.value;
-        else if(cond.condition==='neq')m=val!==cond.value;
-        else if(cond.condition==='between')m=val>=cond.value&&val<=(cond.value2||cond.value);
-        if(m){matchedIdx=i;break;}
-      }
-    } else {
-      const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
-      const lbs=labels[q.type]||[];
-      matchedIdx=lbs.findIndex(l=>l.toLowerCase()===String(resp.response||'').trim().toLowerCase());
-    }
-    if(matchedIdx>-1&&qCfg['opt_'+matchedIdx])return true;
-  }
+// ── Compliance check (Fix #3, revised) ──
+// Counts how many REAL escalation tickets exist for a given submission — i.e. answers
+// that actually triggered an escalation (a ticket was created), not merely answers that
+// landed on an option which has a target configured. Matching is by checklist + date +
+// the submission's own submitter, and de-duplicated by question so a question that
+// escalated counts once. Returns an integer (0 = compliant).
+function _subEscalationCount(c,sub){
+  if(!c||!sub)return 0;
+  const submitterId=sub.userId; // for "any one" group checklists this is whoever submitted
+  const tickets=(DB.tickets||[]).filter(t=>
+    t.checklistId===c.id&&
+    t.date===sub.date&&
+    t.submitterId===submitterId
+  );
+  if(!tickets.length)return 0;
+  // De-dupe by question (repeat escalations on the same question shouldn't inflate the count)
+  const qids=new Set(tickets.map(t=>t.questionId||t.id));
+  return qids.size;
+}
+// Back-compat boolean wrapper (kept in case anything references the old name)
+function _subHasEscalation(c,subOrResponses){
+  // Accept either a submission object or a raw responses array (legacy callers)
+  if(subOrResponses&&!Array.isArray(subOrResponses))return _subEscalationCount(c,subOrResponses)>0;
   return false;
 }
 
