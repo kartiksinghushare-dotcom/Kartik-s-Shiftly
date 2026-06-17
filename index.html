@@ -3562,9 +3562,50 @@ App._editClQuestionEscalation=(qid)=>{
 // given submission — matched by checklist + date + the submission's own submitter (so
 // "any one" group submissions match whoever submitted). This is the single source of
 // truth for both the card badge (count) and the per-question red highlight.
+// Does a single stored answer (resp) trip an escalation for question q on checklist c?
+// Pure re-evaluation of the saved response against the checklist's escalation config —
+// this is what makes OLD submissions show compliance even when no ticket was ever created.
+function _qrEscalates(c,q,resp){
+  if(!c||!q||!resp)return false;
+  const r=resp.response;
+  if(r===null||r===undefined||r==='')return false; // unanswered ≠ escalation
+  const qCfg=(c.questionConfigs||{})[q.id]||{};
+  if(q.type==='answer'){
+    const _respStr=String(r).trim();
+    const optIdx=(q.options||[]).findIndex(o=>String(o.text||'').trim()===_respStr);
+    return optIdx>-1&&!!qCfg['opt_'+optIdx];
+  }
+  if(q.type==='number'){
+    const val=parseFloat(r);
+    for(let i=0;i<(q.options||[]).length;i++){
+      const cond=q.options[i];let m=false;
+      if(cond.condition==='lt')m=val<cond.value;
+      else if(cond.condition==='lte')m=val<=cond.value;
+      else if(cond.condition==='gt')m=val>cond.value;
+      else if(cond.condition==='gte')m=val>=cond.value;
+      else if(cond.condition==='eq')m=val===cond.value;
+      else if(cond.condition==='neq')m=val!==cond.value;
+      else if(cond.condition==='between')m=val>=cond.value&&val<=(cond.value2||cond.value);
+      if(m)return !!qCfg['opt_'+i];
+    }
+    return false;
+  }
+  // passfail / yesno / tick — match by label index
+  const labels={passfail:['Pass','Fail'],yesno:['Yes','No'],tick:['Done','Not done']};
+  const lbs=labels[q.type]||[];
+  const optIdx=lbs.findIndex(l=>l.toLowerCase()===String(r).trim().toLowerCase());
+  return optIdx>-1&&!!qCfg['opt_'+optIdx];
+}
 function _subEscalatedQids(c,sub){
   const out=new Set();
   if(!c||!sub)return out;
+  // 1) Re-evaluate the actual saved answers against the escalation config (works on old data)
+  const qById={};(c.questionIds||[]).forEach(qid=>{const q=(DB.questions||[]).find(x=>x.id===qid);if(q)qById[qid]=q;});
+  (sub.questionResponses||[]).forEach(resp=>{
+    const q=qById[resp.questionId];
+    if(q&&_qrEscalates(c,q,resp))out.add(resp.questionId);
+  });
+  // 2) Union with any real escalation tickets recorded for this submission (belt and suspenders)
   const submitterId=sub.userId; // for "any one" group checklists this is whoever submitted
   (DB.tickets||[]).forEach(t=>{
     if(t.checklistId===c.id&&t.date===sub.date&&t.submitterId===submitterId&&t.questionId){
