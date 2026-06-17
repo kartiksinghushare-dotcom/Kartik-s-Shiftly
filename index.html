@@ -467,8 +467,11 @@ function saveDB(){
     // Strip base64 photos from submissions to avoid 5MB localStorage limit
     (dbCopy.DB.submissions||[]).forEach(s=>{
       (s.tasks||[]).forEach(t=>{if(t.photo&&t.photo.startsWith('data:'))t.photo='[photo]';});
-      // Also strip question response photos
-      (s.questionResponses||[]).forEach(r=>{if(r.photo&&r.photo.startsWith('data:'))r.photo='[photo]';});
+      // Also strip question response photos (single legacy + multi photos[])
+      (s.questionResponses||[]).forEach(r=>{
+        if(r.photo&&r.photo.startsWith('data:'))r.photo='[photo]';
+        if(Array.isArray(r.photos))r.photos=r.photos.map(p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p);
+      });
     });
     localStorage.setItem(LS_KEY,JSON.stringify(dbCopy));
   }catch(e){
@@ -2041,6 +2044,20 @@ function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   }
   return '';
 }
+// ── Multi-photo helpers ──
+// A question response may carry photos in r.photos[] (new) and/or r.photo (legacy single).
+// This returns a de-duped list of *displayable* photos (drops '[photo]' placeholders).
+function _qrPhotoList(qr){
+  if(!qr)return[];
+  const raw=[];
+  if(Array.isArray(qr.photos))raw.push(...qr.photos);
+  if(qr.photo)raw.push(qr.photo);
+  const seen=new Set();const out=[];
+  for(const p of raw){if(!p||p==='[photo]'||typeof p!=='string')continue;if(seen.has(p))continue;seen.add(p);out.push(p);}
+  return out;
+}
+// True if the response has at least one real photo attached.
+function _qrHasPhoto(qr){return _qrPhotoList(qr).length>0;}
 function _clCard(c,date){
   const sub=subForCl(c,S.uid,date);
   const today=todayISO();
@@ -2074,8 +2091,11 @@ function _clCard(c,date){
             const total=(c.questionIds||[]).length;if(!total)return'';
             const answered=(run?.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;
             const allAnswered=!isSubmitted&&answered>=total;
-            if(isSubmitted){return`<span style="font-size:11px;font-weight:600;color:#0E9F6E;flex-shrink:0">${total} question${total>1?'s':''}</span>`;}
-            return`<span style="font-size:11px;font-weight:600;color:${allAnswered?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${answered}/${total} answered</span>`;
+            if(isSubmitted){
+              // After submit: show attempt + compliance badges (read-only, locked)
+              return _subBadges(c,sub,{small:true});
+            }
+            return`<span style="font-size:11px;font-weight:600;color:${allAnswered?'#0E9F6E':'#9CA3AF'};flex-shrink:0">${answered}/${total} attempted</span>`;
           })()}
         </div>
       </div>
@@ -2110,19 +2130,22 @@ function _clCard(c,date){
             inputHtml=`<div style="display:flex;gap:8px"><button onclick="App._setQR('${c.id}','${q.id}','Done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Done'?'#16A34A':'#E5E7EB'};background:${resp==='Done'?'#DCFCE7':'#fff'};color:${resp==='Done'?'#16A34A':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✓</button><button onclick="App._setQR('${c.id}','${q.id}','Not done')" style="flex:1;min-height:44px;padding:6px 20px;border-radius:9px;border:1.5px solid ${resp==='Not done'?'#DC2626':'#E5E7EB'};background:${resp==='Not done'?'#FEE2E2':'#fff'};color:${resp==='Not done'?'#DC2626':'#374151'};font-weight:800;font-size:15px;cursor:pointer">✕</button></div>`;
           }
           const flags=[];if(q.photo)flags.push('📷 Required');if(q.approval)flags.push('✓ Approval');if(q.comment)flags.push('💬 Required');
-          // Photo upload — always shown; q.photo flag only makes it mandatory at submit
+          // Photo upload — always shown; q.photo flag only makes it mandatory at submit.
+          // Supports MULTIPLE photos via r.photos[]; falls back to legacy r.photo for old data.
           if(!locked){
-            const existingPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
+            const _qrPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
+            const photos=_qrPhotoList(_qrPhoto);
             inputHtml+='<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-              +(existingPhoto&&existingPhoto!=='[photo]'?'<div style="position:relative;display:inline-block"><img src="'+existingPhoto+'" onclick="App._bigImg(\''+existingPhoto+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>':'')
-              +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(existingPhoto&&existingPhoto!=='[photo]'?'#F0FDF4':'#F3F4F6')+';color:'+(existingPhoto&&existingPhoto!=='[photo]'?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(existingPhoto&&existingPhoto!=='[photo]'?'#BBF7D0':'#E5E7EB')+'">'
-              +ic('cam','w-3.5 h-3.5')+(existingPhoto&&existingPhoto!=='[photo]'?'Change':'Add photo')+(q.photo?' <span style="color:#EF4444">*</span>':'')
-              +'<input type="file" accept="image/*" capture="environment" style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
+              +photos.map((ph,pi)=>'<div style="position:relative;display:inline-block"><img src="'+ph+'" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\','+pi+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>').join('')
+              +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(photos.length?'#F0FDF4':'#F3F4F6')+';color:'+(photos.length?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(photos.length?'#BBF7D0':'#E5E7EB')+'">'
+              +ic('cam','w-3.5 h-3.5')+(photos.length?'Add more':'Add photo')+(q.photo&&!photos.length?' <span style="color:#EF4444">*</span>':'')
+              +'<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
               +'</label>'
               +'</div>';
           } else {
-            const existingPhoto2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)?.photo||null;
-            if(existingPhoto2&&existingPhoto2!=='[photo]')inputHtml+='<div style="margin-top:6px"><img src="'+existingPhoto2+'" onclick="App._bigImg(\''+existingPhoto2+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/></div>';
+            const _qr2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)||{};
+            const photos2=_qrPhotoList(_qr2);
+            if(photos2.length)inputHtml+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+photos2.map(ph=>'<img src="'+ph+'" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>';
           }
           return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
@@ -2168,34 +2191,51 @@ App._setQR=(clId,qId,val,skipRr)=>{
     const _discrete=_q&&_q.type!=='number';
     const _changed=String(existing.response??'')!==String(val??'');
     existing.response=val;
-    if(_discrete&&_changed){existing.photo=null;existing.comment='';}
+    if(_discrete&&_changed){existing.photo=null;existing.photos=[];existing.comment='';}
   }
   else{RUN[clId].questionResponses.push({questionId:qId,response:val,comment:''});}
   if(!skipRr)rr();
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
 };
-App._clearQRPhoto=(clId,qId)=>{
+App._clearQRPhoto=(clId,qId,idx)=>{
   if(!RUN[clId])return;
   if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
   const existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
-  if(existing){existing.photo=null;}
+  if(existing){
+    // Normalise into photos[] then drop the one at idx
+    const list=_qrPhotoList(existing);
+    if(typeof idx==='number'&&idx>=0&&idx<list.length)list.splice(idx,1);
+    else list.length=0; // no index → clear all (back-compat)
+    existing.photos=list;
+    existing.photo=null;
+  }
   clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
   rr();
 };
 App._setQRPhoto=(clId,qId,input)=>{
-  const file=input?.files?.[0];if(!file)return;
-  const reader=new FileReader();
-  reader.onload=e=>{
-    const dataUrl=e.target.result;
-    if(!RUN[clId])return;
-    if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
-    const existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
-    if(existing){existing.photo=dataUrl;}
-    else{RUN[clId].questionResponses.push({questionId:qId,response:null,comment:'',photo:dataUrl});}
-    clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
-    rr();
-  };
-  reader.readAsDataURL(file);
+  const files=[...(input?.files||[])];if(!files.length)return;
+  if(!RUN[clId])return;
+  if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
+  let existing=RUN[clId].questionResponses.find(r=>r.questionId===qId);
+  if(!existing){existing={questionId:qId,response:null,comment:'',photos:[]};RUN[clId].questionResponses.push(existing);}
+  // Fold any legacy single photo into the array before appending
+  if(!Array.isArray(existing.photos))existing.photos=[];
+  if(existing.photo&&existing.photo!=='[photo]'){existing.photos.push(existing.photo);existing.photo=null;}
+  let pending=files.length;
+  files.forEach(file=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      existing.photos.push(e.target.result);
+      if(--pending===0){
+        clearTimeout(App._saveT);App._saveT=setTimeout(()=>saveDB(),2000);
+        rr();
+      }
+    };
+    reader.onerror=()=>{if(--pending===0)rr();};
+    reader.readAsDataURL(file);
+  });
+  // Allow re-selecting the same file again later
+  if(input)input.value='';
 };
 
 App._setQRComment=(clId,qId,val)=>{
@@ -2228,18 +2268,29 @@ function _dataUrlToBlob(dataUrl){
 async function _uploadSubmissionPhotos(clId,userId,date,responses){
   const out=(responses||[]).map(r=>({...r}));
   for(const r of out){
-    const p=r.photo;
-    if(!p||typeof p!=='string'||!p.startsWith('data:'))continue; // nothing to upload
-    try{
-      const blob=_dataUrlToBlob(p);
-      if(!blob){r.photo='[photo]';continue;}
-      const ext=(blob.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/gi,'')||'jpg';
-      const path='submissions/'+clId+'/'+userId+'/'+date+'/'+r.questionId+'_'+Date.now()+'.'+ext;
-      const {error}=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
-      if(error){console.warn('[photo upload]',error.message);r.photo='[photo]';continue;}
-      const {data:urlData}=sb.storage.from('documents').getPublicUrl(path);
-      r.photo=urlData?.publicUrl||'[photo]';
-    }catch(e){console.warn('[photo upload failed]',e.message);r.photo='[photo]';}
+    // Build the working list (photos[] + any legacy single photo)
+    let list=[];
+    if(Array.isArray(r.photos))list.push(...r.photos);
+    if(r.photo)list.push(r.photo);
+    if(!list.length)continue;
+    const uploaded=[];
+    for(let i=0;i<list.length;i++){
+      const p=list[i];
+      if(!p||typeof p!=='string'){continue;}
+      if(!p.startsWith('data:')){uploaded.push(p);continue;} // already a URL/placeholder
+      try{
+        const blob=_dataUrlToBlob(p);
+        if(!blob){uploaded.push('[photo]');continue;}
+        const ext=(blob.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/gi,'')||'jpg';
+        const path='submissions/'+clId+'/'+userId+'/'+date+'/'+r.questionId+'_'+Date.now()+'_'+i+'.'+ext;
+        const {error}=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
+        if(error){console.warn('[photo upload]',error.message);uploaded.push('[photo]');continue;}
+        const {data:urlData}=sb.storage.from('documents').getPublicUrl(path);
+        uploaded.push(urlData?.publicUrl||'[photo]');
+      }catch(e){console.warn('[photo upload failed]',e.message);uploaded.push('[photo]');}
+    }
+    r.photos=uploaded;
+    r.photo=null; // consolidated into photos[]
   }
   return out;
 }
@@ -2253,7 +2304,7 @@ App._submitRun=async(clId,date)=>{
     const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};
     // Must have a response first (or be non-mandatory type where null is acceptable)
     const _hasResp=_qr.response!==null&&_qr.response!==undefined&&_qr.response!=='';
-    if(_hasResp&&_q.photo&&(!_qr.photo||_qr.photo==='[photo]')){
+    if(_hasResp&&_q.photo&&!_qrHasPhoto(_qr)){
       toast('📷 Photo required for: "'+_q.text.slice(0,40)+'"','err');return;
     }
     if(_hasResp&&_q.comment&&(!_qr.comment||!_qr.comment.trim())){
@@ -2289,9 +2340,16 @@ App._submitRun=async(clId,date)=>{
   // to Storage in the background after the instant render (Fix #5).
   const _origQR=JSON.parse(JSON.stringify(run.questionResponses||[]));
   const _subId=run.id;
-  const _hasInlinePhoto=_origQR.some(r=>typeof r.photo==='string'&&r.photo.startsWith('data:'));
-  // Strip base64 photos before sending to Supabase (store URL reference instead)
-  const srQR=(run.questionResponses||[]).map(r=>({...r,photo:r.photo&&r.photo.startsWith('data:')?'[photo]':r.photo||null}));
+  const _inlineP=r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('data:')))||(typeof r.photo==='string'&&r.photo.startsWith('data:'));
+  const _hasInlinePhoto=_origQR.some(_inlineP);
+  // Strip base64 photos before sending to Supabase (store placeholder; URLs persisted in bg)
+  const _stripP=p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p;
+  const srQR=(run.questionResponses||[]).map(r=>{
+    const o={...r};
+    if(Array.isArray(o.photos))o.photos=o.photos.map(_stripP);
+    if(o.photo)o.photo=_stripP(o.photo);
+    return o;
+  });
   const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:srQR,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
   // 1. Save immediately (saveDB strips photos before writing)
   saveDB();
@@ -2304,7 +2362,7 @@ App._submitRun=async(clId,date)=>{
     // durable URLs (Fix #5). Entirely optional — submission already succeeded above.
     if(_hasInlinePhoto){
       _uploadSubmissionPhotos(clId,S.uid,date,_origQR).then(uploadedQR=>{
-        const anyUrl=uploadedQR.some(r=>typeof r.photo==='string'&&r.photo.startsWith('http'));
+        const anyUrl=uploadedQR.some(r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('http')))||(typeof r.photo==='string'&&r.photo.startsWith('http')));
         if(!anyUrl)return; // nothing persisted (all failed) — leave placeholders, no-op
         // Patch the in-memory record so managers see the real photo without a reload
         const rec=DB.submissions.find(s=>s.id===_subId);
@@ -2462,7 +2520,7 @@ function teamViewPage(){
               <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''} · ${esc(c.department)}</div>
             </div>
             <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-              ${sub&&(sub.questionResponses||[]).length?(()=>{const _fc=_subEscalationCount(c,sub);const _an=(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;return`<span title="${_fc?_fc+' answer'+(_fc>1?'s':'')+' triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${_fc?'#FFF1F2':'#ECFDF5'};color:${_fc?'#BE123C':'#059669'}">${_fc?'⚠ '+_fc+' flagged':_an+'/'+(c.questionIds||[]).length+' ans'}</span>`;})():''}
+              ${sub&&(sub.questionResponses||[]).length?(()=>{const total=(c.questionIds||[]).length;return total?_subBadges(c,sub):'';})():''}
               ${chip(st)}
               <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
             </div>
@@ -2487,7 +2545,7 @@ function teamViewPage(){
                     <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
                     ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
                     ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
-                    ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
+                    ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
                   </div>
                 </div>`;
               }).join('');
@@ -2519,7 +2577,7 @@ function _roResponses(c,sub,date){
         <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
         ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
         ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
-        ${qr.photo&&qr.photo!=='[photo]'?`<div style="margin-top:6px"><img src="${qr.photo}" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/></div>`:''}
+        ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
       </div>
     </div>`;
   }).join('');
@@ -2576,15 +2634,14 @@ function allClsPage(){
     const st=sub?sub.status:(d<today?'Late':'Pending');
     const exp=S.filters.aclExp===key;
     const ansN=sub?(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length:0;
-    const flaggedC=sub?_subEscalationCount(c,sub):0;
     return`<div style="background:#fff;border-radius:14px;border:1px solid #ECEDF0;border-left:4px solid ${BC[st]||'#D1D5DB'};overflow:hidden">
       <button onclick="S.filters.aclExp=S.filters.aclExp==='${key}'?null:'${key}';rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
         <div style="flex:1;min-width:0">
           <div style="font-size:14px;font-weight:700">${esc(c.name)}${c.anyOne?' <span title="Any one assignee can complete" style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;background:#EEF2FF;color:#4338CA">\ud83d\udc65 Any one</span>':''}</div>
           <div style="font-size:12px;color:#9CA3AF;margin-top:2px">${(c.questionIds||[]).length} question${(c.questionIds||[]).length!==1?'s':''}${c.department?' · '+esc(c.department):''}${metaExtra||''}</div>
         </div>
-        <div style="display:flex;align-items:center;gap:6px;flex-shrink:0">
-          ${sub?`<span title="${flaggedC?flaggedC+' answer'+(flaggedC>1?'s':'')+' triggered an escalation':'Answered'}" style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:${flaggedC?'#FFF1F2':'#ECFDF5'};color:${flaggedC?'#BE123C':'#059669'}">${flaggedC?'⚠ '+flaggedC+' flagged':ansN+'/'+(c.questionIds||[]).length+' ans'}</span>`:''}
+        <div style="display:flex;align-items:center;gap:5px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end">
+          ${sub&&(c.questionIds||[]).length?_subBadges(c,sub,{small:true}):''}
           ${chip(st)}
           <span style="color:#D1D5DB;transform:rotate(${exp?'90':'0'}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
         </div>
@@ -2834,13 +2891,15 @@ App.viewSub=(subId)=>{
       +'</div>'
       +(hasResp?'<div style="font-size:13px;font-weight:700;color:#0E9F6E">'+esc(String(resp))+'</div>':'<div style="font-size:12px;color:#D1D5DB;font-style:italic">Not answered</div>')
       +(qr.comment?'<div style="font-size:12px;color:#6B7280;margin-top:4px;font-style:italic">"'+esc(qr.comment)+'"</div>':'')
-      +(qr.photo?'<div style="margin-top:6px"><img src="'+qr.photo+'" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB"/></div>':'')
+      +(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>':'';})()
       +'</div>';
   }).join('');
   openModal('<div class="p-5">'
     +'<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">'
     +'<div><h2 class="fd" style="font-size:18px;font-weight:800">'+clName+'</h2>'
-    +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">'+(u?esc(fullName(u)):'Unknown user')+' · '+fmtD(s.date)+' · '+chip(s.status)+'</div></div>'
+    +'<div style="font-size:12px;color:#9CA3AF;margin-top:2px">'+(u?esc(fullName(u)):'Unknown user')+' · '+fmtD(s.date)+' · '+chip(s.status)+'</div>'
+    +(c&&(c.questionIds||[]).length?'<div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap">'+_subBadges(c,s)+'</div>':'')
+    +'</div>'
     +'<button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF">'+ic('x')+'</button>'
     +'</div>'
     +'<div style="display:flex;flex-direction:column;gap:8px">'
@@ -3516,6 +3575,33 @@ function _subEscalatedQids(c,sub){
 }
 // Count of distinct questions that escalated (0 = compliant).
 function _subEscalationCount(c,sub){return _subEscalatedQids(c,sub).size;}
+// ── Separate badges: Attempt (answered/total) + Compliance (escalations) ──
+// Returns an HTML string with up to two pills. `opts.small` shrinks them for dense rows.
+function _subBadges(c,sub,opts){
+  if(!sub)return'';
+  const total=(c.questionIds||[]).length;
+  const answered=(sub.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;
+  const flagged=_subEscalationCount(c,sub);
+  const small=opts&&opts.small;
+  const pad=small?'2px 7px':'3px 9px';
+  const fs=small?'10px':'11px';
+  const allAns=total>0&&answered>=total;
+  // Attempt badge — green when all questions attempted, grey otherwise
+  const attBg=allAns?'#ECFDF5':'#F6F7F8';
+  const attClr=allAns?'#059669':'#6B7280';
+  const attLabel=small?answered+'/'+total:answered+'/'+total+' attempted';
+  const attempt=total>0
+    ? '<span title="'+answered+' of '+total+' question'+(total>1?'s':'')+' attempted" style="font-size:'+fs+';font-weight:700;padding:'+pad+';border-radius:20px;background:'+attBg+';color:'+attClr+'">'+(allAns?'✓ ':'')+attLabel+'</span>'
+    : '';
+  // Compliance badge — green "Compliant" when no escalations, red "N escalated" when flagged
+  const compBg=flagged?'#FFF1F2':'#ECFDF5';
+  const compClr=flagged?'#BE123C':'#059669';
+  const compLabel=flagged
+    ? (small?'⚠ '+flagged:'⚠ '+flagged+' escalated')
+    : (small?'✓':'✓ Compliant');
+  const compliance='<span title="'+(flagged?flagged+' answer'+(flagged>1?'s':'')+' triggered an escalation':'No escalations — compliant')+'" style="font-size:'+fs+';font-weight:700;padding:'+pad+';border-radius:20px;background:'+compBg+';color:'+compClr+'">'+compLabel+'</span>';
+  return attempt+compliance;
+}
 // Back-compat boolean wrapper (kept in case anything references the old name)
 function _subHasEscalation(c,subOrResponses){
   if(subOrResponses&&!Array.isArray(subOrResponses))return _subEscalationCount(c,subOrResponses)>0;
@@ -3982,8 +4068,9 @@ function ticketsPage(){
             const sub=(DB.submissions||[]).find(s=>s.checklistId===t.checklistId&&s.userId===t.submitterId&&s.date===t.date);
             if(!sub)return'';
             const qr=(sub.questionResponses||[]).find(r=>r.questionId===t.questionId);
-            if(!qr||!qr.photo||qr.photo==='[photo]')return'';
-            return'<div style="margin-top:8px"><img src="'+qr.photo+'" onclick="App._bigImg(this.src)" style="max-width:160px;max-height:110px;border-radius:10px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Response photo"/></div>';
+            const pl=_qrPhotoList(qr);
+            if(!pl.length)return'';
+            return'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:160px;max-height:110px;border-radius:10px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Response photo"/>').join('')+'</div>';
           })()+
         '</div>'+
         (canDelete?'<button onclick="App._delTicket(\''+t.id+'\')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:#FEF2F2;cursor:pointer;color:#DC2626;flex-shrink:0">'+ic('x','w-3.5 h-3.5')+'</button>':'')+
@@ -4154,16 +4241,30 @@ App._aStatDrill=(type)=>{
     let d=new Date(dr1+'T00:00:00');const dEnd=new Date(dr2+'T00:00:00');
     while(d<=dEnd&&dateRange.length<60){dateRange.push(d.toISOString().slice(0,10));d.setDate(d.getDate()+1);}
     const missed=[];
+    const _seenGrp=new Set(); // anyOne checklists are collective → list once per date
     relevantUsers.forEach(u=>{
       dateRange.forEach(dt=>{
         if(dt>=today)return;
         DB.checklists.filter(c=>(c.assignees||[]).includes(u.id)&&clOn(c,dt)&&c.status!=='Draft').forEach(c=>{
-          if(!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt))missed.push({u,c,dt});
+          // For "any one" group checklists, a completion by ANY assignee counts for everyone —
+          // so it's only "missed" if nobody in the group submitted. Otherwise check own submission.
+          const done=c.anyOne
+            ? DB.submissions.some(s=>s.checklistId===c.id&&s.date===dt&&s.status!=='Editing')
+            : !!DB.submissions.find(s=>s.checklistId===c.id&&s.userId===u.id&&s.date===dt);
+          if(done)return;
+          if(c.anyOne){
+            const k=c.id+'|'+dt;
+            if(_seenGrp.has(k))return; // already listed this group checklist for this date
+            _seenGrp.add(k);
+            missed.push({u:null,c,dt}); // group → no single owner
+          } else {
+            missed.push({u,c,dt});
+          }
         });
       });
     });
     title='Missed ('+missed.length+')';
-    rows=missed.slice(0,100).map(({u,c,dt})=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(c.name)+'</div><div style="font-size:11px;color:#9CA3AF">'+esc(fullName(u))+' · '+fmtS(dt)+'</div></div><span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 8px;border-radius:20px">Missed</span></div>').join('');
+    rows=missed.slice(0,100).map(({u,c,dt})=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(c.name)+(c.anyOne?' <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:#EEF2FF;color:#4338CA">👥 Group</span>':'')+'</div><div style="font-size:11px;color:#9CA3AF">'+(u?esc(fullName(u)):'No one in group completed')+' · '+fmtS(dt)+'</div></div><span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 8px;border-radius:20px">Missed</span></div>').join('');
     emptyMsg='No missed checklists in this period.';
   } else {
     const tkMap={tickets:aTickets,tkopen:aTickets.filter(t=>t.status==='Open'),tkhigh:aTickets.filter(t=>t.priority==='High'||t.priority==='Critical'),tkresolved:aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed')};
