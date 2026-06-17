@@ -4245,6 +4245,8 @@ App._aStatDrill=(type)=>{
   if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
   if(fArr('users').length)subs=subs.filter(s=>fArr('users').includes(s.userId));
   if(fArr('deps').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return c&&fArr('deps').includes(c.department);});
+  if(fArr('locs').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return c&&fArr('locs').some(l=>(c.locationIds||[]).includes(l));});
+  if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);
   if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
   let aTickets=(DB.tickets||[]).slice();
@@ -4307,6 +4309,20 @@ App._aStatDrill=(type)=>{
     title='Missed ('+missed.length+')';
     rows=missed.slice(0,100).map(({u,c,dt})=>'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6"><div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600">'+esc(c.name)+(c.anyOne?' <span style="font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:#EEF2FF;color:#4338CA">👥 Group</span>':'')+'</div><div style="font-size:11px;color:#9CA3AF">'+(u?esc(fullName(u)):'No one in group completed')+' · '+fmtS(dt)+'</div></div><span style="font-size:11px;font-weight:700;color:#F97316;background:#FFF7ED;padding:2px 8px;border-radius:20px">Missed</span></div>').join('');
     emptyMsg='No missed checklists in this period.';
+  } else if(type==='compliant'||type==='noncompliant'){
+    const want=type==='noncompliant';
+    const list=subs.map(s=>{const c=clById(s.checklistId);if(!c||!(c.questionIds||[]).length)return null;const n=_subEscalationCount(c,s);return{s,c,n};})
+      .filter(x=>x&&((x.n>0)===want))
+      .sort((a,b)=>want?(b.n-a.n)||((b.s.submittedAt||'').localeCompare(a.s.submittedAt||'')):(b.s.submittedAt||'').localeCompare(a.s.submittedAt||''));
+    title=(want?'Non-compliant':'Compliant')+' ('+list.length+')';
+    rows=list.map(({s,c,n})=>{const u=uById(s.userId);return'<div style="display:flex;align-items:center;gap:10px;padding:10px 16px;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App.viewSub(\''+s.id+'\')" onmouseover="this.style.background=\'#FAFAFA\'" onmouseout="this.style.background=\'\'">'
+      +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c.name)+'</div>'
+      +'<div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+(u?esc(fullName(u)):'?')+' · '+fmtS(s.date)+'</div></div>'
+      +(want
+        ? '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FFF1F2;color:#BE123C">⚠ '+n+' escalated</span>'
+        : '<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669">✓ Compliant</span>')
+      +'</div>';}).join('');
+    emptyMsg=want?'No non-compliant submissions in this period — all clear.':'No compliant submissions in this period.';
   } else {
     const tkMap={tickets:aTickets,tkopen:aTickets.filter(t=>t.status==='Open'),tkhigh:aTickets.filter(t=>t.priority==='High'||t.priority==='Critical'),tkresolved:aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed')};
     const tkLabels={tickets:'All Tickets',tkopen:'Open Tickets',tkhigh:'High Priority Tickets',tkresolved:'Resolved Tickets'};
@@ -4352,6 +4368,9 @@ function analyticsPage(){
   const tot=Math.max(subs.length,1);
   const byS={'On Time':0,'Late':0,'Pending Approval':0,'Rejected':0,'Pending (not submitted)':0};
   subs.forEach(s=>{if(byS[s.status]!==undefined)byS[s.status]++;else byS['Pending (not submitted)']++;});
+  // ── Compliance over the filtered submissions (computed from answers → covers old data) ──
+  let compliantN=0,nonCompliantN=0,totalEscalations=0;
+  subs.forEach(s=>{const c=clById(s.checklistId);if(!c||!(c.questionIds||[]).length)return;const n=_subEscalationCount(c,s);if(n>0){nonCompliantN++;totalEscalations+=n;}else{compliantN++;}});
 
   // Count missed (assigned but no submission for past dates)
   const relevantUsers=isAdmin()?DB.users:[me(),...subTree(S.uid)].filter(Boolean);
@@ -4436,11 +4455,16 @@ function analyticsPage(){
     ${App._aStatCard('Missed',totalMissed,'orange','missed',null)}
   </div>
   <!-- Stats row 2: tickets (all clickable) -->
-  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:14px">
+  <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin-bottom:8px">
     ${App._aStatCard('Tickets',aTickets.length,'#F97316','tickets',aTickets)}
     ${App._aStatCard('Open',tkOpen,'#F59E0B','tkopen',aTickets.filter(t=>t.status==='Open'))}
     ${App._aStatCard('High Priority',tkHigh,'#DC2626','tkhigh',aTickets.filter(t=>t.priority==='High'||t.priority==='Critical'))}
     ${App._aStatCard('Resolved',tkResolved,'#0E9F6E','tkresolved',aTickets.filter(t=>t.status==='Resolved'||t.status==='Closed'))}
+  </div>
+  <!-- Stats row 3: compliance (computed from answers — covers historical data) -->
+  <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:14px">
+    ${App._aStatCard('Compliant',compliantN,'#0E9F6E','compliant',null)}
+    ${App._aStatCard('Non-compliant',nonCompliantN,'#BE123C','noncompliant',null)}
   </div>
 
 
@@ -4470,15 +4494,16 @@ function analyticsPage(){
     </div>
     <div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:13px">
       <thead><tr style="border-bottom:1px solid #F3F4F6">
-        ${['User','Checklist','Dept','Date','Status','Answered'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
+        ${['User','Checklist','Dept','Date','Status','Answered','Compliance'].map(h=>`<th style="padding:9px 16px;font-size:10px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;text-align:left;white-space:nowrap">${h}</th>`).join('')}
       </tr></thead>
-      <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const qCount=(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;if(!c)return`<tr style="border-bottom:1px solid #F9FAFB;opacity:.5"><td style="padding:9px 16px" colspan="6"><span style="font-size:12px;color:#9CA3AF">${esc(fullName(u))} — deleted checklist — ${fmtS(s.date)}</span></td></tr>`;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
+      <tbody>${recent.map(s=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return'';const qCount=(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length;if(!c)return`<tr style="border-bottom:1px solid #F9FAFB;opacity:.5"><td style="padding:9px 16px" colspan="7"><span style="font-size:12px;color:#9CA3AF">${esc(fullName(u))} — deleted checklist — ${fmtS(s.date)}</span></td></tr>`;const _qTot=(c.questionIds||[]).length;const _esc=_qTot?_subEscalationCount(c,s):0;return`<tr style="border-bottom:1px solid #F9FAFB;cursor:pointer" onclick="App.viewSub('${s.id}')" onmouseover="this.style.background='#FAFAFA'" onmouseout="this.style.background=''">
         <td style="padding:9px 16px"><div style="display:flex;align-items:center;gap:7px;cursor:pointer" onclick="event.stopPropagation();App._userDrill('${u.id}')">${avatar(u,'w-7 h-7','text-[10px]')}<span style="font-weight:500;text-decoration:underline;text-decoration-color:#E5E7EB">${esc(fullName(u))}</span></div></td>
         <td style="padding:9px 16px;max-width:140px;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${esc(c.name)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px">${esc(c.department)}</td>
         <td style="padding:9px 16px;color:#9CA3AF;font-size:12px;white-space:nowrap">${fmtS(s.date)}</td>
         <td style="padding:9px 16px">${chip(s.status)}</td>
-        <td style="padding:9px 16px">${qCount?`<span style="font-size:12px;font-weight:700;color:#0E9F6E">${qCount}/${(clById(s.checklistId)?.questionIds||[]).length}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
+        <td style="padding:9px 16px">${qCount?`<span style="font-size:12px;font-weight:700;color:#0E9F6E">${qCount}/${_qTot}</span>`:'<span style="color:#E5E7EB">—</span>'}</td>
+        <td style="padding:9px 16px">${_qTot?(_esc>0?`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#FFF1F2;color:#BE123C;white-space:nowrap">⚠ ${_esc}</span>`:`<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#ECFDF5;color:#059669;white-space:nowrap">✓</span>`):'<span style="color:#E5E7EB">—</span>'}</td>
       </tr>`;}).join('')}</tbody>
     </table>${recent.length?'':empty('chart','No submissions match','Adjust filters or date range')}</div>
   </div></div>`;
@@ -4498,6 +4523,7 @@ App._userDrill=(uid)=>{
   const pending=subs.filter(s=>s.status==='Pending Approval').length;
   const rejected=subs.filter(s=>s.status==='Rejected').length;
   const issues=subs.reduce((n,s)=>n+(s.questionResponses||[]).filter(r=>r.response!==null&&r.response!==undefined&&r.response!=='').length,0);
+  const nonComp=subs.reduce((n,s)=>{const c=clById(s.checklistId);return n+((c&&(c.questionIds||[]).length&&_subEscalationCount(c,s)>0)?1:0);},0);
   const pct=tot?Math.round(onTime/tot*100):0;
   const recent=subs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,10);
   openModal(
@@ -4510,7 +4536,7 @@ App._userDrill=(uid)=>{
     +'</div>'
     // Score
     +'<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px">'
-    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Rejected',rejected,'#7C3AED'],['Answered',issues,'#0E9F6E']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
+    +[['Submitted',tot,'#15171C'],['On time',onTime,'#059669'],['Late',late,'#DC2626'],['Pending',pending,'#F97316'],['Non-compliant',nonComp,'#BE123C'],['Answered',issues,'#0E9F6E']].map(([l,v,c])=>'<div style="background:#F9FAFB;border-radius:12px;padding:12px;text-align:center"><div class="fd" style="font-size:22px;font-weight:800;color:'+c+'">'+v+'</div><div style="font-size:11px;font-weight:600;color:#9CA3AF;margin-top:2px">'+l+'</div></div>').join('')
     +'</div>'
     // Completion rate bar
     +'<div style="background:#F9FAFB;border-radius:12px;padding:12px;margin-bottom:16px">'
@@ -4520,7 +4546,7 @@ App._userDrill=(uid)=>{
     // Recent submissions
     +'<div class="fd" style="font-size:13px;font-weight:700;margin-bottom:8px">Recent submissions</div>'
     +(recent.length
-      ? recent.map(s=>{const c=clById(s.checklistId);return'<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+chip(s.status)+'</div>';}).join('')
+      ? recent.map(s=>{const c=clById(s.checklistId);const _esc=(c&&(c.questionIds||[]).length)?_subEscalationCount(c,s):0;const _comp=(c&&(c.questionIds||[]).length)?(_esc>0?'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#FFF1F2;color:#BE123C;white-space:nowrap">⚠ '+_esc+'</span>':'<span style="font-size:10px;font-weight:700;padding:1px 7px;border-radius:20px;background:#ECFDF5;color:#059669">✓</span>'):'';return'<div style="display:flex;align-items:center;gap:8px;padding:9px 0;border-bottom:1px solid #F3F4F6;cursor:pointer" onclick="App._viewSubById(this.dataset.id)" data-id="'+s.id+'">'+'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(c?.name||'—')+'</div><div style="font-size:11px;color:#9CA3AF;margin-top:1px">'+fmtS(s.date)+'</div></div>'+_comp+chip(s.status)+'</div>';}).join('')
       : '<p style="font-size:13px;color:#9CA3AF">No submissions in last 30 days</p>'
     )
     +'</div>',
@@ -5217,11 +5243,11 @@ App._exportCSV=()=>{
   if(fArr('locs').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('locs').some(l=>(c?.locationIds||[]).includes(l));});
   if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
   if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
-  const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval']];
-  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No']);});
+  const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval','Compliance','Escalations']];
+  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';const _escN=(c&&(c.questionIds||[]).length)?_subEscalationCount(c,s):0;const _compTxt=(c&&(c.questionIds||[]).length)?(_escN>0?'Non-compliant':'Compliant'):'N/A';summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No',_compTxt,_escN]);});
   // Also export question responses as a second sheet
-  const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment']];
-  subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;(s.questionResponses||[]).forEach((qr,qi)=>{const q=(DB.questions||[]).find(x=>x.id===qr.questionId);qRows.push([si+1,fullName(u),u.email||'',c?c.name:'[Deleted]',s.date,s.status,q?q.text:'Q'+(qi+1),qr.response!==null&&qr.response!==undefined?String(qr.response):'',qr.comment||'']);});});
+  const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment','Escalated']];
+  subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;(s.questionResponses||[]).forEach((qr,qi)=>{const q=(DB.questions||[]).find(x=>x.id===qr.questionId);const _esc=(c&&q&&_qrEscalates(c,q,qr))?'Yes':'';qRows.push([si+1,fullName(u),u.email||'',c?c.name:'[Deleted]',s.date,s.status,q?q.text:'Q'+(qi+1),qr.response!==null&&qr.response!==undefined?String(qr.response):'',qr.comment||'',_esc]);});});
   const all=[...summaryRows,[],['=== QUESTION RESPONSES (one row per response) ==='],[],...qRows];
   const csv=all.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='shiftly_export_'+todayISO()+'.csv';a.click();
