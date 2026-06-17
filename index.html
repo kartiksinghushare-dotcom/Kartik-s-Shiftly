@@ -321,11 +321,16 @@ async function loadFromSB(){
     if(_isAdmin||_isSubAdmin){
       DB.submissions=allSubs;
     } else if(_isMgr){
-      // Manager sees: his own + all team members' submissions
-      DB.submissions=allSubs.filter(s=>_teamIds.has(s.userId));
+      // Manager sees: his own + all team members' submissions.
+      // PLUS any submission on a group ("any one") checklist he's an assignee of — so a
+      // teammate's completion of a shared checklist is visible even if they're outside his team.
+      const _grpIds=new Set(DB.checklists.filter(c=>c.anyOne&&(c.assignees||[]).includes(_uid)).map(c=>c.id));
+      DB.submissions=allSubs.filter(s=>_teamIds.has(s.userId)||_grpIds.has(s.checklistId));
     } else {
-      // User sees only their own submissions
-      DB.submissions=allSubs.filter(s=>s.userId===_uid);
+      // User sees their own submissions PLUS submissions on any group ("any one") checklist
+      // they're assigned to — this is what lets a teammate's completion show as done/read-only.
+      const _grpIds=new Set(DB.checklists.filter(c=>c.anyOne&&(c.assignees||[]).includes(_uid)).map(c=>c.id));
+      DB.submissions=allSubs.filter(s=>s.userId===_uid||_grpIds.has(s.checklistId));
     }
   }
 
@@ -2298,25 +2303,28 @@ async function _uploadSubmissionPhotos(clId,userId,date,responses){
 App._submitRun=async(clId,date)=>{
   const c=clById(clId);const run=RUN[clId];if(!run)return;
   const existingSub=subFor(clId,S.uid,date);if(existingSub&&existingSub.status!=='Editing'){toast('Already submitted for this date','warn');return;}
-  // ── Validate mandatory photo and comment fields before submitting ──
-  const _qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
-  for(const _q of _qs){
-    const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};
-    // Must have a response first (or be non-mandatory type where null is acceptable)
-    const _hasResp=_qr.response!==null&&_qr.response!==undefined&&_qr.response!=='';
-    if(_hasResp&&_q.photo&&!_qrHasPhoto(_qr)){
-      toast('📷 Photo required for: "'+_q.text.slice(0,40)+'"','err');return;
-    }
-    if(_hasResp&&_q.comment&&(!_qr.comment||!_qr.comment.trim())){
-      toast('💬 Comment required for: "'+_q.text.slice(0,40)+'"','err');return;
-    }
-    // Also block submit if answer was never given and it's the only question or any question
-    if(!_hasResp&&_q.photo&&false){}  // photo-only questions without answer: skip photo check
+  // Group ("any one") checklist already completed by a teammate → read-only, block duplicate submit
+  if(c&&c.anyOne&&!existingSub){
+    const peerDone=DB.submissions.find(s=>s.checklistId===clId&&s.date===date&&s.userId!==S.uid&&s.status!=='Editing');
+    if(peerDone){const by=uById(peerDone.userId);toast('Already completed by '+(by?fullName(by):'a teammate'),'warn');delete RUN[clId];S.expandedCl=null;render();return;}
   }
-  // Block if any question has no response at all
+  // ── Validate mandatory fields before submitting ──
+  const _qs=(c.questionIds||[]).map(qid=>(DB.questions||[]).find(x=>x.id===qid)).filter(Boolean);
+  // 1) Every question must be answered first.
   if(_qs.length){
     const _unanswered=_qs.filter(_q=>{const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};return _qr.response===null||_qr.response===undefined||_qr.response==='';});
     if(_unanswered.length){toast('Please answer all '+_qs.length+' question'+((_qs.length>1)?'s':'')+' before submitting','err');return;}
+  }
+  // 2) Enforce mandatory photo/comment on EVERY question (independent of each other).
+  //    Each requirement is checked against that question's own response only.
+  for(const _q of _qs){
+    const _qr=(run.questionResponses||[]).find(r=>r.questionId===_q.id)||{};
+    if(_q.photo&&!_qrHasPhoto(_qr)){
+      toast('📷 Photo required for: "'+_q.text.slice(0,40)+'"','err');return;
+    }
+    if(_q.comment&&(!_qr.comment||!_qr.comment.trim())){
+      toast('💬 Comment required for: "'+_q.text.slice(0,40)+'"','err');return;
+    }
   }
   const today=todayISO();
   const late=date<today||(date===todayISO()&&c.scheduleTime&&nowHM()>hm2m(c.scheduleTime));
