@@ -300,17 +300,31 @@ async function loadFromSB(){
   {
     const _delCls=new Set(DB.checklists_deleted||[]);
     const mapped=_mC(allCls||[]).filter(c=>!_delCls.has(c.id));
+    // IDs that came back from Supabase this load
+    const _serverIds=new Set(mapped.map(c=>c.id));
+    // Local checklists the current user owns that have NOT yet arrived from the server
+    // (e.g. an upsert that hasn't completed yet, or one blocked by RLS). These must NOT
+    // be wiped on refresh — keep them so the user never loses a checklist they just made.
+    const _localPending=(DB.checklists||[]).filter(c=>
+      !_serverIds.has(c.id)&&!_delCls.has(c.id)&&
+      (c.createdBy===_uid||(c.assignees||[]).includes(_uid))
+    );
+    let _visible;
     if(mapped.length===0&&DB.checklists.length>0){
       // Nothing from Supabase — keep local cache (RLS may be blocking)
+      _visible=DB.checklists.filter(c=>!_delCls.has(c.id));
     } else if(_isAdmin||_isSubAdmin){
-      DB.checklists=mapped;
+      _visible=mapped;
     } else if(_isMgr){
       // Manager: checklists he created OR assigned to him OR assigned to his team
-      DB.checklists=mapped.filter(c=>c.createdBy===_uid||(c.assignees||[]).includes(_uid)||(_teamIds&&(c.assignees||[]).some(a=>_teamIds.has(a))));
+      _visible=mapped.filter(c=>c.createdBy===_uid||(c.assignees||[]).includes(_uid)||(_teamIds&&(c.assignees||[]).some(a=>_teamIds.has(a))));
     } else {
       // User: checklists assigned to them OR created by them
-      DB.checklists=mapped.filter(c=>(c.assignees||[]).includes(_uid)||c.createdBy===_uid);
+      _visible=mapped.filter(c=>(c.assignees||[]).includes(_uid)||c.createdBy===_uid);
     }
+    // Merge in any local-only checklists the server didn't return, de-duplicated by id.
+    const _seen=new Set(_visible.map(c=>c.id));
+    DB.checklists=[..._visible,..._localPending.filter(c=>!_seen.has(c.id))];
   }
 
   // ── Submissions ──
