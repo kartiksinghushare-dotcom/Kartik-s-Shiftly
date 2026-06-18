@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
+<meta name="description" content="Shiftly — shift checklist and task management."/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <title>Shiftly</title>
 <script>(()=>{const w=console.warn;console.warn=(...a)=>{if(typeof a[0]==='string'&&a[0].includes('cdn.tailwind'))return;w(...a)};window.addEventListener('error',e=>{if(!e.filename||e.filename.includes('cdn.tailwind')||e.filename.includes('fonts.google'))e.stopImmediatePropagation();},true);})();</script>
@@ -20,7 +21,7 @@ input,select,textarea{outline:none}
 /* Toggles */
 .tog{position:relative;width:36px;height:22px;border-radius:11px;transition:background .15s;cursor:pointer;border:none;flex-shrink:0}
 .tog span{position:absolute;top:2px;left:2px;width:18px;height:18px;border-radius:50%;background:#fff;transition:transform .15s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
-.tog.on{background:#10B981}.tog.on span{transform:translateX(14px)}.tog
+.tog.on{background:#10B981}.tog.on span{transform:translateX(14px)}
 /* Calendar strip */
 .cal4{background:#fff;border-radius:18px;border:1px solid #F0EEE9;display:flex;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.05)}
 .cal4-d{flex:1;display:flex;flex-direction:column;align-items:center;padding:10px 4px 8px;cursor:pointer;transition:background .12s;border:none;background:transparent;gap:2px}
@@ -135,7 +136,7 @@ input,select,textarea{outline:none}
 /* ── Loading btn ── */
 
 /* Button click feedback */
-button:active{opacity:.75;transform:scale(.97);transition:transform 
+button:active{opacity:.75;transform:scale(.97);transition:transform .1s}
 /* Clickable stat cards */
 .stat-card-click:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
 .stat-card-click:active{transform:scale(.98);opacity:.9}
@@ -203,7 +204,6 @@ const I={
   audit:'<path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M9 13h6M9 17h4"/>',
   cog:'<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   bell:'<path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/>',
-  user:'<circle cx="12" cy="8" r="4"/><path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1"/>',
   plus:'<path d="M12 5v14M5 12h14"/>',
   search:'<circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/>',
   logout:'<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5M21 12H9"/>',
@@ -211,7 +211,6 @@ const I={
   copy:'<rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>',
   lock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 10 0v4"/>',
   unlock:'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect><path d="M7 11V7a5 5 0 0 1 9.9-1"/>',
-  upload:'<polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>',
   cam:'<path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/>',
   clock:'<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
   chevR:'<path d="M9 18l6-6-6-6"/>',
@@ -221,7 +220,6 @@ const I={
   trash:'<path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6"/>',
   back:'<path d="M19 12H5M12 19l-7-7 7-7"/>',
   key:'<path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0 3 3L22 7l-3-3m-3.5 3.5L19 4"/>',
-  download:'<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="M7 10l5 5 5-5M12 15V3"/>',
   filter:'<path d="M22 3H2l8 9.46V19l4 2v-8.54z"/>',
   pin:'<path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/>',
   msg:'<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -574,9 +572,9 @@ const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-
 const hdr=(t,s,a='')=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:20px;flex-wrap:wrap"><div><h1 class="fd" style="font-size:26px;font-weight:800;letter-spacing:-.5px;line-height:1.2">${esc(t)}</h1>${s?`<p style="font-size:13px;color:#9CA3AF;margin-top:2px">${esc(s)}</p>`:''}</div><div style="display:flex;gap:8px">${a}</div></div>`;
 const btnP=(l,o,i='')=>`<button onclick="${o}" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:14px;font-weight:600;padding:10px 16px;border-radius:12px;border:none;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.12)" onmouseover="this.style.background='#0E0F13'" onmouseout="this.style.background='#15171C'">${i?ic(i,'w-4 h-4'):''}${esc(l)}</button>`;
 const btnG=(l,o,i='')=>`<button onclick="${o}" style="display:inline-flex;align-items:center;gap:6px;background:#fff;color:#262A33;font-size:14px;font-weight:600;padding:10px 16px;border-radius:12px;border:1.5px solid #ECEDF0;cursor:pointer" onmouseover="this.style.background='#F6F7F8'" onmouseout="this.style.background='#fff'">${i?ic(i,'w-4 h-4'):''}${esc(l)}</button>`;
-const fld=(l,id,v='',t='text',p='')=>`<div><label class="block text-xs font-semibold text-ink-500 mb-1">${l}</label><input id="${id}" type="${t}" value="${esc(v)}" placeholder="${esc(p)}" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>`;
-const selF=(l,id,opts,sv='')=>`<div><label class="block text-xs font-semibold text-ink-500 mb-1">${l}</label><select id="${id}" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">${opts.map(o=>`<option value="${esc(Array.isArray(o)?o[0]:o)}" ${(Array.isArray(o)?o[0]:o)===sv?'selected':''}>${esc(Array.isArray(o)?o[1]:o)}</option>`).join('')}</select></div>`;
-function mkTog(id,on,label){return`<div class="flex items-center justify-between py-1"><span class="text-sm">${label}</span><button id="${id}" class="tog ${on?'on':'off'}" onclick="this.classList.toggle('on');this.classList.toggle('off')"><span></span></button></div>`;}
+const fld=(l,id,v='',t='text',p='')=>`<div><label for="${id}" class="block text-xs font-semibold text-ink-500 mb-1">${l}</label><input id="${id}" type="${t}" value="${esc(v)}" placeholder="${esc(p)}" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>`;
+const selF=(l,id,opts,sv='')=>`<div><label for="${id}" class="block text-xs font-semibold text-ink-500 mb-1">${l}</label><select id="${id}" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">${opts.map(o=>`<option value="${esc(Array.isArray(o)?o[0]:o)}" ${(Array.isArray(o)?o[0]:o)===sv?'selected':''}>${esc(Array.isArray(o)?o[1]:o)}</option>`).join('')}</select></div>`;
+function mkTog(id,on,label){return`<div class="flex items-center justify-between py-1"><span class="text-sm">${label}</span><button id="${id}" role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="this.classList.toggle('on');this.classList.toggle('off');this.setAttribute('aria-checked',this.classList.contains('on'))"><span></span></button></div>`;}
 const togV=id=>{const el=$(`#${id}`);if(!el)return false;return el.classList?.contains('on')||false;};
 const STAT_C={sky:'#0284C7',brand:'#0E9F6E',rose:'#E11D48',amber:'#D97706',orange:'#EA580C',emerald:'#059669'};
 const statCard=(t,v,c='sky',oc='')=>{
@@ -599,7 +597,7 @@ const empty=(i,t,s)=>`<div style="text-align:center;padding:48px 24px"><div styl
 function openModal(html,size='max-w-lg'){
   let m=$('#modal');if(!m){m=document.createElement('div');m.id='modal';document.body.appendChild(m);}
   m.className='fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6';m.style.cssText='background:rgba(14,15,19,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
-  m.innerHTML=`<div class="pop w-full ${size} md:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto" style="background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.28),0 8px 32px rgba(0,0,0,.16),0 0 0 1px rgba(255,255,255,.08)">${html}</div>`;
+  m.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Dialog" class="pop w-full ${size} md:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto" style="background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.28),0 8px 32px rgba(0,0,0,.16),0 0 0 1px rgba(255,255,255,.08)">${html}</div>`;
   m.onclick=e=>{if(e.target===m)closeModal();};
 }
 const closeModal=()=>{const m=$('#modal');if(m&&m.remove)m.remove();};
@@ -827,14 +825,14 @@ function pageContent(){
 function loginView(){return`<div class="min-h-screen flex"><div class="hidden lg:flex flex-col justify-between" style="width:42%;background:#15171C;color:#fff;padding:48px;position:relative;overflow:hidden"><div class="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-brand-600/20 blur-3xl"></div><div class="flex items-center gap-3 relative"><div style="width:36px;height:36px;border-radius:12px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:18px;color:#fff">S</div><span class="fd font-bold text-2xl">Shiftly</span></div><div class="relative"><h1 class="fd text-4xl font-bold leading-tight">Every shift,<br>every check,<br><span class="text-brand-400">accounted for.</span></h1><p class="text-ink-300 mt-4 leading-relaxed text-sm">Enterprise checklists with question-based responses, escalation routing, location tracking, and real-time approvals.</p></div><div class="text-xs text-ink-400">© 2026 Shiftly</div></div>
 <div class="flex-1 flex items-center justify-center p-6 bg-paper"><div class="w-full max-w-sm fade"><div class="lg:hidden flex items-center gap-2 mb-7 justify-center"><div style="width:32px;height:32px;border-radius:10px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:16px;color:#fff">S</div><span class="fd font-bold text-xl">Shiftly</span></div><h2 class="fd text-2xl font-bold mb-1">Welcome back</h2><p class="text-ink-400 text-sm mb-5">Sign in to your workspace.</p><div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
   <div>
-    <label style="display:block;font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Email address</label>
+    <label for="li-e" style="display:block;font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Email address</label>
     <input id="li-e" type="email" autocomplete="email" placeholder="Enter your email"
       style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1.5px solid #E5E3DC;background:#fff;font-size:14px;outline:none;transition:border .15s"
       onfocus="this.style.borderColor='#15171C'" onblur="this.style.borderColor='#E5E3DC'"
       onkeydown="if(event.key==='Enter')document.getElementById('li-p').focus()"/>
   </div>
   <div>
-    <label style="display:block;font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Password</label>
+    <label for="li-p" style="display:block;font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Password</label>
     <input id="li-p" type="password" autocomplete="current-password" placeholder="Enter your password"
       style="width:100%;box-sizing:border-box;padding:12px 14px;border-radius:12px;border:1.5px solid #E5E3DC;background:#fff;font-size:14px;outline:none;transition:border .15s"
       onfocus="this.style.borderColor='#15171C'" onblur="this.style.borderColor='#E5E3DC'"
@@ -1098,7 +1096,7 @@ App.editUser=(id=null)=>{
     <div class="grid grid-cols-2 gap-3">${fld('First name','u-fn',v('firstName'))}${fld('Last name','u-ln',v('lastName'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Email','u-email',v('email'),'email')}${fld('Phone','u-phone',v('phone'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',DB.departments.map(d=>d.name),u?.department||'')}</div>
-    <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',[['User','User'],['SubAdmin','Admin'],['Admin','Super Admin']],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
+    <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',[['User','User'],['SubAdmin','Admin'],['Admin','Super Admin']],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label for="u-mgr" class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??true,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??true,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??false,'Past entries')}${mkTog('u-af',u?.approval?.future??false,'Future entries')}${mkTog('u-ae',u?.approval?.edited??false,'Edited entries')}</div>
@@ -1352,7 +1350,7 @@ App._newFolderIn=(t,s)=>{
     +'<button onclick="App.closeModal()" style="background:none;border:none;cursor:pointer;color:#9CA3AF;font-size:20px">×</button>'
     +'</div>'
     +'<div style="margin-bottom:16px">'
-    +'<label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Folder name</label>'
+    +'<label for="nf-name" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Folder name</label>'
     +'<input id="nf-name" type="text" placeholder="e.g. Procurement, Inventory…" '
     +'style="width:100%;background:#fff;border:1.5px solid #ECEDF0;border-radius:12px;padding:10px 14px;font-size:14px;outline:none;box-sizing:border-box;font-family:inherit" '
     +'autofocus/>'
@@ -1657,18 +1655,18 @@ function _renderClModal(editing){
       <!-- Basic info -->
       <div class="space-y-3">
         <div>
-          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Checklist name</label>
+          <label for="cn-name" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Checklist name</label>
           <input id="cn-name" value="${esc(c.name)}" placeholder="e.g. Morning Inspection, Daily Cleaning Round…" class="w-full bg-white border-2 border-ink-200 focus:border-brand-500 rounded-xl px-3.5 py-3 text-sm font-semibold rf transition"/>
         </div>
         <div>
-          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Description <span class="font-normal text-ink-300">(optional)</span></label>
+          <label for="cn-desc" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Description <span class="font-normal text-ink-300">(optional)</span></label>
           <textarea id="cn-desc" rows="2" placeholder="Brief description of this checklist's purpose…" class="w-full bg-white border-2 border-ink-200 focus:border-brand-500 rounded-xl px-3.5 py-3 text-sm rf transition resize-none">${esc(c.description)}</textarea>
         </div>
         <div class="grid grid-cols-2 gap-3">
           ${selF('Status','cn-status',['Active','Draft'],c?.status||'Active')}
        ${selF('Department','cn-dep',DB.departments.map(d=>d.name),c.department)}
           <div>
-            <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Frequency</label>
+            <label for="cn-freq" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Frequency</label>
             <select id="cn-freq" onchange="App._freqChange(this.value)" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-3 text-sm font-medium rf">
               ${['Daily','Weekly','Monthly','Custom'].map(f=>`<option ${c.frequency===f?'selected':''}>${f}</option>`).join('')}
             </select>
@@ -1677,16 +1675,16 @@ function _renderClModal(editing){
         <div id="cn-sched" class="bg-ink-50 rounded-xl p-3">${_freqUI(c.frequency)}</div>
         <div class="grid grid-cols-2 gap-3">
           <div>
-            <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Start date</label>
+            <label for="cn-sd" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Start date</label>
             <input id="cn-sd" type="date" value="${esc(c.startDate||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
           </div>
           <div>
-            <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">End date</label>
+            <label for="cn-ed" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">End date</label>
             <input id="cn-ed" type="date" value="${esc(c.endDate||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
           </div>
         </div>
         <div>
-          <label class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline time <span class="font-normal text-ink-300">(marked Late if not submitted by this time)</span></label>
+          <label for="cn-time" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Deadline time <span class="font-normal text-ink-300">(marked Late if not submitted by this time)</span></label>
           <input id="cn-time" type="time" value="${esc(c.scheduleTime||'')}" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/>
         </div>
       </div>
@@ -2124,7 +2122,7 @@ function _clCard(c,date){
           if(locked){
             inputHtml='<span style="font-size:13px;font-weight:600;color:#0E9F6E">'+(resp!==null&&resp!==undefined?esc(String(resp)):'<em style="color:#D1D5DB">Not answered</em>')+'</span>';
           } else if(q.type==='answer'){
-            inputHtml='<div style="display:flex;flex-wrap:wrap;gap:6px">'+(q.options||[]).map(o=>`<button onclick="App._setQR('${c.id}','${q.id}','${o.text}')" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${resp===o.text?'#15171C':'#E5E7EB'};background:${resp===o.text?'#15171C':'#fff'};color:${resp===o.text?'#fff':'#374151'};font-size:12px;font-weight:600;cursor:pointer">${esc(o.text)}</button>`).join('')+'</div>';
+            inputHtml='<div style="display:flex;flex-wrap:wrap;gap:6px">'+(q.options||[]).map((o,oi)=>`<button onclick="App._setQROpt('${c.id}','${q.id}',${oi})" style="padding:6px 14px;border-radius:20px;border:1.5px solid ${resp===o.text?'#15171C':'#E5E7EB'};background:${resp===o.text?'#15171C':'#fff'};color:${resp===o.text?'#fff':'#374151'};font-size:12px;font-weight:600;cursor:pointer">${esc(o.text)}</button>`).join('')+'</div>';
           } else if(q.type==='number'){
             inputHtml=`<input type="number" value="${resp??''}" oninput="App._setQR('${c.id}','${q.id}',this.value,true)" onchange="App._setQR('${c.id}','${q.id}',this.value)" placeholder="Enter number…" style="width:120px;padding:6px 12px;border-radius:9px;border:1.5px solid #E5E7EB;font-size:13px;outline:none"/>`;
           } else if(q.type==='passfail'){
@@ -2141,7 +2139,7 @@ function _clCard(c,date){
             const _qrPhoto=(run.questionResponses||[]).find(r=>r.questionId===q.id)||{};
             const photos=_qrPhotoList(_qrPhoto);
             inputHtml+='<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap">'
-              +photos.map((ph,pi)=>'<div style="position:relative;display:inline-block"><img src="'+ph+'" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\','+pi+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>').join('')
+              +photos.map((ph,pi)=>'<div style="position:relative;display:inline-block"><img src="'+ph+'" alt="Task response photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1.5px solid #BBF7D0;cursor:pointer"/><button onclick="App._clearQRPhoto(\''+c.id+'\',\''+q.id+'\','+pi+')" style="position:absolute;top:-5px;right:-5px;width:18px;height:18px;border-radius:50%;background:#EF4444;border:1.5px solid #fff;color:#fff;font-size:11px;cursor:pointer;display:grid;place-items:center;font-weight:700">×</button></div>').join('')
               +'<label style="display:inline-flex;align-items:center;gap:5px;padding:7px 13px;border-radius:9px;background:'+(photos.length?'#F0FDF4':'#F3F4F6')+';color:'+(photos.length?'#16A34A':'#374151')+';font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid '+(photos.length?'#BBF7D0':'#E5E7EB')+'">'
               +ic('cam','w-3.5 h-3.5')+(photos.length?'Add more':'Add photo')+(q.photo&&!photos.length?' <span style="color:#EF4444">*</span>':'')
               +'<input type="file" accept="image/*" capture="environment" multiple style="display:none" onchange="App._setQRPhoto(\''+c.id+'\',\''+q.id+'\',this)"/>'
@@ -2150,7 +2148,7 @@ function _clCard(c,date){
           } else {
             const _qr2=(sub?.questionResponses||[]).find(r=>r.questionId===q.id)||{};
             const photos2=_qrPhotoList(_qr2);
-            if(photos2.length)inputHtml+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+photos2.map(ph=>'<img src="'+ph+'" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>';
+            if(photos2.length)inputHtml+='<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+photos2.map(ph=>'<img src="'+ph+'" alt="Task response photo" onclick="App._bigImg(\''+ph.replace(/'/g,"\\'")+'\')" style="max-width:110px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>';
           }
           return`<div style="background:#FAFAFA;border:1px solid #ECEDF0;border-radius:12px;padding:12px 14px">
             <div style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
@@ -2182,6 +2180,14 @@ function _clCard(c,date){
 
 
 
+App._setQROpt=(clId,qId,optIdx)=>{
+  // Resolve the option text by index so the free-form (admin-authored) option
+  // text never has to be interpolated into an inline onclick handler (XSS-safe).
+  const _q=(DB.questions||[]).find(x=>x.id===qId);
+  const _o=_q&&(_q.options||[])[optIdx];
+  if(!_o)return;
+  App._setQR(clId,qId,_o.text);
+};
 App._setQR=(clId,qId,val,skipRr)=>{
   if(!RUN[clId])return;
   if(!RUN[clId].questionResponses)RUN[clId].questionResponses=[];
@@ -2553,7 +2559,7 @@ function teamViewPage(){
                     <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
                     ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
                     ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
-                    ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
+                    ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" alt="Task response photo" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
                   </div>
                 </div>`;
               }).join('');
@@ -2585,7 +2591,7 @@ function _roResponses(c,sub,date){
         <div style="font-size:12px;font-weight:600;color:${hasR?'#15171C':'#9CA3AF'}">${esc(q.text)}${esc1?'<span style="font-size:9px;font-weight:800;color:#BE123C;background:#FFE4E6;padding:1px 6px;border-radius:8px;margin-left:6px;text-transform:uppercase;letter-spacing:.04em">Flagged</span>':''}</div>
         ${hasR?`<div style="font-size:11px;font-weight:700;color:${ansClr};margin-top:2px">${esc(String(resp))}</div>`:'<div style="font-size:11px;color:#D1D5DB;font-style:italic;margin-top:2px">Not answered</div>'}
         ${qr.comment?`<div style="font-size:11px;color:#6B7280;margin-top:2px;font-style:italic">"${esc(qr.comment)}"</div>`:''}
-        ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
+        ${(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" alt="Task response photo" onclick="App._bigImg(this.src)" style="max-width:100px;max-height:72px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Click to enlarge"/>').join('')+'</div>':'';})()}
       </div>
     </div>`;
   }).join('');
@@ -2757,7 +2763,7 @@ function allClsPage(){
   </div>`;
 }
 
-App._bigImg=(src)=>{openModal(`<div style="padding:10px;position:relative"><button onclick="App.closeModal()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:26px;height:26px;color:#fff;cursor:pointer;display:grid;place-items:center;z-index:1;font-size:14px">×</button><img src="${src}" style="width:100%;border-radius:10px;max-height:80vh;object-fit:contain;display:block"/></div>`,'max-w-xl');};
+App._bigImg=(src)=>{openModal(`<div style="padding:10px;position:relative"><button onclick="App.closeModal()" style="position:absolute;top:6px;right:6px;background:rgba(0,0,0,.6);border:none;border-radius:50%;width:26px;height:26px;color:#fff;cursor:pointer;display:grid;place-items:center;z-index:1;font-size:14px">×</button><img src="${esc(src)}" alt="Enlarged photo" style="width:100%;border-radius:10px;max-height:80vh;object-fit:contain;display:block"/></div>`,'max-w-xl');};
 
 
 function approvalsPage(){
@@ -2899,7 +2905,7 @@ App.viewSub=(subId)=>{
       +'</div>'
       +(hasResp?'<div style="font-size:13px;font-weight:700;color:#0E9F6E">'+esc(String(resp))+'</div>':'<div style="font-size:12px;color:#D1D5DB;font-style:italic">Not answered</div>')
       +(qr.comment?'<div style="font-size:12px;color:#6B7280;margin-top:4px;font-style:italic">"'+esc(qr.comment)+'"</div>':'')
-      +(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>':'';})()
+      +(()=>{const pl=_qrPhotoList(qr);return pl.length?'<div style="margin-top:6px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" alt="Task response photo" onclick="App._bigImg(this.src)" style="max-width:120px;max-height:80px;border-radius:8px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer"/>').join('')+'</div>':'';})()
       +'</div>';
   }).join('');
   openModal('<div class="p-5">'
@@ -3277,7 +3283,7 @@ App._renderQModal=()=>{
 
   const togRow=(k,lbl,desc)=>`<label style="display:flex;align-items:center;justify-content:space-between;gap:10px;padding:9px 12px;border-radius:9px;border:1.5px solid ${_QED[k]?'#BBF7D0':'#F3F4F6'};background:${_QED[k]?'#F0FDF4':'#FAFAFA'};cursor:pointer;margin-bottom:5px">
     <div><div style="font-size:13px;font-weight:600">${lbl}</div><div style="font-size:11px;color:#9CA3AF">${desc}</div></div>
-    <button type="button" class="tog ${_QED[k]?'on':'off'}" onclick="_QED['${k}']=!_QED['${k}'];App._renderQModal()"><span></span></button>
+    <button type="button" role="switch" aria-checked="${_QED[k]?'true':'false'}" aria-label="${esc(lbl)}" class="tog ${_QED[k]?'on':'off'}" onclick="_QED['${k}']=!_QED['${k}'];App._renderQModal()"><span></span></button>
   </label>`;
 
   const typeBtns=Q_TYPES.map(t=>`<button type="button" onclick="_QED.type='${t.id}';_QED.options=[];App._renderQModal()" style="padding:8px;border-radius:9px;border:1.5px solid ${q.type===t.id?Q_TYPE_CLR[t.id]:'#E5E7EB'};background:${q.type===t.id?Q_TYPE_BG[t.id]:'#fff'};cursor:pointer;text-align:left">
@@ -3294,7 +3300,7 @@ App._renderQModal=()=>{
     </div>
     <div style="padding:16px 18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;max-height:70vh">
       <div>
-        <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Question text *</label>
+        <label for="qed-text" style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Question text *</label>
         <input id="qed-text" type="text" value="${q.text||''}" oninput="_QED.text=this.value" placeholder="e.g. Is the area clean?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none" />
       </div>
       <div>
@@ -3973,19 +3979,19 @@ App._openSendFeedback=(userId)=>{
     +['General','Checklist','Performance'].map((t,i)=>'<button type="button" onclick="App._sfbSelectType(this)" data-type="'+t+'" style="padding:8px;border-radius:9px;border:1.5px solid '+(i===0?'#15171C':'#E5E7EB')+';background:'+(i===0?'#15171C':'#fff')+';color:'+(i===0?'#fff':'#6B7280')+';font-size:13px;font-weight:600;cursor:pointer">'+t+'</button>').join('')
     +'</div></div>'
     // Checklist dropdown
-    +'<div id="sfb-cl-wrap" style="margin-bottom:14px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Checklist <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
+    +'<div id="sfb-cl-wrap" style="margin-bottom:14px"><label for="sfb-cl" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Checklist <span style="color:#9CA3AF;text-transform:none;font-weight:400">(optional)</span></label>'
     +'<select id="sfb-cl" onchange="App._sfbClChange(this.value)" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Select checklist…</option>'+clOptions+'</select></div>'
     // Task dropdown (updates dynamically)
 
     // Priority + title in one row
     +'<div style="display:grid;grid-template-columns:2fr 1fr;gap:10px;margin-bottom:14px">'
-    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Title</label>'
+    +'<div><label for="sfb-title" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Title</label>'
     +'<input id="sfb-title" type="text" placeholder="e.g. Great work on opening" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"/></div>'
-    +'<div><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Priority</label>'
+    +'<div><label for="sfb-pri" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Priority</label>'
     +'<select id="sfb-pri" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option>Low</option><option>Medium</option><option>High</option></select></div>'
     +'</div>'
     // Comment
-    +'<div style="margin-bottom:16px"><label style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Comment</label>'
+    +'<div style="margin-bottom:16px"><label for="sfb-text" style="display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#6B7280;margin-bottom:6px">Comment</label>'
     +'<textarea id="sfb-text" rows="4" placeholder="Write your feedback…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea></div>'
     +'<button onclick="App._saveSendFeedback(this.dataset.uid)" data-uid="'+userId+'" style="width:100%;background:#15171C;color:#fff;font-weight:700;padding:13px;border-radius:12px;border:none;cursor:pointer;font-size:15px">Send feedback</button>'
     +'</div>',
@@ -4119,7 +4125,7 @@ function ticketsPage(){
             const qr=(sub.questionResponses||[]).find(r=>r.questionId===t.questionId);
             const pl=_qrPhotoList(qr);
             if(!pl.length)return'';
-            return'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" onclick="App._bigImg(this.src)" style="max-width:160px;max-height:110px;border-radius:10px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Response photo"/>').join('')+'</div>';
+            return'<div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">'+pl.map(ph=>'<img src="'+esc(ph)+'" alt="Task response photo" onclick="App._bigImg(this.src)" style="max-width:160px;max-height:110px;border-radius:10px;object-fit:cover;border:1px solid #E5E7EB;cursor:pointer" title="Response photo"/>').join('')+'</div>';
           })()+
         '</div>'+
         (canDelete?'<button onclick="App._delTicket(\''+t.id+'\')" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:#FEF2F2;cursor:pointer;color:#DC2626;flex-shrink:0">'+ic('x','w-3.5 h-3.5')+'</button>':'')+
@@ -4758,7 +4764,7 @@ App._doUpload=async()=>{
 App._downloadDoc=async(id)=>{
   const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
   if(doc.url&&doc.url.startsWith('http')){
-    const a=document.createElement('a');a.href=doc.url;a.download=doc.name;a.target='_blank';a.click();return;
+    const a=document.createElement('a');a.href=doc.url;a.download=doc.name;a.target='_blank';a.rel='noopener noreferrer';a.click();return;
   }
   // Signed URL
   const{data,error}=await sb.storage.from('documents').createSignedUrl(doc.storagePath||doc.url,300);
@@ -4776,11 +4782,11 @@ App._previewDoc=async(id)=>{
   }
   const ext=(doc.name.split('.').pop()||'').toLowerCase();
   if(ext.match(/jpe?g|png|gif|webp/)){
-    openModal('<div class="p-4"><div class="flex justify-between mb-3"><h3 class="fd font-bold">'+esc(doc.name)+'</h3><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div><img src="'+url+'" style="width:100%;border-radius:12px;max-height:70vh;object-fit:contain"/></div>','max-w-2xl');
+    openModal('<div class="p-4"><div class="flex justify-between mb-3"><h3 class="fd font-bold">'+esc(doc.name)+'</h3><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div><img src="'+url+'" alt="'+esc(doc.name)+'" style="width:100%;border-radius:12px;max-height:70vh;object-fit:contain"/></div>','max-w-2xl');
   } else if(ext==='pdf'){
-    window.open(url,'_blank');
+    window.open(url,'_blank','noopener');
   } else {
-    window.open(url,'_blank');
+    window.open(url,'_blank','noopener');
   }
 };
 
@@ -5021,12 +5027,13 @@ function _nsTogRow(key,label,desc){
       <div style="font-size:13px;font-weight:600;color:#15171C">${label}</div>
       ${desc?`<div style="font-size:11px;color:#B8B5AC;margin-top:1px">${desc}</div>`:''}
     </div>
-    <button class="tog ${on?'on':'off'}" onclick="App._nsTog(this,'${key}')"><span></span></button>
+    <button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._nsTog(this,'${key}')"><span></span></button>
   </div>`;}
 App._nsTog=async(btn,key)=>{
   if(!_ns)_ns=_nsDefault();
   const nowOn=btn.classList.contains('off');
   btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);
+  btn.setAttribute('aria-checked',nowOn?'true':'false');
   _ns[key]=nowOn;await _saveNS();
 };
 App._nsSaveEmail=async()=>{
@@ -5116,24 +5123,24 @@ function settingsPage(){
           <div style="font-size:14px;font-weight:700">Email notifications</div>
           <div style="font-size:12px;color:#9CA3AF;margin-top:2px">Sends to the email address set on each user's account</div>
         </div>
-        <button class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
+        <button role="switch" aria-checked="${emailOn?'true':'false'}" aria-label="Email notifications" class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
       </div>
       <div style="padding:16px 20px;border-bottom:1px solid #F0EEE9">
         <div style="font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
+            <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
             <input id="ns-from-name" value="${esc(ns.email_from_name||'Shiftly')}" placeholder="Shiftly"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
+            <label for="ns-from-addr" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From address</label>
             <input id="ns-from-addr" type="email" value="${esc(ns.email_from_address||'')}" placeholder="you@company.com"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
         </div>
         <div style="margin-bottom:12px">
-          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
+          <label for="ns-reminder-mins" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
           <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
             style="width:120px;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
         </div>
@@ -5186,12 +5193,12 @@ function settingsPage(){
         </button>
         ${open?`<div style="padding:0 16px 16px;border-top:1px solid #F5F4F0">
           <div style="margin-bottom:10px">
-            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;margin-top:12px">Subject</label>
+            <label for="tpl-subj-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px;margin-top:12px">Subject</label>
             <input id="tpl-subj-${ev.key}" value="${esc(tpl.subject||'')}" placeholder="Email subject…"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
-            <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Body</label>
+            <label for="tpl-body-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">Body</label>
             <textarea id="tpl-body-${ev.key}" rows="6"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
             <div style="font-size:11px;color:#B8B5AC;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
@@ -5257,7 +5264,11 @@ App._exportCSV=()=>{
   const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment','Escalated']];
   subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;(s.questionResponses||[]).forEach((qr,qi)=>{const q=(DB.questions||[]).find(x=>x.id===qr.questionId);const _esc=(c&&q&&_qrEscalates(c,q,qr))?'Yes':'';qRows.push([si+1,fullName(u),u.email||'',c?c.name:'[Deleted]',s.date,s.status,q?q.text:'Q'+(qi+1),qr.response!==null&&qr.response!==undefined?String(qr.response):'',qr.comment||'',_esc]);});});
   const all=[...summaryRows,[],['=== QUESTION RESPONSES (one row per response) ==='],[],...qRows];
-  const csv=all.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const csv=all.map(r=>r.map(v=>{let cell=String(v??'');
+    // Neutralize CSV formula injection: cells that begin with = + - @ (or tab/CR)
+    // are prefixed with a single quote so spreadsheet apps treat them as text.
+    if(/^[=+\-@\t\r]/.test(cell))cell="'"+cell;
+    return '"'+cell.replace(/"/g,'""')+'"';}).join(',')).join('\n');
   const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='shiftly_export_'+todayISO()+'.csv';a.click();
   toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
 };
