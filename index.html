@@ -657,9 +657,9 @@ function _recoverEditingSubmissions(){
   });
 }
 /* ===== NAVIGATION ===== */
-const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Checklists'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
+const NAV_ADM=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['users','users','Users'],['hierarchy','tree','Hierarchy'],['checklists','list','Create Checklist'],['allcl','list','All Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics'],['locations','pin','Locations'],['departments','dept','Departments'],['settings','cog','Settings'],['audit','audit','Audit']];
 const NAV_USR=[['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['notifications','bell','Notifications']];
-const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['teamview','users','Team'],['users','user','My Users'],['checklists','list','Checklists'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
+const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Checklists'],['tickets','ticket','Tickets'],['teamview','users','Team'],['users','user','My Users'],['checklists','list','Create Checklist'],['questions','help','Questions'],['approvals','approve','Approvals'],['notifications','bell','Notifications'],['analytics','chart','Analytics']];
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
 const MOB_USR=['mychecklists','tickets','notifications','more'];
 const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
@@ -1624,7 +1624,7 @@ function clsPage(){
   const myTeamIds=new Set([S.uid,...subTree(S.uid).map(u=>u.id)]);
 let list=(isAdmin()||isSubAdmin())?DB.checklists:DB.checklists.filter(c=>c.createdBy===S.uid||(c.assignees||[]).includes(S.uid));
   if(S.search)list=list.filter(c=>c.name.toLowerCase().includes(S.search.toLowerCase())||c.department.toLowerCase().includes(S.search.toLowerCase()));
-  return`<div class="fade">${hdr('Checklists',list.length+' configured',(isAdmin()||isSubAdmin()||isMgr())?btnP('New checklist','App.editCl()','plus'):'')}
+  return`<div class="fade">${hdr('Create Checklist',list.length+' configured',(isAdmin()||isSubAdmin()||isMgr())?btnP('New checklist','App.editCl()','plus'):'')}
   <div class="space-y-2.5">
     ${list.map(c=>{
       const ass=(c.assignees||[]).map(uById).filter(Boolean);
@@ -2634,12 +2634,6 @@ function allClsPage(){
   ).filter(u=>u.status==='Active');
   const scopeIds=new Set(scopeUsers.map(u=>u.id));
   const cls=filtCls(d);
-  const grp=cls.filter(c=>c.anyOne&&(isAdmin()||isSubAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
-  const ind=cls.filter(c=>!c.anyOne);
-  // Map: user → their individual checklists for this date (scoped to hierarchy)
-  const userMap={};
-  ind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;const u=uById(uid2);if(!u||u.status!=='Active')return;(userMap[uid2]=userMap[uid2]||[]).push(c);}));
-  const userIds=Object.keys(userMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
 
   // Strip dots: aggregated across ALL users/checklists (respecting filters)
   const dayDots=dd=>{
@@ -2678,53 +2672,93 @@ function allClsPage(){
     </div>`;
   };
 
-  // ── Group ("any one") checklists: shown once each ──
-  let grpHtml='';
-  if(grp.length){
-    grpHtml=`<div style="margin-bottom:18px;margin-top:8px">
-      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Group checklists — any one can complete</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-        ${grp.map(c=>{
-          const sub=DB.submissions.find(x=>x.checklistId===c.id&&x.date===d&&x.status!=='Editing')||null;
-          const names=(c.assignees||[]).map(a=>uById(a)).filter(Boolean).map(u=>fullName(u));
-          const meta=' · '+((c.assignees||[]).length)+' assignee'+((c.assignees||[]).length!==1?'s':'')+(names.length?' ('+esc(names.slice(0,3).join(', '))+(names.length>3?' +'+(names.length-3):'')+')':'');
-          return roCard(c,sub,'grp|'+c.id,meta);
-        }).join('')}
-      </div>
-    </div>`;
-  }
+  // ── Render one location's section: group ("any one") checklists, then individual checklists user-by-user.
+  //    secKey is prefixed into every expand key so the same checklist/user appearing under two
+  //    locations expands independently. Returns '' when this section has nothing to show. ──
+  const renderSection=(sectionCls,secKey)=>{
+    const sgrp=sectionCls.filter(c=>c.anyOne&&(isAdmin()||isSubAdmin()||(c.assignees||[]).some(a=>scopeIds.has(a))));
+    const sind=sectionCls.filter(c=>!c.anyOne);
+    const sUserMap={};
+    sind.forEach(c=>(c.assignees||[]).forEach(uid2=>{if(!scopeIds.has(uid2))return;const u=uById(uid2);if(!u||u.status!=='Active')return;(sUserMap[uid2]=sUserMap[uid2]||[]).push(c);}));
+    const sUserIds=Object.keys(sUserMap).sort((a,b)=>fullName(uById(a)).localeCompare(fullName(uById(b))));
 
-  // ── Individual checklists: user by user ──
-  let usrHtml='';
-  if(userIds.length){
-    usrHtml=`<div style="margin-top:${grp.length?'0':'8px'}">
-      <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Individual checklists — user by user</div>
-      <div style="display:flex;flex-direction:column;gap:8px">
-      ${userIds.map(uid2=>{
-        const u=uById(uid2);
-        const ucls=userMap[uid2].slice().sort((a,b)=>(a.scheduleTime||'99:99').localeCompare(b.scheduleTime||'99:99')||(a.name||'').localeCompare(b.name||''));
-        const done=ucls.filter(c=>subFor(c.id,uid2,d)).length;
-        const uExp=S.filters.aclU===uid2;
-        const allDone=done===ucls.length;
-        const flaggedN=ucls.filter(c=>{const s=subForCl(c,uid2,d);return s&&_subEscalationCount(c,s)>0;}).length;
-        return`<div style="background:#fff;border-radius:16px;border:1.5px solid ${uExp?'#C7D2FE':'#ECEDF0'};overflow:hidden">
-          <button onclick="S.filters.aclU=S.filters.aclU==='${uid2}'?null:'${uid2}';S.filters.aclExp=null;rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
-            <span style="color:#C8C5BD;transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
-            ${avatar(u,'w-9 h-9','text-xs')}
-            <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div>
-              <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}${(()=>{const mg=u.managerId?uById(u.managerId):null;return mg?' · under '+esc(fullName(mg)):'';})()}</div>
-            </div>
-            ${flaggedN?`<span title="${flaggedN} non-compliant submission${flaggedN>1?'s':''}" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FFF1F2;color:#BE123C;margin-right:6px">⚠ ${flaggedN}</span>`:''}
-            <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${allDone?'#E8FAF3':'#FEF7E6'};color:${allDone?'#0D7A4E':'#B36A00'}">${done}/${ucls.length} done</span>
-          </button>
-          ${uExp?`<div style="padding:0 14px 12px 38px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #F5F4F0;padding-top:10px">
-            ${ucls.map(c=>roCard(c,subFor(c.id,uid2,d)||null,uid2+'|'+c.id,'')).join('')}
-          </div>`:''}
-        </div>`;
-      }).join('')}
-      </div>
+    let gHtml='';
+    if(sgrp.length){
+      gHtml=`<div style="margin-bottom:18px;margin-top:8px">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Group checklists — any one can complete</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${sgrp.map(c=>{
+            const sub=DB.submissions.find(x=>x.checklistId===c.id&&x.date===d&&x.status!=='Editing')||null;
+            const names=(c.assignees||[]).map(a=>uById(a)).filter(Boolean).map(u=>fullName(u));
+            const meta=' · '+((c.assignees||[]).length)+' assignee'+((c.assignees||[]).length!==1?'s':'')+(names.length?' ('+esc(names.slice(0,3).join(', '))+(names.length>3?' +'+(names.length-3):'')+')':'');
+            return roCard(c,sub,secKey+'|grp|'+c.id,meta);
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    let uHtml='';
+    if(sUserIds.length){
+      uHtml=`<div style="margin-top:${sgrp.length?'0':'8px'}">
+        <div style="font-size:11px;font-weight:700;color:#9CA3AF;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Individual checklists — user by user</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+        ${sUserIds.map(uid2=>{
+          const u=uById(uid2);
+          const uKey=secKey+'|'+uid2;
+          const ucls=sUserMap[uid2].slice().sort((a,b)=>(a.scheduleTime||'99:99').localeCompare(b.scheduleTime||'99:99')||(a.name||'').localeCompare(b.name||''));
+          const done=ucls.filter(c=>subFor(c.id,uid2,d)).length;
+          const uExp=S.filters.aclU===uKey;
+          const allDone=done===ucls.length;
+          const flaggedN=ucls.filter(c=>{const s=subForCl(c,uid2,d);return s&&_subEscalationCount(c,s)>0;}).length;
+          return`<div style="background:#fff;border-radius:16px;border:1.5px solid ${uExp?'#C7D2FE':'#ECEDF0'};overflow:hidden">
+            <button onclick="S.filters.aclU=S.filters.aclU==='${uKey}'?null:'${uKey}';S.filters.aclExp=null;rr()" style="width:100%;text-align:left;padding:12px 14px;background:transparent;border:none;cursor:pointer;display:flex;align-items:center;gap:10px">
+              <span style="color:#C8C5BD;transform:rotate(${uExp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
+              ${avatar(u,'w-9 h-9','text-xs')}
+              <div style="flex:1;min-width:0">
+                <div style="font-size:14px;font-weight:700">${esc(fullName(u))}</div>
+                <div style="font-size:12px;color:#9CA3AF">${esc(u.position||u.department||'')}${(()=>{const mg=u.managerId?uById(u.managerId):null;return mg?' · under '+esc(fullName(mg)):'';})()}</div>
+              </div>
+              ${flaggedN?`<span title="${flaggedN} non-compliant submission${flaggedN>1?'s':''}" style="font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;background:#FFF1F2;color:#BE123C;margin-right:6px">⚠ ${flaggedN}</span>`:''}
+              <span style="font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:${allDone?'#E8FAF3':'#FEF7E6'};color:${allDone?'#0D7A4E':'#B36A00'}">${done}/${ucls.length} done</span>
+            </button>
+            ${uExp?`<div style="padding:0 14px 12px 38px;display:flex;flex-direction:column;gap:8px;border-top:1px solid #F5F4F0;padding-top:10px">
+              ${ucls.map(c=>roCard(c,subFor(c.id,uid2,d)||null,uKey+'|'+c.id,'')).join('')}
+            </div>`:''}
+          </div>`;
+        }).join('')}
+        </div>
+      </div>`;
+    }
+    return gHtml+uHtml;
+  };
+
+  // ── Segregate checklists by location: one section per location (Dubai, etc.), then a
+  //    "No location" bucket. A checklist tagged with multiple locations appears under each. ──
+  let locationsHtml='';
+  let anyContent=false;
+  const locList=loc?DB.locations.filter(l=>l.id===loc):DB.locations.slice();
+  const locHeader=(label,count,muted)=>`<div style="display:flex;align-items:center;gap:7px;margin:18px 0 10px">
+      <span style="color:${muted?'#9CA3AF':'#6366F1'}">${ic('pin','w-4 h-4')}</span>
+      <span style="font-size:15px;font-weight:800;color:${muted?'#6B7280':'#15171C'}">${esc(label)}</span>
+      <span style="font-size:11px;font-weight:700;color:#9CA3AF;background:#F3F4F6;padding:2px 9px;border-radius:20px">${count}</span>
     </div>`;
+  locList.forEach(l=>{
+    const secCls=cls.filter(c=>(c.locationIds||[]).includes(l.id));
+    if(!secCls.length)return;
+    const secHtml=renderSection(secCls,'loc'+l.id);
+    if(!secHtml)return;
+    anyContent=true;
+    locationsHtml+=locHeader(l.name,secCls.length,false)+secHtml;
+  });
+  if(!loc){
+    const noLocCls=cls.filter(c=>!(c.locationIds||[]).length);
+    if(noLocCls.length){
+      const secHtml=renderSection(noLocCls,'locnone');
+      if(secHtml){
+        anyContent=true;
+        locationsHtml+=locHeader('No location',noLocCls.length,true)+secHtml;
+      }
+    }
   }
 
   return`<div class="fade">
@@ -2766,8 +2800,8 @@ function allClsPage(){
         }).join('')}
       </div>
     </div>
-    ${grpHtml}${usrHtml}
-    ${!grp.length&&!userIds.length?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8;margin-top:8px">
+    ${locationsHtml}
+    ${!anyContent?`<div style="padding:60px 20px;text-align:center;background:#fff;border-radius:18px;border:1px solid #EEECE8;margin-top:8px">
       <div style="font-size:40px;margin-bottom:10px">\ud83d\udcc5</div>
       <div class="fd" style="font-size:17px;font-weight:800;color:#111110">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1?'No users under you':'No checklists'}</div>
       <p style="font-size:13px;color:#B8B5AC;margin-top:6px">${!isAdmin()&&!isSubAdmin()&&scopeUsers.length<=1
@@ -4092,8 +4126,8 @@ function ticketsPage(){
   // Manager — sees tickets assigned to them OR tickets they created (so they can track)
   // User — sees ONLY tickets assigned to them
   let tickets=(DB.tickets||[]).slice().sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));
-  if(isAdmin()){
-    // all tickets — no filter
+  if(isAdmin()||isSubAdmin()){
+    // all tickets — no filter (Super Admin + Admin see everything regardless of escalation)
   } else if(isMgr()){
     // Manager sees: assigned to them + tickets they personally created
     tickets=tickets.filter(t=>t.assignedTo===S.uid);
