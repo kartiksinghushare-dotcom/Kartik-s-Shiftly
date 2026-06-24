@@ -695,14 +695,16 @@ async function _sync(){try{
     sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
-  // Surface write failures (incl. error-bearing resolved results) instead of swallowing them.
+  // Background full-DB mirror. Row-level-security will reject rows owned by other users
+  // (notifications, audit_logs, feedback, etc.) — that is expected and harmless, because all
+  // user-facing writes go through confirmed per-record saves that report their own errors.
+  // So we log these quietly and DON'T alarm the user with a toast.
   const failed=results.filter(r=>r.status==='rejected'||(r.value&&r.value.error));
   if(failed.length){
     const msg=failed.map(r=>(r.reason&&r.reason.message)||(r.value&&r.value.error&&r.value.error.message)||'').filter(Boolean).join(', ');
-    console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',msg);
-    try{toast('⚠ Some changes didn’t sync — check your connection','warn');}catch(_){ }
+    console.warn('[Shiftly sync] '+failed.length+' background table(s) skipped (non-blocking):',msg);
   }
-}catch(e){console.warn('[Shiftly sync error]',e.message);try{toast('⚠ Sync error — check your connection','warn');}catch(_){ }}}
+}catch(e){console.warn('[Shiftly sync error]',e.message);}}
 
 /* ===== STATUS CHIPS ===== */
 const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF","Open":"background:#FFF7ED;color:#C2410C","In Progress":"background:#EFF6FF;color:#1D4ED8","Resolved":"background:#ECFDF5;color:#047857","Closed":"background:#F6F7F8;color:#9CA3AF"};
@@ -2134,7 +2136,7 @@ App._saveCl=async(editing)=>{
   const _cld=CLD;
   const clRow={id:_cld.id,name:_cld.name,description:_cld.description||'',department:_cld.department||'',frequency:_cld.frequency||'Daily',schedule:_cld.schedule||'',selected_days:_cld.selectedDays||[],selected_dates:_cld.selectedDates||[],custom_dates:_cld.customDates||[],start_date:_cld.startDate||null,end_date:_cld.endDate||null,location_ids:_cld.locationIds||[],assignees:_cld.assignees||[],tasks:_cld.tasks||[],question_ids:_cld.questionIds||[],question_configs:_cld.questionConfigs||{},schedule_time:_cld.scheduleTime||null,status:_cld.status||'Active',any_one:_cld.anyOne||false,created_by:_cld.createdBy||null};
   let _res;
-  try{_res=await sb.from('checklists').upsert(clRow,{onConflict:'id'}).select().single();}
+  try{_res=await sb.from('checklists').upsert(clRow,{onConflict:'id'});}
   catch(e){_res={error:e};}
   if(_res&&_res.error){
     console.error('Checklist save failed:',_res.error.message||_res.error);
@@ -2189,7 +2191,7 @@ App.dupCl=async(id)=>{
     start_date:null,end_date:null,
     location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:JSON.parse(JSON.stringify(copy.questionConfigs||{})),schedule_time:copy.scheduleTime||null,any_one:copy.anyOne||false,
     status:'Draft',created_by:S.uid
-  }).select().single();}catch(e){_dres={error:e};}
+  });}catch(e){_dres={error:e};}
   if(_dres&&_dres.error){
     console.error('dupCl failed:',_dres.error.message||_dres.error);
     toast('Couldn’t duplicate — please retry.','err');
