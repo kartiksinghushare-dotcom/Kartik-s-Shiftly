@@ -140,6 +140,47 @@ button:active{opacity:.75;transform:scale(.97);transition:transform .1s}
 /* Clickable stat cards */
 .stat-card-click:hover{box-shadow:0 4px 16px rgba(0,0,0,.1)!important}
 .stat-card-click:active{transform:scale(.98);opacity:.9}
+/* ════════════ UI POLISH LAYER (v2) ════════════ */
+:root{--brand:#0E9F6E;--brand-d:#0B7A55;--ring:rgba(16,185,129,.18)}
+*{ -webkit-tap-highlight-color:transparent }
+button{transition:transform .12s ease,opacity .12s ease,box-shadow .15s ease,background .15s ease,color .15s ease}
+button:active{opacity:.85;transform:scale(.97)}
+a,button,select,input,textarea,label[onclick],[onclick]{transition:all .14s ease}
+/* Inputs — consistent, refined focus */
+input,select,textarea{transition:border-color .15s ease,box-shadow .15s ease,background .15s ease}
+input:focus,select:focus,textarea:focus{box-shadow:0 0 0 3px var(--ring);border-color:var(--brand)!important}
+/* Cards lift gently on hover */
+.shadow-soft{transition:box-shadow .2s ease,transform .2s ease,border-color .2s ease}
+.bg-white.rounded-2xl:hover, .bg-white.rounded-xl:hover{box-shadow:0 6px 22px -10px rgba(16,24,40,.20)}
+/* Primary button sheen */
+.btn-primary,button[style*="#0E9F6E"],button[style*="#10B981"]{box-shadow:0 1px 2px rgba(11,122,85,.25),0 6px 16px -8px rgba(14,159,110,.45)}
+/* Saving / busy buttons → spinner + disabled look */
+button[disabled]{cursor:not-allowed;opacity:.7}
+button[data-saving]{position:relative;color:transparent!important}
+button[data-saving]::after{content:"";position:absolute;top:50%;left:50%;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid rgba(255,255,255,.45);border-top-color:#fff;border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+/* Toast — refined pill with entrance */
+@keyframes pop{0%{opacity:0;transform:translateY(10px) scale(.96)}60%{opacity:1;transform:translateY(0) scale(1.01)}100%{opacity:1;transform:translateY(0) scale(1)}}
+.pop{animation:pop .26s cubic-bezier(.2,.8,.2,1)}
+#toast .tt{display:flex;align-items:center;gap:9px;backdrop-filter:saturate(140%) blur(2px)}
+#toast .tt .ic{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;font-size:11px;font-weight:800;flex-shrink:0}
+/* Modal entrance */
+@keyframes modalIn{from{opacity:0;transform:translateY(12px) scale(.985)}to{opacity:1;transform:none}}
+@keyframes overlayIn{from{opacity:0}to{opacity:1}}
+.modal-card,[class*="max-w-"]>.bg-white{animation:modalIn .22s cubic-bezier(.2,.8,.2,1)}
+/* Frequency / chips smoother */
+.dchip{transition:all .14s ease}.dchip:hover{border-color:var(--brand);color:var(--brand)}
+.dchip.on:hover{color:#fff}
+/* Scrollbar a touch nicer */
+::-webkit-scrollbar{width:7px;height:7px}::-webkit-scrollbar-thumb{background:#D6D8DE;border-radius:8px;border:2px solid transparent;background-clip:content-box}::-webkit-scrollbar-thumb:hover{background:#A9ADB8;background-clip:content-box}
+/* Status badges crisper */
+span[style*="border-radius:20px"],span[style*="border-radius:9999px"]{letter-spacing:.01em}
+/* Empty-state helper */
+.empty-state{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:44px 20px;color:#9CA3AF}
+.empty-state svg{width:40px;height:40px;opacity:.5;margin-bottom:10px}
+/* Focus visible accessibility */
+:focus-visible{outline:2px solid var(--brand);outline-offset:2px}
+button:focus-visible,a:focus-visible{outline-offset:3px;border-radius:8px}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
@@ -187,8 +228,10 @@ let _toast;
 function toast(msg,type='ok'){
   let t=$('#toast');if(!t){t=document.createElement('div');t.id='toast';t.style.cssText='position:fixed;z-index:500;left:50%;transform:translateX(-50%);bottom:calc(70px + env(safe-area-inset-bottom));pointer-events:none';document.body.appendChild(t);}
   const bg=type==='ok'?'#15171C':type==='warn'?'#D97706':'#DC2626';
-  t.innerHTML=`<div class="pop" style="background:${bg};color:#fff;padding:10px 18px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.25)">${type==='ok'?'✓':'⚠'} ${esc(msg)}</div>`;
-  clearTimeout(_toast);_toast=setTimeout(()=>{if(t)t.innerHTML='';},2800);
+  const icbg=type==='ok'?'rgba(16,185,129,.9)':'rgba(255,255,255,.2)';
+  const glyph=type==='ok'?'✓':type==='warn'?'!':'✕';
+  t.innerHTML=`<div class="pop tt" style="background:${bg};color:#fff;padding:11px 16px 11px 12px;border-radius:14px;font-size:13px;font-weight:600;box-shadow:0 10px 34px -10px rgba(0,0,0,.45),0 2px 8px rgba(0,0,0,.2)"><span class="ic" style="background:${icbg};color:#fff">${glyph}</span><span>${esc(msg)}</span></div>`;
+  clearTimeout(_toast);_toast=setTimeout(()=>{if(t)t.innerHTML='';},type==='ok'?2800:4800);
 }
 
 /* ===== ICONS ===== */
@@ -496,9 +539,14 @@ async function _sync(){try{
     sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
-  const failed=results.filter(r=>r.status==='rejected');
-  if(failed.length)console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',failed.map(r=>r.reason?.message).join(', '));
-}catch(e){console.warn('[Shiftly sync error]',e.message);}}
+  // Surface write failures (incl. error-bearing resolved results) instead of swallowing them.
+  const failed=results.filter(r=>r.status==='rejected'||(r.value&&r.value.error));
+  if(failed.length){
+    const msg=failed.map(r=>(r.reason&&r.reason.message)||(r.value&&r.value.error&&r.value.error.message)||'').filter(Boolean).join(', ');
+    console.warn('[Shiftly sync] '+failed.length+' table(s) failed:',msg);
+    try{toast('⚠ Some changes didn’t sync — check your connection','warn');}catch(_){ }
+  }
+}catch(e){console.warn('[Shiftly sync error]',e.message);try{toast('⚠ Sync error — check your connection','warn');}catch(_){ }}}
 
 /* ===== STATUS CHIPS ===== */
 const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF","Open":"background:#FFF7ED;color:#C2410C","In Progress":"background:#EFF6FF;color:#1D4ED8","Resolved":"background:#ECFDF5;color:#047857","Closed":"background:#F6F7F8;color:#9CA3AF"};
@@ -1906,7 +1954,9 @@ App._togLoc=(id,on,el)=>{if(!CLD.locationIds)CLD.locationIds=[];if(on&&!CLD.loca
 App._togAsgn=(id,on,el)=>{if(!CLD.assignees)CLD.assignees=[];if(on&&!CLD.assignees.includes(id))CLD.assignees.push(id);if(!on)CLD.assignees=CLD.assignees.filter(a=>a!==id);el.closest('label').className=`flex items-center gap-2 p-2 rounded-xl border cursor-pointer transition text-xs ${on?'border-brand-300 bg-brand-50':'border-ink-100'}`;};
 
 
-App._saveCl=(editing)=>{
+App._saveCl=async(editing)=>{
+  const btn=document.getElementById('cl-save-btn');
+  const _resetBtn=()=>{if(btn){btn.disabled=false;btn.removeAttribute('data-saving');btn.textContent=editing?'Save changes':'Create checklist';}};
   try{
   // Read all form values — also call _snapshotCLD for safety
   _snapshotCLD();
@@ -1916,42 +1966,47 @@ App._saveCl=(editing)=>{
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
   if($('#cn-anyone'))CLD.anyOne=$('#cn-anyone').classList.contains('on');
-  if(!CLD.name){toast('Name required','err');
-    const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
-    return;}
+  if(!CLD.name){toast('Name required','err');_resetBtn();return;}
   CLD.questionIds=CLD.questionIds||[];CLD.questionConfigs=CLD.questionConfigs||{};CLD.tasks=CLD.tasks||[];
-  if(!CLD.questionIds.length){toast('Add at least one question','err');
-    const btn=document.getElementById('cl-save-btn');if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
-    return;}
+  if(!CLD.questionIds.length){toast('Add at least one question','err');_resetBtn();return;}
+  // ── Saving state ──
+  if(btn){btn.disabled=true;btn.setAttribute('data-saving','1');btn.textContent=editing?'Saving…':'Creating…';}
   const prevAssignees=editing?((clById(CLD.id)?.assignees)||[]):[];
-  const _existIdx=DB.checklists.findIndex(c=>c.id===CLD.id);
-  if(_existIdx>-1){DB.checklists[_existIdx]=CLD;}else{DB.checklists.push(CLD);}
-  const newlyAssigned=(CLD.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
+  // ── Write to Supabase FIRST. Only commit local state / audit log / notifications
+  //    AFTER the server confirms the write, so nothing is ever "created" in the UI
+  //    or audit log without actually being stored in the database. ──
+  const _cld=CLD;
+  const clRow={id:_cld.id,name:_cld.name,description:_cld.description||'',department:_cld.department||'',frequency:_cld.frequency||'Daily',schedule:_cld.schedule||'',selected_days:_cld.selectedDays||[],selected_dates:_cld.selectedDates||[],custom_dates:_cld.customDates||[],start_date:_cld.startDate||null,end_date:_cld.endDate||null,location_ids:_cld.locationIds||[],assignees:_cld.assignees||[],tasks:_cld.tasks||[],question_ids:_cld.questionIds||[],question_configs:_cld.questionConfigs||{},schedule_time:_cld.scheduleTime||null,status:_cld.status||'Active',any_one:_cld.anyOne||false,created_by:_cld.createdBy||null};
+  let _res;
+  try{_res=await sb.from('checklists').upsert(clRow,{onConflict:'id'}).select().single();}
+  catch(e){_res={error:e};}
+  if(_res&&_res.error){
+    console.error('Checklist save failed:',_res.error.message||_res.error);
+    toast('Couldn’t save to server — please retry. ('+String(_res.error.message||_res.error).slice(0,48)+')','err');
+    _resetBtn();
+    return;
+  }
+  // ── Server confirmed → commit locally ──
+  const _existIdx=DB.checklists.findIndex(c=>c.id===_cld.id);
+  if(_existIdx>-1){DB.checklists[_existIdx]=_cld;}else{DB.checklists.push(_cld);}
+  const newlyAssigned=(_cld.assignees||[]).filter(uid2=>!prevAssignees.includes(uid2)&&uid2!==S.uid);
   newlyAssigned.forEach(uid2=>{
-    DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+CLD.name+'"',time:new Date().toISOString(),read:false});
-    queueEmail('checklist_assigned',uid2,null,null,{checklist_name:CLD.name});
+    DB.notifications.unshift({id:uid('n'),userId:uid2,text:'📋 Checklist assigned: "'+_cld.name+'"',time:new Date().toISOString(),read:false});
+    queueEmail('checklist_assigned',uid2,null,null,{checklist_name:_cld.name});
   });
   if(newlyAssigned.length)_invalidateNotifCache();
-  log(fullName(me()),editing?'Edited cl':'Created cl',CLD.name);
-  // ── Capture row before clearing CLD ──
-  const clRow={id:CLD.id,name:CLD.name,description:CLD.description||'',department:CLD.department||'',frequency:CLD.frequency||'Daily',schedule:CLD.schedule||'',selected_days:CLD.selectedDays||[],selected_dates:CLD.selectedDates||[],custom_dates:CLD.customDates||[],start_date:CLD.startDate||null,end_date:CLD.endDate||null,location_ids:CLD.locationIds||[],assignees:CLD.assignees||[],tasks:CLD.tasks||[],question_ids:CLD.questionIds||[],question_configs:CLD.questionConfigs||{},schedule_time:CLD.scheduleTime||null,status:CLD.status||'Active',any_one:CLD.anyOne||false,created_by:CLD.createdBy||null};
-  const toastMsg=editing?'Saved ✓':'Checklist created ✓';
-  // ── Clear CLD FIRST so render() never re-opens the modal ──
+  log(fullName(me()),editing?'Edited cl':'Created cl',_cld.name);
+  const toastMsg=editing?'Saved to server ✓':'Checklist created ✓';
   CLD=null;
   App._clQSel=null;
   closeModal();
   toast(toastMsg);
   saveDB();
   render();
-  // ── Sync to Supabase in background ──
-  sb.from('checklists').upsert(clRow,{onConflict:'id'}).then(({error})=>{
-    if(error){console.error('Checklist sync error:',error.message);toast('⚠ Not synced: '+error.message.slice(0,60),'warn');}
-  }).catch(e=>console.error('Checklist sync:',e));
   }catch(err){
     console.error('_saveCl error:',err);
-    toast('Error saving: '+err.message,'err');
-    const btn=document.getElementById('cl-save-btn');
-    if(btn){btn.disabled=false;btn.textContent=editing?'Save changes':'Create checklist';}
+    toast('Error saving: '+(err&&err.message||err),'err');
+    _resetBtn();
   }
 };
 App.dupCl=async(id)=>{
@@ -1967,13 +2022,10 @@ App.dupCl=async(id)=>{
   copy.createdBy=S.uid;
   // Give each task a fresh ID to avoid any ID collisions
   (copy.tasks||[]).forEach(t=>{t.id=uid('t');});
-  DB.checklists.unshift(copy);  // show at top of list
-  // Render immediately — don't wait for Supabase
-  log(fullName(me()),'Duplicated checklist',src.name);
-  toast('✓ Duplicated as Draft — tap Edit to make changes');
-  saveDB();render();
-  // Sync to Supabase in background
-  sb.from('checklists').insert({
+  // ── Write to Supabase FIRST, then reflect locally only on success ──
+  toast('Duplicating…');
+  let _dres;
+  try{_dres=await sb.from('checklists').insert({
     id:copy.id,name:copy.name,description:copy.description||'',
     department:copy.department||'',frequency:copy.frequency||'Daily',
     schedule:copy.schedule||'',selected_days:copy.selectedDays||[],
@@ -1981,23 +2033,41 @@ App.dupCl=async(id)=>{
     start_date:null,end_date:null,
     location_ids:copy.locationIds||[],assignees:[],tasks:copy.tasks||[],question_ids:copy.questionIds||[],question_configs:JSON.parse(JSON.stringify(copy.questionConfigs||{})),schedule_time:copy.scheduleTime||null,any_one:copy.anyOne||false,
     status:'Draft',created_by:S.uid
-  }).then(()=>{}).catch(e=>console.warn('dupCl sync:',e));
+  }).select().single();}catch(e){_dres={error:e};}
+  if(_dres&&_dres.error){
+    console.error('dupCl failed:',_dres.error.message||_dres.error);
+    toast('Couldn’t duplicate — please retry.','err');
+    return;
+  }
+  copy.assignees=[];
+  DB.checklists.unshift(copy);  // show at top of list
+  log(fullName(me()),'Duplicated checklist',src.name);
+  toast('✓ Duplicated as Draft — tap Edit to make changes');
+  saveDB();render();
 };
 
-App.delCl=(id)=>{
+App.delCl=async(id)=>{
   const c=clById(id);if(!c)return;
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
-  // ── Remove locally immediately for instant UI ──
+  // ── Delete on the server FIRST. Only update local state / audit log after
+  //    the server confirms, so the UI and DB never disagree. ──
+  toast('Deleting…','warn');
+  let _dr;
+  try{_dr=await sb.from('checklists').delete().eq('id',id);}catch(e){_dr={error:e};}
+  if(_dr&&_dr.error){
+    console.error('delCl failed:',_dr.error.message||_dr.error);
+    toast('Couldn’t delete — please retry.','err');
+    return;
+  }
+  // ── Server confirmed → reflect locally ──
   DB.checklists=DB.checklists.filter(x=>x.id!==id);
+  if(!DB.checklists_deleted)DB.checklists_deleted=[];
+  if(!DB.checklists_deleted.includes(id))DB.checklists_deleted.push(id);
   DB.submissions.filter(s=>s.checklistId===id).forEach(s=>s.checklistDeleted=true);
   const clAssignees=c.assignees||[];
   clAssignees.forEach(uid2=>{if(uid2!==S.uid)DB.notifications.unshift({id:uid('n'),userId:uid2,text:'Checklist removed: "'+c.name+'" is no longer assigned to you',time:new Date().toISOString(),read:false});});
   _invalidateNotifCache();log(fullName(me()),'Deleted cl',c.name);
   toast('Deleted','warn');saveDB();render();
-  // ── Sync to Supabase in background ──
-  sb.from('checklists').delete().eq('id',id).then(({error})=>{
-    if(error)console.error('delCl sync:',error.message);
-  }).catch(e=>console.error('delCl:',e));
 };
 
 /* ===== MY CHECKLISTS — Calendar + Ultra-compact ===== */
