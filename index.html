@@ -181,6 +181,99 @@ span[style*="border-radius:20px"],span[style*="border-radius:9999px"]{letter-spa
 /* Focus visible accessibility */
 :focus-visible{outline:2px solid var(--brand);outline-offset:2px}
 button:focus-visible,a:focus-visible{outline-offset:3px;border-radius:8px}
+/* ════════════ VIBRANT THEME (v3) — modern & lively ════════════ */
+:root{
+  --g1:#0E9F6E;--g2:#10B981;--g3:#34D399;
+  --grad-brand:linear-gradient(135deg,#10B981 0%,#0E9F6E 55%,#0B7A55 100%);
+  --grad-dark:linear-gradient(135deg,#23272F 0%,#15171C 100%);
+  --grad-paper:radial-gradient(1200px 600px at 100% -10%,rgba(16,185,129,.10),transparent 60%),radial-gradient(900px 500px at -10% 110%,rgba(59,130,246,.07),transparent 55%),linear-gradient(180deg,#F8FAF8 0%,#F4F6F4 100%);
+  --card-sh:0 1px 2px rgba(16,24,40,.04),0 10px 28px -14px rgba(16,24,40,.18);
+  --card-sh-hi:0 8px 22px -8px rgba(16,159,110,.22),0 18px 40px -16px rgba(16,24,40,.22);
+}
+/* App backdrop */
+body{background:var(--grad-paper)!important;background-attachment:fixed!important}
+/* Brand logo squares → gradient + glow (sidebar + topbar use .nav-brand) */
+.nav-brand{display:grid;place-items:center;width:34px;height:34px;border-radius:11px;background:var(--grad-brand);color:#fff;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:17px;box-shadow:0 6px 16px -4px rgba(16,159,110,.55);letter-spacing:-.5px}
+/* Sidebar → deep gradient with subtle inner glow */
+aside.sidebar{background:linear-gradient(180deg,#1B1E25 0%,#15171C 60%,#101216 100%)!important;border-right:1px solid rgba(255,255,255,.05)}
+/* Page titles a touch larger + tighter */
+main#content h1.fd{letter-spacing:-.6px}
+/* ── Cards: more depth, bigger radius, lively hover lift ── */
+main#content .bg-white.rounded-2xl,
+main#content .bg-white.rounded-xl,
+main#content .shadow-soft{
+  border-radius:20px;
+  box-shadow:var(--card-sh);
+  border-color:#EEF0F2;
+  transition:transform .18s ease, box-shadow .22s ease, border-color .18s ease;
+}
+main#content .bg-white.rounded-2xl:hover,
+main#content .shadow-soft:hover{
+  transform:translateY(-2px);
+  box-shadow:var(--card-sh-hi);
+  border-color:#D6F2E6;
+}
+/* Don't lift rows/inner static blocks too aggressively */
+main#content table .bg-white:hover{transform:none}
+/* ── Primary (dark) buttons → gradient + depth ── */
+button[style*="background:#15171C"]{
+  background:var(--grad-dark)!important;
+  box-shadow:0 1px 2px rgba(0,0,0,.18),0 10px 22px -10px rgba(0,0,0,.45)!important;
+  border-radius:12px!important;
+}
+button[style*="background:#15171C"]:hover{filter:brightness(1.12)}
+/* ── Green buttons / pills → brand gradient ── */
+button[style*="background:#0E9F6E"],
+button[style*="background:#10B981"],
+.submit-pill.go,
+button[style*="background:#111110"]{
+  background:var(--grad-brand)!important;
+  box-shadow:0 2px 6px rgba(11,122,85,.30),0 10px 22px -10px rgba(16,159,110,.55)!important;
+}
+.submit-pill.go:hover{filter:brightness(1.08)}
+/* ── Stat cards: vivid accent strip + bigger number ── */
+.stat-card-click,
+main#content [style*="border-radius:20px"][style*="border:1px solid #ECEDF0"]{
+  position:relative;overflow:hidden;border-radius:20px!important;
+  box-shadow:var(--card-sh)!important;
+  transition:transform .18s ease, box-shadow .22s ease!important;
+}
+.stat-card-click::before{
+  content:"";position:absolute;left:0;top:0;bottom:0;width:4px;
+  background:var(--grad-brand);border-radius:4px 0 0 4px;
+}
+.stat-card-click:hover{transform:translateY(-3px);box-shadow:var(--card-sh-hi)!important}
+/* ── Status chips / badges: subtle depth + crisp ── */
+span[style*="border-radius:20px"][style*="font-weight:700"]{
+  box-shadow:0 1px 1px rgba(16,24,40,.04);
+}
+/* ── Progress bars → gradient fill ── */
+.pgf,
+[style*="background:#0E9F6E"][style*="height:100%"]{
+  background:var(--grad-brand)!important;
+}
+/* ── Calendar selected day → gradient pop ── */
+.csd.act{background:var(--grad-dark)!important}
+.cal4-d.sel{background:var(--grad-dark)!important}
+/* ── Inputs: rounder + soft inner ── */
+main#content input,main#content select,main#content textarea{border-radius:12px}
+.rf{border-radius:12px}
+/* Section dividers a hair lighter for airiness */
+.divide-ink-50>*+*{border-color:#F3F5F4}
+/* Topbar glassy */
+header.topbar{background:rgba(248,250,248,.85)!important;backdrop-filter:blur(18px) saturate(140%)!important}
+/* Mobile bottom nav active accent */
+nav.md\:hidden button[style*="#0E9F6E"]{position:relative}
+/* Modal surface a touch warmer shadow */
+#modal>div{box-shadow:0 30px 90px -20px rgba(16,24,40,.45),0 10px 30px -12px rgba(16,24,40,.30)!important}
+/* Empty-state icons get a soft brand tint */
+main#content [style*="background:#F6F7F8"][style*="place-items:center"]{background:linear-gradient(135deg,#ECFDF5,#F0FDF9)!important}
+/* Avatars: subtle ring */
+.rounded-full.grid.place-items-center{box-shadow:inset 0 0 0 1px rgba(0,0,0,.03)}
+/* Login hero panel richer */
+.loginView,.bg-paper{background:var(--grad-paper)}
+/* Buttons feel springy */
+button:active{transform:scale(.96)}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
