@@ -293,6 +293,50 @@ span.bg-brand-50.text-brand-700{background:#E7F9F1!important;color:#0B7A55!impor
 /* Stat-card label text slightly darker for legibility */
 main#content [style*="text-transform:uppercase"][style*="#9CA3AF"]{color:#8A93A0!important}
 /* Empty-state check icon container keeps brand tint already from v3; ensure contrast of helper copy */
+/* ════════════ BEST POLISH (v5) — full pass, consistency & arrangement ════════════ */
+/* --- Layout breathing room --- */
+@media(min-width:768px){ main#content{padding:24px 28px 96px!important} }
+main#content h1.fd + p{ margin-top:3px }
+/* --- Sidebar: brand accent bar on the active item + smoother items --- */
+aside.sidebar nav button[style*="rgba(255,255,255,.12)"]{
+  position:relative; box-shadow:inset 3px 0 0 0 #34D399;
+}
+aside.sidebar nav button{ letter-spacing:.1px }
+/* --- Tables: header tint, row hover, legible action icons --- */
+main#content thead tr{ background:#FBFCFB }
+main#content tbody tr{ transition:background .12s ease }
+main#content tbody tr:hover{ background:#F6FAF8!important }
+main#content table button[style*="color:#9CA3AF"]{ color:#5B6470!important; border-radius:8px!important }
+main#content table button:hover{ background:#EEF2F0!important }
+/* --- Selects & filter dropdowns: unified rounding & borders --- */
+main#content select{ border-radius:11px!important; border-color:#E4E8E6!important }
+main#content select:hover{ border-color:#C7D2CC!important }
+/* --- Inputs: softer placeholders, consistent radius (radius from v3) --- */
+::placeholder{ color:#A7AEB8!important; opacity:1 }
+/* --- Filter / tab pill buttons: consistent rounded hit area --- */
+main#content button[style*="border-radius:20px"]{ transition:all .14s ease }
+/* --- Card section titles: consistent weight & spacing --- */
+main#content .fd.font-semibold{ letter-spacing:-.2px }
+/* --- Dividers a touch lighter for airiness --- */
+.divide-ink-50 > * + *{ border-color:#F2F4F3!important }
+.divide-ink-100 > * + *{ border-color:#EDF0EE!important }
+/* --- Stat numbers: tighter, more confident --- */
+main#content .fd[style*="font-size:30px"], main#content [style*="font-size:28px"][style*="font-weight:800"]{ letter-spacing:-1px }
+/* --- Secondary (white) buttons: subtle depth so they don't read as flat --- */
+button[style*="background:#fff"][style*="border:1.5px solid #ECEDF0"]{ box-shadow:0 1px 2px rgba(16,24,40,.05) }
+button[style*="background:#fff"][style*="border:1.5px solid #ECEDF0"]:hover{ background:#F7F9F8!important }
+/* --- Calendar strip: rounder, lifted --- */
+.cal-strip,.cal4{ box-shadow:0 2px 10px -4px rgba(16,24,40,.12)!important }
+/* --- Mobile bottom nav: cleaner top edge + active brand --- */
+nav.md\:hidden{ box-shadow:0 -6px 20px -10px rgba(16,24,40,.18) }
+/* --- Empty-state cards: gentle brand-tinted backdrop --- */
+main#content [style*="border-radius:18px"][style*="border:1px solid #EEECE8"]{ border-radius:20px!important }
+/* --- Modals: comfortable max-height scroll & crisp header divider --- */
+#modal .border-b.border-ink-100{ border-color:#EEF0EE!important }
+/* --- Login screen hero: deepen the dark panel --- */
+.min-h-screen [style*="background:#15171C"]{ background:linear-gradient(160deg,#1B1E25 0%,#15171C 70%)!important }
+/* --- Focus rings consistent on all controls --- */
+main#content input:focus,main#content select:focus,main#content textarea:focus{ box-shadow:0 0 0 3px rgba(16,185,129,.16)!important }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
