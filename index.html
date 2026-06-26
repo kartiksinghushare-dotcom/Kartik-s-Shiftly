@@ -2,15 +2,15 @@
 <html lang="en">
 <head>
 <meta charset="utf-8"/>
-<meta name="description" content="Shiftly — shift checklist and task management."/>
+<meta name="description" content="Bridge — shift checklist and task management."/>
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
-<title>Shiftly</title>
+<title>Bridge</title>
 <script>(()=>{const w=console.warn;console.warn=(...a)=>{if(typeof a[0]==='string'&&a[0].includes('cdn.tailwind'))return;w(...a)};window.addEventListener('error',e=>{if(!e.filename||e.filename.includes('cdn.tailwind')||e.filename.includes('fonts.google'))e.stopImmediatePropagation();},true);})();</script>
 <script src="https://cdn.tailwindcss.com"></script>
 <link href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@400;500;600;700;800&family=Hanken+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script>if(typeof tailwind!=='undefined')tailwind.config={theme:{extend:{fontFamily:{display:['"Schibsted Grotesk"'],sans:['"Hanken Grotesk"']},colors:{ink:{DEFAULT:'#15171C',50:'#F6F7F8',100:'#ECEDF0',200:'#D6D8DE',300:'#A9ADB8',400:'#6B7280',500:'#3A3E48',600:'#262A33',700:'#1C1F26',800:'#15171C'},brand:{DEFAULT:'#0E9F6E',50:'#ECFDF5',100:'#D1FAE5',400:'#34D399',500:'#10B981',600:'#0E9F6E',700:'#0B7A55'},paper:'#F7F6F2'},boxShadow:{soft:'0 1px 2px rgba(16,24,40,.04),0 4px 16px -6px rgba(16,24,40,.10)',pop:'0 8px 40px -8px rgba(16,24,40,.28)'}}}}</script>
 <style>
-/* ─ Shiftly base ─ */
+/* ─ Bridge base ─ */
 html,body{height:100%}
 body{font-family:"Hanken Grotesk",sans-serif;background:#F7F6F2;color:#15171C;-webkit-font-smoothing:antialiased;overscroll-behavior:none}
 .fd{font-family:"Schibsted Grotesk",sans-serif}
@@ -598,7 +598,7 @@ async function loadFromSB(){
 
   // ── Departments + Locations: everyone sees all ──
   const _delDepts=new Set(DB.departments_deleted||[]);
-  DB.departments=(depts||[]).filter(d=>!_delDepts.has(d.id)).map(d=>({id:d.id,name:d.name}));
+  DB.departments=(depts||[]).filter(d=>!_delDepts.has(d.id)).map(d=>({id:d.id,name:d.name,parentId:d.parent_id||null}));
   const _delLocs=new Set(DB.locations_deleted||[]);
   DB.locations=(locs||[]).filter(l=>!_delLocs.has(l.id)).map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'}));
 
@@ -663,7 +663,7 @@ async function loadFromSB(){
   // Questions tab content is filtered by createdBy in questionsPage()
   if(qRows){
     const _delQs=new Set(DB.questions_deleted||[]);
-    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at}));
+    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at,departmentId:q.department_id||null,subDepartmentId:q.sub_department_id||null}));
   }
 
   // ── Feedback: role-scoped (shared helper, last-30-day window) ──
@@ -682,7 +682,7 @@ async function loadFromSB(){
 }
 async function _sync(){try{
   const results=await Promise.allSettled([
-    sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name})),{onConflict:'id'}),
+    sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name,parent_id:d.parentId||null})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
     sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',any_one:c.anyOne||false,created_by:c.createdBy||null})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
@@ -692,7 +692,7 @@ async function _sync(){try{
     sb.from('feedback').upsert((DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
-    sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}),
+    sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString(),department_id:q.departmentId||null,sub_department_id:q.subDepartmentId||null})),{onConflict:'id'}),
     (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
   // Background full-DB mirror. Row-level-security will reject rows owned by other users
@@ -702,9 +702,9 @@ async function _sync(){try{
   const failed=results.filter(r=>r.status==='rejected'||(r.value&&r.value.error));
   if(failed.length){
     const msg=failed.map(r=>(r.reason&&r.reason.message)||(r.value&&r.value.error&&r.value.error.message)||'').filter(Boolean).join(', ');
-    console.warn('[Shiftly sync] '+failed.length+' background table(s) skipped (non-blocking):',msg);
+    console.warn('[Bridge sync] '+failed.length+' background table(s) skipped (non-blocking):',msg);
   }
-}catch(e){console.warn('[Shiftly sync error]',e.message);}}
+}catch(e){console.warn('[Bridge sync error]',e.message);}}
 
 /* ===== STATUS CHIPS ===== */
 const CHIP_STYLE={"On Time":"background:#ECFDF5;color:#047857","Submitted":"background:#ECFDF5;color:#047857","Pending":"background:#FFFBEB;color:#B45309","Late":"background:#FFF1F2;color:#BE123C","Pending Approval":"background:#FFF7ED;color:#C2410C","Rejected":"background:#FFF1F2;color:#9F1239","Active":"background:#ECFDF5;color:#047857","Inactive":"background:#F6F7F8;color:#9CA3AF","Approved":"background:#ECFDF5;color:#047857","Editing":"background:#EFF6FF;color:#1D4ED8","Upcoming":"background:#FAF5FF;color:#7E22CE","Draft":"background:#F6F7F8;color:#9CA3AF","Open":"background:#FFF7ED;color:#C2410C","In Progress":"background:#EFF6FF;color:#1D4ED8","Resolved":"background:#ECFDF5;color:#047857","Closed":"background:#F6F7F8;color:#9CA3AF"};
@@ -751,7 +751,7 @@ function saveDB(){
   clearTimeout(_syncTimer);
   _syncTimer=setTimeout(()=>{
     _sync().catch(e=>{
-      console.warn('[Shiftly] Sync error:',e.message);
+      console.warn('[Bridge] Sync error:',e.message);
     });
   },1500);
 }
@@ -985,8 +985,8 @@ function shell(content){
   return`<div style="min-height:100vh;display:flex">
   <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="background:#15171C;color:#fff">
     <button onclick="App.go('dashboard')" style="padding:12px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;border-left:none;border-right:none;border-top:none;cursor:pointer;width:100%;text-align:left" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background='transparent'">
-      <div class="nav-brand">S</div>
-      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Shiftly</span>
+      <div class="nav-brand">B</div>
+      <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Bridge</span>
     </button>
     <nav style="flex:1;padding:8px;display:flex;flex-direction:column;gap:2px">${sideLinks}</nav>
     <div style="padding:8px;border-top:1px solid rgba(255,255,255,.06)">
@@ -1007,8 +1007,8 @@ function shell(content){
     <header class="topbar sticky top-0 z-20" style="background:rgba(247,246,242,.92);backdrop-filter:blur(16px);border-bottom:1px solid #ECEDF0">
       <div style="height:52px;padding:0 20px;display:flex;align-items:center;gap:12px">
         <div class="md:hidden flex items-center gap-2">
-          <div class="nav-brand" style="width:24px;height:24px;font-size:11px">S</div>
-          <span class="fd" style="font-weight:800;font-size:14px">Shiftly</span>
+          <div class="nav-brand" style="width:24px;height:24px;font-size:11px">B</div>
+          <span class="fd" style="font-weight:800;font-size:14px">Bridge</span>
         </div>
         <div style="flex:1"></div>
 
@@ -1091,8 +1091,8 @@ function pageContent(){
 }
 
 /* ===== LOGIN ===== */
-function loginView(){return`<div class="min-h-screen flex"><div class="hidden lg:flex flex-col justify-between" style="width:42%;background:#15171C;color:#fff;padding:48px;position:relative;overflow:hidden"><div class="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-brand-600/20 blur-3xl"></div><div class="flex items-center gap-3 relative"><div style="width:36px;height:36px;border-radius:12px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:18px;color:#fff">S</div><span class="fd font-bold text-2xl">Shiftly</span></div><div class="relative"><h1 class="fd text-4xl font-bold leading-tight">Every shift,<br>every check,<br><span class="text-brand-400">accounted for.</span></h1><p class="text-ink-300 mt-4 leading-relaxed text-sm">Enterprise checklists with question-based responses, escalation routing, location tracking, and real-time approvals.</p></div><div class="text-xs text-ink-400">© 2026 Shiftly</div></div>
-<div class="flex-1 flex items-center justify-center p-6 bg-paper"><div class="w-full max-w-sm fade"><div class="lg:hidden flex items-center gap-2 mb-7 justify-center"><div style="width:32px;height:32px;border-radius:10px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:16px;color:#fff">S</div><span class="fd font-bold text-xl">Shiftly</span></div><h2 class="fd text-2xl font-bold mb-1">Welcome back</h2><p class="text-ink-400 text-sm mb-5">Sign in to your workspace.</p><div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
+function loginView(){return`<div class="min-h-screen flex"><div class="hidden lg:flex flex-col justify-between" style="width:42%;background:#15171C;color:#fff;padding:48px;position:relative;overflow:hidden"><div class="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-brand-600/20 blur-3xl"></div><div class="flex items-center gap-3 relative"><div style="width:36px;height:36px;border-radius:12px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:18px;color:#fff">B</div><span class="fd font-bold text-2xl">Bridge</span></div><div class="relative"><h1 class="fd text-4xl font-bold leading-tight">Every shift,<br>every check,<br><span class="text-brand-400">accounted for.</span></h1><p class="text-ink-300 mt-4 leading-relaxed text-sm">Enterprise checklists with question-based responses, escalation routing, location tracking, and real-time approvals.</p></div><div class="text-xs text-ink-400">© 2026 Bridge</div></div>
+<div class="flex-1 flex items-center justify-center p-6 bg-paper"><div class="w-full max-w-sm fade"><div class="lg:hidden flex items-center gap-2 mb-7 justify-center"><div style="width:32px;height:32px;border-radius:10px;background:#0E9F6E;display:grid;place-items:center;font-family:'Schibsted Grotesk',sans-serif;font-weight:800;font-size:16px;color:#fff">B</div><span class="fd font-bold text-xl">Bridge</span></div><h2 class="fd text-2xl font-bold mb-1">Welcome back</h2><p class="text-ink-400 text-sm mb-5">Sign in to your workspace.</p><div style="display:flex;flex-direction:column;gap:10px;margin-bottom:4px">
   <div>
     <label for="li-e" style="display:block;font-size:11px;font-weight:700;color:#9CA3AF;letter-spacing:.06em;text-transform:uppercase;margin-bottom:5px">Email address</label>
     <input id="li-e" type="email" autocomplete="email" placeholder="Enter your email"
@@ -1212,7 +1212,7 @@ function adminDash(){
   const active=DB.users.filter(u=>u.status==='Active').length;
   const pendA=DB.approvals.filter(a=>a.status==='Pending').length;
   const late=fSubs.filter(s=>s.status==='Late').length;
-  const depts=DB.departments.map(d=>{const us=DB.users.filter(u=>u.department===d.name).length;const cls=DB.checklists.filter(c=>c.department===d.name).length;const ss=fSubs.filter(s=>{const c=clById(s.checklistId);return c?.department===d.name;});return{name:d.name,us,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};}).filter(d=>d.us||d.cls);
+  const depts=topDepts().map(d=>{const us=DB.users.filter(u=>u.department===d.name).length;const cls=DB.checklists.filter(c=>c.department===d.name).length;const ss=fSubs.filter(s=>{const c=clById(s.checklistId);return c?.department===d.name;});return{name:d.name,us,cls,total:ss.length,onTime:ss.filter(s=>s.status==='On Time').length,late:ss.filter(s=>s.status==='Late').length};}).filter(d=>d.us||d.cls);
   const recent=fSubs.slice().sort((a,b)=>(b.submittedAt||'').localeCompare(a.submittedAt||'')).slice(0,8);
   return`<div class="fade">${hdr('Dashboard',new Date().toLocaleDateString('en-GB',{weekday:'long',day:'numeric',month:'long'}))}
   ${_dashFilterBar()}
@@ -1306,7 +1306,7 @@ function usersPage(){
   return`<div class="fade">${hdr('Users',visU().length+' people',isAdmin()?btnP('Add user','App.editUser()','plus'):'')}
   <div class="flex gap-2 mb-4 flex-wrap">
     <div class="relative flex-1 min-w-[160px] md:hidden"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-300">${ic('search','w-4 h-4')}</span><input oninput="S.search=this.value;rr()" value="${esc(S.search)}" placeholder="Search…" class="w-full bg-white border border-ink-200 rounded-xl pl-9 pr-3 py-2.5 text-sm rf"/></div>
-    <select onchange="S.filters.dep=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">All depts</option>${DB.departments.map(d=>`<option ${S.filters.dep===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
+    <select onchange="S.filters.dep=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">All depts</option>${topDepts().map(d=>`<option ${S.filters.dep===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     <select onchange="S.filters.stat=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Any status</option><option ${S.filters.stat==='Active'?'selected':''}>Active</option><option ${S.filters.stat==='Inactive'?'selected':''}>Inactive</option></select>
   </div>
   <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
@@ -1319,14 +1319,14 @@ function usersPage(){
     ${mgr?`<div class="text-xs text-ink-400 mt-2.5 pt-2.5 border-t border-ink-50">Reports to <strong>${esc(fullName(mgr))}</strong></div>`:''}</div>`;}).join('')}</div>
 </div>`;}
 function _docAccessSection(u){
-  if(!DB.departments.length&&!DB.locations.length)return'<div style="background:#F9FAFB;border-radius:16px;padding:14px;margin-top:8px"><p style="font-size:12px;color:#9CA3AF;text-align:center">Add departments and locations first to assign document access.</p></div>';
+  if(!topDepts().length&&!DB.locations.length)return'<div style="background:#F9FAFB;border-radius:16px;padding:14px;margin-top:8px"><p style="font-size:12px;color:#9CA3AF;text-align:center">Add departments and locations first to assign document access.</p></div>';
   const da=u?.docAccess||{departments:{},locations:{}};
   const PERMS=['view','upload','download','edit'];
   let html='<div style="border-top:1px solid #ECEDF0;margin-top:14px;padding-top:14px">'
     +'<p style="font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:#9CA3AF;margin-bottom:10px">Document Access</p>';
-  if(DB.departments.length){
+  if(topDepts().length){
     html+='<p style="font-size:11px;font-weight:700;color:#374151;margin-bottom:8px">Departments</p>';
-    html+=DB.departments.map(d=>{
+    html+=topDepts().map(d=>{
       const dp=da.departments?.[d.name]||{};
       return'<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px;padding:9px 12px;background:#F9FAFB;border-radius:10px">'
         +'<span style="font-size:12px;font-weight:600;min-width:100px;flex-shrink:0">'+esc(d.name)+'</span>'
@@ -1364,7 +1364,7 @@ App.editUser=(id=null)=>{
   <div class="space-y-3">
     <div class="grid grid-cols-2 gap-3">${fld('First name','u-fn',v('firstName'))}${fld('Last name','u-ln',v('lastName'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Email','u-email',v('email'),'email')}${fld('Phone','u-phone',v('phone'))}</div>
-    <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',DB.departments.map(d=>d.name),u?.department||'')}</div>
+    <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',topDepts().map(d=>d.name),u?.department||'')}</div>
     <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',[['User','User'],['SubAdmin','Admin'],['Admin','Super Admin']],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label for="u-mgr" class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??true,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??true,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
@@ -1711,6 +1711,28 @@ function queueEmail(eventKey,userId,clId,date,vars){
 }
 
 
+function topDepts(){return (DB.departments||[]).filter(d=>!d.parentId);}
+function subDepts(pid){return (DB.departments||[]).filter(d=>d.parentId===pid);}
+let _deptParent=null;
+function _subDeptsTabHTML(d){
+  const subs=subDepts(d.id);
+  let h='<div>';
+  h+='<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">';
+  h+='<div style="font-size:13px;color:#6B7280">'+subs.length+' sub-department'+(subs.length===1?'':'s')+'</div>';
+  if(isAdmin())h+='<button onclick="App.editDept(null,\''+d.id+'\')" style="display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border-radius:10px;background:#15171C;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">'+ic('plus','w-4 h-4')+'Add sub-department</button>';
+  h+='</div>';
+  if(!subs.length){h+=empty('dept','No sub-departments','Create a sub-department to organise questions inside '+esc(d.name)+'.');}
+  else{h+='<div class="space-y-2">'+subs.map(s=>{
+    const qn=(DB.questions||[]).filter(q=>q.subDepartmentId===s.id).length;
+    return '<div style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;border:1px solid #ECEDF0;padding:12px 14px">'
+      +'<div style="width:36px;height:36px;border-radius:10px;background:#ECFDF5;display:grid;place-items:center;flex-shrink:0">'+ic('dept','w-4 h-4 text-brand-600')+'</div>'
+      +'<div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:600">'+esc(s.name)+'</div><div style="font-size:12px;color:#9CA3AF">'+qn+' question'+(qn===1?'':'s')+'</div></div>'
+      +(isAdmin()?'<div style="display:flex;gap:4px"><button onclick="App.editDept(\''+s.id+'\')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#9CA3AF;cursor:pointer">'+ic('edit','w-4 h-4')+'</button><button onclick="App.delDept(\''+s.id+'\')" style="width:30px;height:30px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;color:#D1D5DB;cursor:pointer">'+ic('trash','w-4 h-4')+'</button></div>':'')
+      +'</div>';
+  }).join('')+'</div>';}
+  h+='</div>';
+  return h;
+}
 function deptsPage(){
   const sel=S.filters.deptSel||null;
   const stab=S.filters.deptTab||'docs';
@@ -1720,14 +1742,14 @@ function deptsPage(){
     if(!d){S.filters.deptSel=null;return deptsPage();}
     const dUsers=DB.users.filter(u=>u.department===d.name);
     const dCls=DB.checklists.filter(c=>c.department===d.name);
-    const TABS=[['docs','📁 Documents'],['users','👥 Users'],['checklists','✓ Checklists']];
+    const TABS=[['docs','📁 Documents'],['users','👥 Users'],['checklists','✓ Checklists'],['subdepts','🏢 Sub-departments']];
     return'<div class="fade">'
       // Back bar
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
       +'<button onclick="App._closeDept()" style="width:34px;height:34px;border-radius:10px;border:1.5px solid #ECEDF0;background:#fff;cursor:pointer;display:grid;place-items:center;color:#6B7280">'+ic('back','w-4 h-4')+'</button>'
       +'<div style="width:36px;height:36px;border-radius:10px;background:#ECFDF5;display:grid;place-items:center">'+ic('dept','w-4 h-4 text-brand-600')+'</div>'
       +'<div style="flex:1"><div class="fd" style="font-size:16px;font-weight:800">'+esc(d.name)+'</div>'
-      +'<div style="font-size:12px;color:#9CA3AF">'+dUsers.length+' users · '+dCls.length+' checklists</div></div>'
+      +'<div style="font-size:12px;color:#9CA3AF">'+dUsers.length+' users · '+dCls.length+' checklists'+(subDepts(d.id).length?' · '+subDepts(d.id).length+' sub-depts':'')+'</div></div>'
       +(isAdmin()?'<button onclick="App.editDept(this.dataset.id)" data-id="'+d.id+'" style="display:inline-flex;align-items:center;gap:6px;padding:7px 14px;border-radius:10px;background:#F6F7F8;color:#374151;font-size:13px;font-weight:600;border:1px solid #ECEDF0;cursor:pointer">'+ic('edit','w-4 h-4')+'Edit</button>':'')
       +'</div>'
       // Sub-tabs
@@ -1750,11 +1772,12 @@ function deptsPage(){
             :empty('list','No checklists','No checklists in this department.')
           )+'</div>')
         :'')
+      +(stab==='subdepts'?_subDeptsTabHTML(d):'')
       +'</div>';
   }
   // ── List view ──
   // Filter depts by user's access if not admin
-  const visibleDepts=isAdmin()?DB.departments:DB.departments.filter(d=>{
+  const visibleDepts=isAdmin()?topDepts():topDepts().filter(d=>{
     const da=(me()?.docAccess)||{};
     return Object.keys(da.departments||{}).includes(d.name);
   });
@@ -1773,7 +1796,7 @@ function deptsPage(){
         +'<div class="fd" style="font-size:15px;font-weight:800;margin-bottom:6px">'+esc(d.name)+'</div>'
         +'<div style="display:flex;gap:12px;font-size:12px;color:#9CA3AF">'
         +'<span><b style="color:#15171C">'+us.length+'</b> users</span>'
-        +'<span><b style="color:#15171C">'+cls.length+'</b> checklists</span>'
+        +'<span><b style="color:#15171C">'+cls.length+'</b> checklists</span>'+(subDepts(d.id).length?'<span><b style="color:#15171C">'+subDepts(d.id).length+'</b> sub-depts</span>':'')
         +(docs||folders?'<span><b style="color:#0E9F6E">'+(folders+' folders, '+docs+' files')+'</b></span>':'')
         +'</div>'
         +'<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">'
@@ -1781,13 +1804,13 @@ function deptsPage(){
         +'<span style="font-size:11px;font-weight:600;color:#0E9F6E">Open →</span>'
         +'</div></div>';
     }).join('')
-    +(DB.departments.length?'':empty('dept','No departments','Create your first department.'))
+    +(topDepts().length?'':empty('dept','No departments','Create your first department.'))
     +'</div></div>';
 }
-App.editDept=(id=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} department</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveDept:',error.message);}).catch(()=>{});};
-App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;if(!confirm('Delete '+d.name+'? Users and checklists in this department will not be deleted but will have no department.'))return;if(!DB.departments_deleted)DB.departments_deleted=[];if(!DB.departments_deleted.includes(id))DB.departments_deleted.push(id);DB.departments=DB.departments.filter(x=>x.id!==id);sb.from('departments').delete().eq('id',id).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});// Clear dept from users and checklists (don't delete them)
-DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
+App.editDept=(id=null,parentId=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;_deptParent=d?(d.parentId||null):(parentId||null);const _lbl=_deptParent?'sub-department':'department';openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} ${_lbl}</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
+App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n,parentId:_deptParent||null};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveDept:',error.message);}).catch(()=>{});};
+App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;const isSub=!!d.parentId;const kids=DB.departments.filter(x=>x.parentId===id);const msg=isSub?('Delete sub-department '+d.name+'? Questions tagged to it will become untagged.'):('Delete '+d.name+'?'+(kids.length?' Its '+kids.length+' sub-department(s) will also be deleted.':'')+' Users and checklists in this department will not be deleted but will have no department.');if(!confirm(msg))return;if(!DB.departments_deleted)DB.departments_deleted=[];const _toDel=[id,...kids.map(k=>k.id)];_toDel.forEach(did=>{if(!DB.departments_deleted.includes(did))DB.departments_deleted.push(did);});DB.departments=DB.departments.filter(x=>!_toDel.includes(x.id));_toDel.forEach(did=>{sb.from('departments').delete().eq('id',did).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});});// Clear dept from users and checklists (don't delete them)
+DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});(DB.questions||[]).forEach(q=>{if(_toDel.includes(q.departmentId))q.departmentId=null;if(_toDel.includes(q.subDepartmentId))q.subDepartmentId=null;});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
 function locsPage(){
@@ -1850,7 +1873,7 @@ function locsPage(){
     +(DB.locations.length?'':empty('pin','No locations','Add locations to assign them to checklists.'))
     +'</div></div>';
 }
-App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...DB.departments.map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
+App.editLoc=(id=null)=>{const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...topDepts().map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveLoc=(id)=>{const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveLoc:',error.message);}).catch(()=>{});};
 App.delLoc=(id)=>{const l=locById(id);if(!l)return;if(!confirm('Delete "'+l.name+'"? Checklists using this location will keep it as reference.'))return;if(!DB.locations_deleted)DB.locations_deleted=[];if(!DB.locations_deleted.includes(id))DB.locations_deleted.push(id);DB.locations=DB.locations.filter(x=>x.id!==id);saveDB();render();toast('Deleted','warn');sb.from('locations').delete().eq('id',id).then(({error})=>{if(error)console.error('delLoc:',error.message);}).catch(()=>{});};
 
@@ -1896,7 +1919,7 @@ App.editCl=(id=null)=>{
   try{
     const c=id?clById(id):null;
     CLD=c?JSON.parse(JSON.stringify(c)):{
-      id:uid('cl'),name:'',description:'',department:DB.departments[0]?.name||'',
+      id:uid('cl'),name:'',description:'',department:topDepts()[0]?.name||'',
       frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
       startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,anyOne:false,createdBy:S.uid
     };
@@ -1933,7 +1956,7 @@ function _renderClModal(editing){
         </div>
         <div class="grid grid-cols-2 gap-3">
           ${selF('Status','cn-status',['Active','Draft'],c?.status||'Active')}
-       ${selF('Department','cn-dep',DB.departments.map(d=>d.name),c.department)}
+       ${selF('Department','cn-dep',topDepts().map(d=>d.name),c.department)}
           <div>
             <label for="cn-freq" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Frequency</label>
             <select id="cn-freq" onchange="App._freqChange(this.value)" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-3 text-sm font-medium rf">
@@ -3044,7 +3067,7 @@ function allClsPage(){
     <div style="display:flex;gap:8px;margin-bottom:10px;flex-wrap:wrap;align-items:center">
       <select onchange="S.filters.aclDep=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
         <option value="">All departments</option>
-        ${DB.departments.map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
+        ${topDepts().map(x=>`<option value="${esc(x.name)}" ${dep===x.name?'selected':''}>${esc(x.name)}</option>`).join('')}
       </select>
       <select onchange="S.filters.aclLoc=this.value;S.filters.aclExp=null;S.filters.aclU=null;rr()" style="background:#fff;border:1.5px solid #E5E7EB;border-radius:9px;padding:6px 10px;font-size:13px;font-weight:600;outline:none;cursor:pointer">
         <option value="">All locations</option>
@@ -3340,7 +3363,7 @@ App._downloadQTemplate=()=>{
   const blob=new Blob([csv],{type:'text/csv'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
-  a.download='shiftly_questions_template.csv';
+  a.download='bridge_questions_template.csv';
   document.body.appendChild(a);a.click();document.body.removeChild(a);
   URL.revokeObjectURL(a.href);
   toast('Template downloaded ✓');
@@ -3412,7 +3435,7 @@ App._importQCSV=(input)=>{
     });
     if(added){
       saveDB();
-      sb.from('questions').upsert(DB.questions.filter(q=>q.createdBy===S.uid).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString()})),{onConflict:'id'}).then(()=>{}).catch(()=>{});
+      sb.from('questions').upsert(DB.questions.filter(q=>q.createdBy===S.uid).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString(),department_id:q.departmentId||null,sub_department_id:q.subDepartmentId||null})),{onConflict:'id'}).then(()=>{}).catch(()=>{});
       rr();
       toast(added+' question'+(added===1?'':'s')+' imported'+(skipped?' ('+skipped+' skipped)':'')+'  ✓','ok');
     } else {
@@ -3449,6 +3472,8 @@ App._togQPublic=(id)=>{
 };
 
 function qCard(q){
+    const _qdep=q.departmentId?(DB.departments||[]).find(d=>d.id===q.departmentId):null;
+    const _qsub=q.subDepartmentId?(DB.departments||[]).find(d=>d.id===q.subDepartmentId):null;
     const exp=S.filters.expandedQ===q.id;
     const clr=Q_TYPE_CLR[q.type]||'#6B7280';
     const bg=Q_TYPE_BG[q.type]||'#F6F7F8';
@@ -3457,6 +3482,7 @@ function qCard(q){
     h+=`<div style="display:flex;align-items:center;gap:10px;padding:12px 14px;cursor:pointer" onclick="App._togExpandQ('${q.id}')">`;
     h+=`<span style="color:#C8C5BD;transition:transform .2s;transform:rotate(${exp?90:0}deg)">${ic('chevR','w-4 h-4')}</span>`;
     h+=`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:6px;background:${bg};color:${clr}">${tl}</span>`;
+    if(_qdep){h+=`<span style="font-size:10px;font-weight:600;padding:2px 8px;border-radius:6px;background:#F3F4F6;color:#6B7280;white-space:nowrap;flex-shrink:0">${esc(_qdep.name)}${_qsub?' › '+esc(_qsub.name):''}</span>`;}
     h+=`<div style="flex:1;min-width:0;font-size:14px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(q.text)}</div>`;
     const isPub=q.isPublic!==false;
     const mine=canManageQ(q);
@@ -3490,6 +3516,26 @@ function qCard(q){
     return h;
   }
 
+function _qGroupHTML(list){
+  if(!list.length)return empty('help','No questions yet','Create questions or upload a CSV template.');
+  const tops=topDepts();
+  const used=new Set();
+  let html='';
+  const deptHdr=(name,count)=>`<div style="display:flex;align-items:center;gap:8px;margin:18px 0 8px"><div style="width:30px;height:30px;border-radius:9px;background:#ECFDF5;display:grid;place-items:center;flex-shrink:0">${ic('dept','w-4 h-4 text-brand-600')}</div><div class="fd" style="font-size:15px;font-weight:800;color:#15171C">${esc(name)}</div><span style="font-size:11px;font-weight:700;color:#9CA3AF;background:#F3F4F6;padding:2px 8px;border-radius:20px">${count}</span></div>`;
+  const subHdr=(name)=>`<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 8px"><span style="width:6px;height:6px;border-radius:50%;background:#0E9F6E"></span><div style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">${esc(name)}</div></div>`;
+  tops.forEach(dep=>{
+    const direct=list.filter(q=>q.departmentId===dep.id&&!q.subDepartmentId);
+    const subBlocks=subDepts(dep.id).map(sd=>({sd,qs:list.filter(q=>q.subDepartmentId===sd.id)}));
+    const total=direct.length+subBlocks.reduce((a,b)=>a+b.qs.length,0);
+    if(!total)return;
+    html+=deptHdr(dep.name,total);
+    if(direct.length){html+=subHdr('General');html+='<div class="space-y-2">'+direct.map(q=>{used.add(q.id);return qCard(q);}).join('')+'</div>';}
+    subBlocks.forEach(({sd,qs})=>{if(!qs.length)return;html+=subHdr(sd.name);html+='<div class="space-y-2">'+qs.map(q=>{used.add(q.id);return qCard(q);}).join('')+'</div>';});
+  });
+  const rest=list.filter(q=>!used.has(q.id));
+  if(rest.length){html+=deptHdr('Unassigned',rest.length);html+='<div class="space-y-2">'+rest.map(q=>qCard(q)).join('')+'</div>';}
+  return html;
+}
 function questionsPage(){
   // Questions tab: admin sees all; others see public questions + their own private questions
   const allQ=visibleQuestions();
@@ -3515,9 +3561,7 @@ function questionsPage(){
     </div>
     <div id="qResults">${(()=>{
       const filtered=S.filters.qSearch?allQ.filter(q=>q.text.toLowerCase().includes((S.filters.qSearch||'').toLowerCase())):allQ;
-      return !filtered.length
-        ? empty('help','No questions yet','Create questions or upload a CSV template.')
-        : '<div class="space-y-2">'+filtered.map(q=>qCard(q)).join('')+'</div>';
+      return _qGroupHTML(filtered);
     })()}</div>
   </div>`;
 }
@@ -3530,9 +3574,7 @@ App._filterQuestions=(val)=>{
   if(!box)return;
   const allQ=visibleQuestions();
   const filtered=val?allQ.filter(q=>q.text.toLowerCase().includes(val.toLowerCase())):allQ;
-  box.innerHTML=!filtered.length
-    ? empty('help','No questions yet','Create questions or upload a CSV template.')
-    : '<div class="space-y-2">'+filtered.map(q=>qCard(q)).join('')+'</div>';
+  box.innerHTML=_qGroupHTML(filtered);
 };
 
 App._delQuestion=(id)=>{
@@ -3552,7 +3594,7 @@ App._delQuestion=(id)=>{
 App._editQuestion=(id)=>{
   const existing=id?(DB.questions||[]).find(x=>x.id===id):null;
   _QED=existing?JSON.parse(JSON.stringify(existing)):{
-    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:false
+    id:uid('q'),text:'',type:'answer',options:[],photo:false,approval:false,comment:false,isPublic:false,departmentId:null,subDepartmentId:null
   };
   if(_QED.isPublic===undefined)_QED.isPublic=true;
   App._renderQModal();
@@ -3562,6 +3604,9 @@ App._renderQModal=()=>{
   if(!_QED)return;
   const q=_QED;
   const au=DB.users.filter(u=>u.status==='Active');
+  const _qDeptOpts='<option value="">— No department —</option>'+topDepts().map(d=>`<option value="${d.id}" ${q.departmentId===d.id?'selected':''}>${esc(d.name)}</option>`).join('');
+  const _qSubs=q.departmentId?subDepts(q.departmentId):[];
+  const _qSubOpts='<option value="">— No sub-department —</option>'+_qSubs.map(s=>`<option value="${s.id}" ${q.subDepartmentId===s.id?'selected':''}>${esc(s.name)}</option>`).join('');
 
   let optsHtml='';
   if(q.type==='answer'){
@@ -3634,6 +3679,16 @@ App._renderQModal=()=>{
         <label for="qed-text" style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Question text *</label>
         <input id="qed-text" type="text" value="${q.text||''}" oninput="_QED.text=this.value" placeholder="e.g. Is the area clean?" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:10px 12px;font-size:14px;outline:none" />
       </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Department</label>
+          <select onchange="_QED.departmentId=this.value||null;_QED.subDepartmentId=null;App._renderQModal()" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:9px 10px;font-size:13px;outline:none;background:#fff">${_qDeptOpts}</select>
+        </div>
+        <div>
+          <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Sub-department</label>
+          <select ${_qSubs.length?'':'disabled'} onchange="_QED.subDepartmentId=this.value||null" style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:9px 10px;font-size:13px;outline:none;background:${_qSubs.length?'#fff':'#F3F4F6'}">${_qSubOpts}</select>
+        </div>
+      </div>
       <div>
         <label style="display:block;font-size:11px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Response type</label>
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px">${typeBtns}</div>
@@ -3687,7 +3742,7 @@ App._saveQuestion=()=>{
   saveDB();
   render();
   // ── Sync to Supabase in background ──
-  const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,is_public:savedQ.isPublic!==false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString()};
+  const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,is_public:savedQ.isPublic!==false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString(),department_id:savedQ.departmentId||null,sub_department_id:savedQ.subDepartmentId||null};
   sb.from('questions').upsert(qRow,{onConflict:'id'}).then(({error})=>{
     if(error){console.error('Question sync error:',error.message);toast('⚠ Question saved locally but not synced: '+error.message.slice(0,60),'warn');}
   }).catch(e=>console.error('Question sync:',e));
@@ -4776,7 +4831,7 @@ function analyticsPage(){
   <div style="background:#fff;border-radius:16px;border:1px solid #E5E7EB;padding:14px 16px;margin-bottom:14px;position:sticky;top:0;z-index:20">
     <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px">
       ${msDropdown('Status','stats',['On Time','Late','Pending Approval','Rejected'],s=>s,s=>s)}
-      ${msDropdown('Department','deps',DB.departments,d=>d.name,d=>d.name)}
+      ${msDropdown('Department','deps',topDepts(),d=>d.name,d=>d.name)}
       ${msDropdown('Team member','users',relevantUsers,u=>u.id,u=>fullName(u))}
       ${DB.locations.length?msDropdown('Location','locs',DB.locations,l=>l.id,l=>l.name):''}
     </div>
@@ -5230,7 +5285,7 @@ const EMAIL_EVENTS=[
 
 function _defaultTemplates(){
   return{
-    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Shiftly to complete it.\n\n{{action_url}}'},
+    checklist_assigned:{subject:'📋 Checklist assigned: {{checklist_name}}',   body:'Hi {{user_name}},\n\nA checklist has been assigned to you: {{checklist_name}}\n\nOpen Bridge to complete it.\n\n{{action_url}}'},
     submission_late:  {subject:'⏰ Late submission: {{checklist_name}}',        body:'Hi {{user_name}},\n\nA submission is overdue: {{checklist_name}}\n\n{{action_url}}'},
     submission_approved:{subject:'✅ Submission approved: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been approved.\n\n{{action_url}}'},
     submission_rejected:{subject:'❌ Submission rejected: {{checklist_name}}',  body:'Hi {{user_name}},\n\nYour submission for {{checklist_name}} has been rejected. Please review and resubmit.\n\n{{action_url}}'},
@@ -5242,7 +5297,7 @@ function _defaultTemplates(){
 }
 
 function _nsDefault(){return{
-  email_enabled:false,email_from_name:'Shiftly',email_from_address:'',email_reminder_minutes:15,
+  email_enabled:false,email_from_name:'Bridge',email_from_address:'',email_reminder_minutes:15,
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
@@ -5283,7 +5338,7 @@ function _fillTemplate(str, vars){
 
 // ── Render plain text body as HTML — {{action_url}} line becomes a CTA button ──
 function _bodyToHtml(fromName, bodyText, actionUrl=''){
-  const safeName=String(fromName||'Shiftly').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
+  const safeName=String(fromName||'Bridge').replace(/[<>&"']/g,c=>({'<':'&lt;','>':'&gt;','&':'&amp;','"':'&quot;',"'":'&#39;'}[c]));
   const rawLines = bodyText.split('\n').map(l=>l.trim());
   // ctaUrl is passed in as 3rd arg — already the resolved URL
   let ctaUrl = actionUrl||'';
@@ -5296,11 +5351,11 @@ function _bodyToHtml(fromName, bodyText, actionUrl=''){
     :ctaUrl.includes('notifications')?'View Notifications'
     :ctaUrl.includes('settings')?'Open Settings'
     :ctaUrl.includes('analytics')?'View Analytics'
-    :'Open Shiftly';
+    :'Open Bridge';
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#F7F6F2;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #ECEDF0;overflow:hidden">
     <div style="background:#15171C;padding:20px 28px;display:flex;align-items:center;gap:10px">
-      <div style="width:28px;height:28px;border-radius:8px;background:#0E9F6E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">S</div>
+      <div style="width:28px;height:28px;border-radius:8px;background:#0E9F6E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">B</div>
       <span style="font-weight:700;font-size:16px;color:#fff">${safeName}</span>
     </div>
     <div style="padding:28px">
@@ -5337,7 +5392,7 @@ async function sendEmail(eventType, userId, vars){
     deadline_reminder:'mychecklists',
   };
   const actionUrl = appUrl + '/#' + (routeMap[eventType]||'');
-  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Shiftly', app_url:appUrl, action_url:actionUrl, ...vars};
+  const allVars = {user_name:fullName(user), from_name:_ns.email_from_name||'Bridge', app_url:appUrl, action_url:actionUrl, ...vars};
   const defaults = _defaultTemplates();
   const tpl = {
     subject:(_ns.templates?.[eventType]?.subject)||defaults[eventType]?.subject||eventType,
@@ -5346,7 +5401,7 @@ async function sendEmail(eventType, userId, vars){
   const subject  = _fillTemplate(tpl.subject, allVars);
   const bodyHtml = _bodyToHtml(_ns.email_from_name, _fillTemplate(tpl.body, allVars), actionUrl);
   sb.functions.invoke('send-notification',{body:{
-    to:user.email, from_name:_ns.email_from_name||'Shiftly', subject, html:bodyHtml,
+    to:user.email, from_name:_ns.email_from_name||'Bridge', subject, html:bodyHtml,
   }}).catch(e=>console.warn('sendEmail invoke failed:',e.message));
 }
 
@@ -5374,7 +5429,7 @@ App._nsSaveEmail=async()=>{
   const mins=parseInt($('#ns-reminder-mins')?.value||'15')||15;
   if(!addr){toast('Enter a from email address','err');return;}
   if(!addr.includes('@')){toast('Enter a valid email address','err');return;}
-  _ns.email_from_name=name||'Shiftly';_ns.email_from_address=addr;
+  _ns.email_from_name=name||'Bridge';_ns.email_from_address=addr;
   _ns.email_reminder_minutes=Math.max(5,Math.min(120,mins));
   await _saveNS();toast('Saved ✓');
 };
@@ -5388,10 +5443,10 @@ App._testEmail=async()=>{
     const appUrl=window.location.origin;
     const {error}=await sb.functions.invoke('send-notification',{body:{
       to: u.email,
-      from_name: _ns.email_from_name||'Shiftly',
-      subject: '✅ Shiftly test email',
-      html: _bodyToHtml(_ns.email_from_name||'Shiftly',
-        'Hi '+u.firstName+',\n\nThis is a test email from Shiftly.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
+      from_name: _ns.email_from_name||'Bridge',
+      subject: '✅ Bridge test email',
+      html: _bodyToHtml(_ns.email_from_name||'Bridge',
+        'Hi '+u.firstName+',\n\nThis is a test email from Bridge.\n\nIf you received this, your email setup is working correctly. SMTP is connected and emails will be delivered to users based on their profile email address.',
         appUrl+'/#mychecklists'),
     }});
     if(error)throw new Error(error.message||'Function error');
@@ -5461,7 +5516,7 @@ function settingsPage(){
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
             <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#6B7280;margin-bottom:4px">From name</label>
-            <input id="ns-from-name" value="${esc(ns.email_from_name||'Shiftly')}" placeholder="Shiftly"
+            <input id="ns-from-name" value="${esc(ns.email_from_name||'Bridge')}" placeholder="Bridge"
               style="width:100%;box-sizing:border-box;border:1.5px solid #E5E7EB;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
@@ -5600,7 +5655,7 @@ App._exportCSV=()=>{
     // are prefixed with a single quote so spreadsheet apps treat them as text.
     if(/^[=+\-@\t\r]/.test(cell))cell="'"+cell;
     return '"'+cell.replace(/"/g,'""')+'"';}).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='shiftly_export_'+todayISO()+'.csv';a.click();
+  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='bridge_export_'+todayISO()+'.csv';a.click();
   toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
 };
 
