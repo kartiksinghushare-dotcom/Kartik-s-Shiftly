@@ -442,7 +442,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,password:'***'}));}
-function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
+function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',subDepartment:c.sub_department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 /* ===== Egress-reduction helpers: 30-day windowing + lazy per-tab loading ===== */
@@ -684,7 +684,7 @@ async function _sync(){try{
   const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name,parent_id:d.parentId||null})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',any_one:c.anyOne||false,created_by:c.createdBy||null})),{onConflict:'id'}),
+    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',sub_department:c.subDepartment||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',any_one:c.anyOne||false,created_by:c.createdBy||null})),{onConflict:'id'}),
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -1715,6 +1715,20 @@ function queueEmail(eventKey,userId,clId,date,vars){
 
 function topDepts(){return (DB.departments||[]).filter(d=>!d.parentId);}
 function subDepts(pid){return (DB.departments||[]).filter(d=>d.parentId===pid);}
+// ── Sub-department <option>s for the checklist form (checklist.department is stored by NAME) ──
+function _clSubDeptOptions(deptName,selSub){
+  const dep=(DB.departments||[]).find(d=>!d.parentId&&d.name===deptName);
+  const subs=dep?subDepts(dep.id):[];
+  let h='<option value="">— No sub-department —</option>';
+  h+=subs.map(s=>`<option value="${esc(s.name)}" ${s.name===selSub?'selected':''}>${esc(s.name)}</option>`).join('');
+  return h;
+}
+// When the checklist department changes, refresh the sub-department list and clear the prior pick.
+App._clDepChange=(name)=>{
+  if(CLD)CLD.department=name;
+  const sel=document.getElementById('cn-subdep');
+  if(sel){if(CLD)CLD.subDepartment='';sel.innerHTML=_clSubDeptOptions(name,'');}
+};
 let _deptParent=null;
 function _subDeptsTabHTML(d){
   const subs=subDepts(d.id);
@@ -1921,7 +1935,7 @@ App.editCl=(id=null)=>{
   try{
     const c=id?clById(id):null;
     CLD=c?JSON.parse(JSON.stringify(c)):{
-      id:uid('cl'),name:'',description:'',department:topDepts()[0]?.name||'',
+      id:uid('cl'),name:'',description:'',department:topDepts()[0]?.name||'',subDepartment:'',
       frequency:'Daily',schedule:'Every day',selectedDays:[],selectedDates:[],customDates:[],
       startDate:'',endDate:'',locationIds:[],assignees:[],tasks:[],questionIds:[],questionConfigs:{},scheduleTime:null,anyOne:false,createdBy:S.uid
     };
@@ -1958,13 +1972,14 @@ function _renderClModal(editing){
         </div>
         <div class="grid grid-cols-2 gap-3">
           ${selF('Status','cn-status',['Active','Draft'],c?.status||'Active')}
-       ${selF('Department','cn-dep',topDepts().map(d=>d.name),c.department)}
+       <div><label for="cn-dep" class="block text-xs font-semibold text-ink-500 mb-1">Department</label><select id="cn-dep" onchange="App._clDepChange(this.value)" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">${topDepts().map(d=>`<option value="${esc(d.name)}" ${d.name===c.department?'selected':''}>${esc(d.name)}</option>`).join('')}</select></div>
           <div>
             <label for="cn-freq" class="block text-xs font-bold text-ink-500 uppercase tracking-wide mb-1.5">Frequency</label>
             <select id="cn-freq" onchange="App._freqChange(this.value)" class="w-full bg-white border-2 border-ink-200 rounded-xl px-3 py-3 text-sm font-medium rf">
               ${['Daily','Weekly','Monthly','Custom'].map(f=>`<option ${c.frequency===f?'selected':''}>${f}</option>`).join('')}
             </select>
           </div>
+          <div><label for="cn-subdep" class="block text-xs font-semibold text-ink-500 mb-1">Sub-department</label><select id="cn-subdep" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf">${_clSubDeptOptions(c.department,c.subDepartment)}</select></div>
         </div>
         <div id="cn-sched" class="bg-ink-50 rounded-xl p-3">${_freqUI(c.frequency)}</div>
         <div class="grid grid-cols-2 gap-3">
@@ -2145,7 +2160,7 @@ App._saveCl=async(editing)=>{
   _snapshotCLD();
   CLD.name=$('#cn-name')?.value.trim()||CLD.name;CLD.description=$('#cn-desc')?.value.trim()||'';
   CLD.status=$('#cn-status')?.value||'Active';
-  CLD.department=$('#cn-dep')?.value||CLD.department;CLD.frequency=$('#cn-freq')?.value||CLD.frequency;
+  CLD.department=$('#cn-dep')?.value||CLD.department;CLD.subDepartment=$('#cn-subdep')?.value||'';CLD.frequency=$('#cn-freq')?.value||CLD.frequency;
   CLD.startDate=$('#cn-sd')?.value||null;CLD.endDate=$('#cn-ed')?.value||null;
   CLD.scheduleTime=$('#cn-time')?.value||null;
   if($('#cn-anyone'))CLD.anyOne=$('#cn-anyone').classList.contains('on');
@@ -2159,7 +2174,7 @@ App._saveCl=async(editing)=>{
   //    AFTER the server confirms the write, so nothing is ever "created" in the UI
   //    or audit log without actually being stored in the database. ──
   const _cld=CLD;
-  const clRow={id:_cld.id,name:_cld.name,description:_cld.description||'',department:_cld.department||'',frequency:_cld.frequency||'Daily',schedule:_cld.schedule||'',selected_days:_cld.selectedDays||[],selected_dates:_cld.selectedDates||[],custom_dates:_cld.customDates||[],start_date:_cld.startDate||null,end_date:_cld.endDate||null,location_ids:_cld.locationIds||[],assignees:_cld.assignees||[],tasks:_cld.tasks||[],question_ids:_cld.questionIds||[],question_configs:_cld.questionConfigs||{},schedule_time:_cld.scheduleTime||null,status:_cld.status||'Active',any_one:_cld.anyOne||false,created_by:_cld.createdBy||null};
+  const clRow={id:_cld.id,name:_cld.name,description:_cld.description||'',department:_cld.department||'',sub_department:_cld.subDepartment||'',frequency:_cld.frequency||'Daily',schedule:_cld.schedule||'',selected_days:_cld.selectedDays||[],selected_dates:_cld.selectedDates||[],custom_dates:_cld.customDates||[],start_date:_cld.startDate||null,end_date:_cld.endDate||null,location_ids:_cld.locationIds||[],assignees:_cld.assignees||[],tasks:_cld.tasks||[],question_ids:_cld.questionIds||[],question_configs:_cld.questionConfigs||{},schedule_time:_cld.scheduleTime||null,status:_cld.status||'Active',any_one:_cld.anyOne||false,created_by:_cld.createdBy||null};
   let _res;
   try{_res=await sb.from('checklists').upsert(clRow,{onConflict:'id'});}
   catch(e){_res={error:e};}
@@ -3917,6 +3932,7 @@ function _snapshotCLD(){
   if(el('cn-desc'))CLD.description=el('cn-desc').value.trim();
   if(el('cn-status')&&el('cn-status').value)CLD.status=el('cn-status').value;
   if(el('cn-dep')&&el('cn-dep').value)CLD.department=el('cn-dep').value;
+  if(el('cn-subdep'))CLD.subDepartment=el('cn-subdep').value;
   if(el('cn-freq')&&el('cn-freq').value)CLD.frequency=el('cn-freq').value;
   if(el('cn-sd'))CLD.startDate=el('cn-sd').value||null;
   if(el('cn-ed'))CLD.endDate=el('cn-ed').value||null;
