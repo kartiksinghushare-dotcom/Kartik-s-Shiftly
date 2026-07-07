@@ -809,6 +809,7 @@ const SB_URL='https://bxuhmyxfzoqvmukausjd.supabase.co';
 const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJ4dWhteXhmem9xdm11a2F1c2pkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzkxODgxMTgsImV4cCI6MjA5NDc2NDExOH0._-WHdcw2p1LR09imPkfGx7F7VfqwHJHkcW6b0hSD00k';
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
+const _mQrow=q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at,departmentId:q.department_id||null,subDepartmentId:q.sub_department_id||null});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],hrm:(p.hrm&&typeof p.hrm==='object')?p.hrm:null,password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',subDepartment:c.sub_department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
@@ -890,6 +891,13 @@ async function _lazyLoad(kind){
     else if(kind==='notifications'){const{data,error}=await sb.from('notifications').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyNotifications(data);}
     else if(kind==='feedback'){const{data,error}=await sb.from('feedback').select('*').gte('created_at',c).order('created_at',{ascending:false});if(!error)_applyFeedback(data);}
     else if(kind==='documents'){const r=await Promise.all([sb.from('documents').select('*').gte('uploaded_at',c).order('uploaded_at',{ascending:false}),sb.from('doc_folders').select('*').order('created_at',{ascending:false})]);if(!r[0].error)_applyDocuments(r[0].data);if(!r[1].error)_applyFolders(r[1].data);}
+    else if(kind==='checklists'){
+      // Checklist & question DEFINITIONS refresh — fixes edits by one user (e.g. a manager adding a
+      // question) not reaching other users' open sessions until a full reload.
+      const r=await Promise.all([sb.from('checklists').select('*').order('created_at',{ascending:false}),sb.from('questions').select('*').order('created_at',{ascending:false})]);
+      if(!r[0].error&&r[0].data){const _delCls=new Set(DB.checklists_deleted||[]);DB.checklists=_mC(r[0].data).filter(c=>!_delCls.has(c.id));}
+      if(!r[1].error&&r[1].data){const _delQs=new Set(DB.questions_deleted||[]);DB.questions=r[1].data.filter(q=>!_delQs.has(q.id)).map(_mQrow);}
+    }
     else if(kind==='okr'){const r=await Promise.all([sb.from('okrs').select('*').order('created_at',{ascending:true}),sb.from('okr_checkins').select('*').order('date',{ascending:true}),sb.from('okr_logs').select('*').order('created_at',{ascending:false}).limit(800)]);if(!r[0].error)DB.okrs=_mOKR(r[0].data);if(!r[1].error)DB.okrCheckins=_mOKRCheckin(r[1].data);if(!r[2].error)DB.okrLogs=_mOKRLog(r[2].data);}
     saveDB();rr();
   }catch(e){console.warn('[lazyLoad]',kind,e.message);}
@@ -917,10 +925,10 @@ function _lazyForRoute(r){
   else if(r==='approvals')_lazyLoad('approvals');
   else if(r==='notifications'){_lazyLoad('notifications');_lazyLoad('feedback');}
   else if(r==='departments'||r==='locations')_lazyLoad('documents');
-  else if(r==='mychecklists')_lazyLoadDate('mychecklists');
-  else if(r==='teamview')_lazyLoadDate('teamview');
-  else if(r==='allcl')_lazyLoadDate('allcl');
-  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoadDate('mychecklists');}
+  else if(r==='mychecklists'){_lazyLoad('checklists');_lazyLoadDate('mychecklists');}
+  else if(r==='teamview'){_lazyLoad('checklists');_lazyLoadDate('teamview');}
+  else if(r==='allcl'){_lazyLoad('checklists');_lazyLoadDate('allcl');}
+  else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoad('checklists');_lazyLoadDate('mychecklists');}
   else if(r==='okr')_lazyLoad('okr');
 }
 
@@ -1049,7 +1057,7 @@ async function loadFromSB(){
   // Questions tab content is filtered by createdBy in questionsPage()
   if(qRows){
     const _delQs=new Set(DB.questions_deleted||[]);
-    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at,departmentId:q.department_id||null,subDepartmentId:q.sub_department_id||null}));
+    DB.questions=qRows.filter(q=>!_delQs.has(q.id)).map(_mQrow);
   }
 
   // ── Feedback: role-scoped (shared helper, last-30-day window) ──
@@ -1310,11 +1318,13 @@ const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
 const MOB_USR=['mychecklists','tickets','notifications','more'];
 const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
 /* ── PORTED NAV v2 (perms-driven, HRM entries removed; analytics kept from production) ── */
+const _isMgrRole=()=>{const r=(typeof _roleOf==='function')?_roleOf(me()):null;return !!r&&r.id==='manager';};
 const NAV_ALL=[
-  ['dashboard','grid','Dashboard',()=>isAdmin()||isSubAdmin()||isMgr()],
+  ['dashboard','grid','Dashboard',()=>isAdmin()||isSubAdmin()||isMgr()||_isMgrRole()],
   ['mychecklists','check','My Checklists',()=>true],
   ['tickets','ticket','Tickets',()=>can('tickets','view')],
-  ['allcl','list','All Checklists / Team',()=>can('allChecklists','view')||can('teamview','view')],
+  ['teamview','users','Team',()=>can('teamview','view')],
+  ['allcl','list','All Checklists',()=>can('allChecklists','view')],
   ['users','users','Users',()=>can('employees','view')],
   ['hierarchy','tree','Hierarchy',()=>can('hierarchy','view')],
   ['checklists','list','Create Checklist',()=>can('checklists','create')],
@@ -1529,25 +1539,25 @@ App.logout=()=>{
 /* ===== ROUTER ===== */
 function pageContent(){
   const r=S.route;
-  if(r==='dashboard'){if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='users'){if(can('employees','view'))return usersPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='departments'){if(can('departments','view'))return deptsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='locations'){if(can('locations','view'))return locsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='checklists'){if(can('checklists','create'))return clsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='dashboard'){if(isAdmin()||isSubAdmin())return adminDash();if(isMgr()||_isMgrRole())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='users'){if(can('employees','view'))return usersPage();S.route='dashboard';return pageContent();}
+  if(r==='departments'){if(can('departments','view'))return deptsPage();S.route='dashboard';return pageContent();}
+  if(r==='locations'){if(can('locations','view'))return locsPage();S.route='dashboard';return pageContent();}
+  if(r==='checklists'){if(can('checklists','create'))return clsPage();S.route='dashboard';return pageContent();}
   if(r==='approvals'){if(can('approvals','view'))return approvalsPage();S.route='notifications';return notificationsPage();}
   if(r==='notifications')return notificationsPage();
   if(r==='tickets'){if(can('tickets','view'))return ticketsPage();S.route='mychecklists';return myClsPage();}
   if(r==='hierarchy')return hierarchyPage();
-  if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';return pageContent();}
+  if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';return pageContent();}
+  if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';return pageContent();}
   if(r==='questions'){if(can('questions','view'))return questionsPage();return myClsPage();}
   if(r==='mychecklists')return myClsPage();
   if(r==='teamview'){if(can('teamview','view'))return teamViewPage();S.route='mychecklists';return myClsPage();}
   if(r==='allcl'){if(can('allChecklists','view'))return allClsPage();S.route='teamview';return pageContent();}
   if(r==='profile')return profilePage();
-  if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
-  if(r==='accesscontrol'){if(can('accessControl','view'))return accessControlPage();S.route='dashboard';if(isAdmin())return adminDash();if(isMgr())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';return pageContent();}
+  if(r==='accesscontrol'){if(can('accessControl','view'))return accessControlPage();S.route='dashboard';return pageContent();}
   return empty('grid','Not found','');
 }
 
@@ -1840,13 +1850,10 @@ App.editUser=(id=null)=>{
     <div class="grid grid-cols-2 gap-3">${fld('First name','u-fn',v('firstName'))}${fld('Last name','u-ln',v('lastName'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Email','u-email',v('email'),'email')}${fld('Phone','u-phone',v('phone'))}</div>
     <div class="grid grid-cols-2 gap-3">${fld('Position','u-pos',v('position'))}${selF('Department','u-dep',topDepts().map(d=>d.name),u?.department||'')}</div>
-    <div class="grid grid-cols-3 gap-3">${selF('Role','u-role',[['User','User'],['SubAdmin','Admin'],['Admin','Super Admin']],u?.role||'User')}${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label for="u-mgr" class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
+    <div class="grid grid-cols-2 gap-3">${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label for="u-mgr" class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
-    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Submission rules</p>${mkTog('u-rp',u?.rules?.past??true,'Allow past-date submissions')}${mkTog('u-rf',u?.rules?.future??true,'Allow future-date submissions')}${mkTog('u-re',u?.rules?.edit??true,'Can edit submitted data')}</div>
-    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Approval required for</p>${mkTog('u-ap',u?.approval?.past??false,'Past entries')}${mkTog('u-af',u?.approval?.future??false,'Future entries')}${mkTog('u-ae',u?.approval?.edited??false,'Edited entries')}</div>
-    <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Tab Access</p>${mkTog('u-qa',u?.questionsAccess??false,'Access to Questions tab')}</div>
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Notifications</p>${mkTog('u-email',u?.emailEnabled??true,'Receive email notifications')}</div>
-    ${_docAccessSection(u)}
+    <div style="font-size:11.5px;color:var(--c-text-3);background:var(--c-surface-2);border:1px dashed var(--c-border-2);border-radius:10px;padding:9px 12px">🛡️ Role, tab access, document permissions and submission rules are managed in <b>Access Control</b>.</div>
   </div>
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button id="save-user-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=this.textContent==='Save'?'Saving…':'Creating…';App.saveUser('${id||''}').catch(()=>{}).finally(()=>{const b=document.getElementById('save-user-btn');if(b){b.disabled=false;b.textContent='${u?'Save':'Create'}';}})" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
@@ -1858,28 +1865,36 @@ App.saveUser=async(id)=>{
   const mId=$('#u-mgr')?.value||null;
   if(id&&mId&&(mId===id||isDesc(mId,id))){toast('Circular hierarchy!','err');return;}
 
-  // ── Read doc permissions FIRST (before any closeModal) ──
-  const docAccess={departments:{},locations:{}};
-  document.querySelectorAll('.doc-perm-dept').forEach(cb=>{
-    const dept=cb.dataset.dept,p=cb.dataset.perm;
-    if(!docAccess.departments[dept])docAccess.departments[dept]={view:false,upload:false,download:false,edit:false};
-    docAccess.departments[dept][p]=cb.checked;
-  });
-  document.querySelectorAll('.doc-perm-loc').forEach(cb=>{
-    const loc=cb.dataset.loc,p=cb.dataset.perm;
-    if(!docAccess.locations[loc])docAccess.locations[loc]={view:false,upload:false,download:false,edit:false};
-    docAccess.locations[loc][p]=cb.checked;
-  });
+  // ── Email change: must update the LOGIN email too (auth), not only the profile row.
+  //    Done via the update-user-email edge function (service role) — profile row updated after success.
+  if(id){
+    const _cur=uById(id);
+    if(_cur&&email&&_cur.email&&email.toLowerCase()!==_cur.email.toLowerCase()){
+      const btn=document.getElementById('save-user-btn');
+      if(btn){btn.disabled=true;btn.textContent='Updating email…';}
+      const{data:_er,error:_ee}=await sb.functions.invoke('update-user-email',{body:{user_id:id,email}});
+      if(_ee||_er?.error){
+        let msg=_er?.error||_ee?.message||'Email update failed';
+        try{if(_ee?.context){const b=await _ee.context.json();msg=b.error||msg;}}catch(e){}
+        toast('Email not changed: '+msg,'err');
+        if(btn){btn.disabled=false;btn.textContent='Save';}
+        return;
+      }
+      toast('Login email updated ✓');
+    }
+  }
 
-  // ── Read ALL toggles and DOM values NOW, before any async/closeModal ──
-  const questionsAccess=togV('u-qa');
+  // ── Access fields are managed in Access Control — preserve existing values here ──
+  const _ex=id?uById(id):null;
+  const docAccess=_ex?(_ex.docAccess||{departments:{},locations:{}}):{departments:{},locations:{}};
+  const questionsAccess=_ex?(_ex.questionsAccess??false):false;
   const emailEnabled=togV('u-email');
-  const rules={past:togV('u-rp'),future:togV('u-rf'),edit:togV('u-re')};
-  const approval_settings={past:togV('u-ap'),future:togV('u-af'),edited:togV('u-ae')};
+  const rules=_ex?(_ex.rules||{past:true,future:true,edit:true}):{past:true,future:true,edit:true};
+  const approval_settings=_ex?(_ex.approval||{past:false,future:false,edited:false}):{past:false,future:false,edited:false};
 
   const pd={first_name:fn,last_name:ln,email,
     phone:g('u-phone'),position:g('u-pos'),
-    department:$('#u-dep')?.value,role:$('#u-role')?.value,
+    department:$('#u-dep')?.value,role:(_ex?_ex.role:'User'),
     status:$('#u-status')?.value,manager_id:mId||null,
     rules,approval_settings,
     doc_access:docAccess,questions_access:questionsAccess,email_enabled:emailEnabled};
@@ -4033,13 +4048,19 @@ function _qGroupHTML(list){
 }
 function questionsPage(){
   // Questions tab: admin sees all; others see public questions + their own private questions
-  const allQ=visibleQuestions();
+  let allQ=visibleQuestions();
+  const _qd=S.filters.qDept||'',_qsd=S.filters.qSubDept||'';
+  if(_qd)allQ=allQ.filter(q=>q.departmentId===_qd||(_qsd?false:(DB.departments||[]).some(sd=>sd.parentId===_qd&&sd.id===q.subDepartmentId)));
+  if(_qsd)allQ=allQ.filter(q=>q.subDepartmentId===_qsd);
   return`<div class="fade">${hdr('Questions','Reusable question library for your checklists')}
     <!-- Action bar: New + Search -->
     <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap;align-items:center">
       <input id="qSearchInput" type="text" placeholder="Search questions…" value="${S.filters.qSearch||''}"
         oninput="App._filterQuestions(this.value)"
         style="flex:1;min-width:180px;border:1.5px solid #ECEDF0;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;background:#fff"/>
+      <select onchange="S.filters.qDept=this.value;S.filters.qSubDept='';rr()" class="ui-select" style="width:auto;min-width:150px;flex:0 0 auto"><option value="">All departments</option>${topDepts().map(d=>`<option value="${d.id}" ${(S.filters.qDept||'')===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
+      <select onchange="S.filters.qSubDept=this.value;rr()" class="ui-select" style="width:auto;min-width:160px;flex:0 0 auto" ${(S.filters.qDept&&(DB.departments||[]).some(d=>d.parentId===S.filters.qDept))?'':'disabled'}><option value="">All sub-departments</option>${(DB.departments||[]).filter(d=>d.parentId===(S.filters.qDept||'')).map(d=>`<option value="${d.id}" ${(S.filters.qSubDept||'')===d.id?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
+
       <button onclick="App._editQuestion(null)" style="display:inline-flex;align-items:center;gap:6px;background:#15171C;color:#fff;font-size:13px;font-weight:700;padding:9px 16px;border-radius:10px;border:none;cursor:pointer">${ic('plus','w-4 h-4')} New question</button>
     </div>
     <!-- CSV Import / Export bar -->
@@ -4930,13 +4951,31 @@ App._saveSendFeedback=(userId)=>{
   toast('Feedback sent ✓');closeModal();saveDB();render();
 };
 /* ===== HIERARCHY ===== */
-function hierarchyPage(){const roots=isAdmin()?DB.users.filter(u=>!u.managerId):[me()].filter(Boolean);return`<div class="fade">${hdr(isAdmin()?'Organisation':'My Team','Reporting structure')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 overflow-x-auto"><div class="min-w-fit">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;}
-function _tNode(u,d){const kids=DB.users.filter(x=>x.managerId===u.id);const col=COLL[u.id];return`<div class="${d>0?'ml-5 pl-1 relative before:absolute before:left-[-14px] before:top-0 before:bottom-0 before:w-px before:bg-ink-100 after:absolute after:left-[-14px] after:top-6 after:w-3 after:h-px after:bg-ink-100':''}"><div class="flex items-center gap-2 py-1.5"><span class="w-5">${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" class="w-5 h-5 grid place-items-center rounded text-ink-400 hover:bg-ink-100">${ic(col?'chevR':'chevD','w-3.5 h-3.5')}</button>`:''}</span><div class="flex items-center gap-2.5 bg-paper border border-ink-100 rounded-xl pl-1.5 pr-3 py-1.5 hover:border-brand-200 transition">${avatar(u,'w-8 h-8','text-[11px]')}<div><div class="text-sm font-semibold">${esc(fullName(u))}${u.role==='Admin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#15171C;color:#fff;margin-left:4px">SUPER ADMIN</span>`:u.role==='SubAdmin'?` <span style="font-size:10px;font-weight:700;padding:1px 5px;border-radius:4px;background:#EEF2FF;color:#4338CA;margin-left:4px">ADMIN</span>`:''}</div><div class="text-[11px] text-ink-400">${esc(u.position)} · ${esc(u.department)}</div></div>${kids.length?`<span class="ml-1.5 text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-brand-50 text-brand-700">${kids.length}</span>`:''}</div></div>${kids.length&&!col?`<div>${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}</div>`;}
-
-/* ===== ANALYTICS ===== */
-
-
-/* ===== TICKETS PAGE ===== */
+function hierarchyPage(){
+  const admin=isAdmin()||isSubAdmin();
+  const roots=admin?DB.users.filter(u=>u.status!=='Inactive'&&(!u.managerId||!uById(u.managerId))):[me()].filter(Boolean);
+  return`<div class="fade">${hdr(admin?'Organisation':'My Team','Reporting structure')}
+  <div class="ui-card" style="padding:20px 22px;overflow-x:auto"><div style="min-width:fit-content">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;
+}
+function _tNode(u,d){
+  const kids=DB.users.filter(x=>x.managerId===u.id&&x.id!==u.id&&x.status!=='Inactive');
+  const col=COLL[u.id];
+  const rp=(typeof _roleOf==='function')?_roleOf(u):null;
+  const tag=u.role==='Admin'?['SUPER ADMIN','#15171C','#fff']:u.role==='SubAdmin'?['ADMIN','#EEF2FF','#4338CA']:((rp&&rp.id==='manager')||kids.length)?['MANAGER','#E0F2FE','#0369A1']:null;
+  const card=`<div style="display:inline-flex;align-items:center;gap:10px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:7px 14px 7px 8px;box-shadow:var(--sh-xs)">
+      ${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" title="${col?'Expand':'Collapse'}" style="width:22px;height:22px;display:grid;place-items:center;border-radius:7px;border:1px solid var(--c-border-2);background:var(--c-surface-2);cursor:pointer;color:var(--c-text-2);font-size:12px;font-weight:800;line-height:1">${col?'+':'–'}</button>`:''}
+      ${avatar(u,'w-8 h-8','text-[11px]')}
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:700;color:var(--c-text);white-space:nowrap">${esc(fullName(u))}${tag?` <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:${tag[1]};color:${tag[2]};margin-left:4px;vertical-align:1px">${tag[0]}</span>`:''}</div>
+        <div style="font-size:11px;color:var(--c-text-3);white-space:nowrap">${esc(u.position||'')}${u.position&&u.department?' · ':''}${esc(u.department||'')}</div>
+      </div>
+      ${kids.length?`<span title="${kids.length} direct report${kids.length===1?'':'s'}" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;background:var(--c-brand-soft);color:var(--c-brand-ink)">${kids.length}</span>`:''}
+    </div>`;
+  return`<div>
+    <div style="display:flex;align-items:center;padding:3px 0">${d?`<span style="width:14px;height:1.5px;background:var(--c-border-2);margin-right:8px;flex-shrink:0"></span>`:''}${card}</div>
+    ${kids.length&&!col?`<div style="margin-left:${d?36:14}px;border-left:1.5px solid var(--c-border-2);padding-left:0px">${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}
+  </div>`;
+}
 function ticketsPage(){
   // Mark assigned tickets as viewed when page opens (no rr() — already rendering)
   let _dirty=false;
@@ -6564,15 +6603,27 @@ function _okrExpectedPct(o){
 }
 // Status: a manual mark (statusMode 'manual') wins; otherwise derived from progress vs expected pace.
 //   ≥100% → Achieved · period over & <100% → Not achieved · within 10 pts of pace → On track · else Off track.
+function _okrExpectedForNode(o,_seen){
+  // Pace for a node: leaves use their own period window; parents average their children's pace
+  // (a parent with no window of its own no longer defaults to a hard 70% bar — that wrongly
+  // flagged healthy trees as Off track).
+  _seen=_seen||new Set();if(_seen.has(o.id))return null;_seen.add(o.id);
+  const kids=okrChildren(o.id);
+  if(kids.length){
+    const vals=kids.map(k=>_okrExpectedForNode(k,_seen)).filter(v=>v!==null&&isFinite(v));
+    if(vals.length)return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
+  }
+  return _okrExpectedPct(o);
+}
 function okrStatusOf(o){
   if(o.statusMode==='manual'&&o.statusManual)return o.statusManual;
   const pct=okrProgress(o);
   if(pct===null)return 'No data';
   if(pct>=100)return 'Achieved';
   if(o.periodEnd&&todayISO()>o.periodEnd)return 'Not achieved';
-  const exp=_okrExpectedPct(o);
-  if(exp===null)return pct>=70?'On track':'Off track';
-  return pct>=exp-10?'On track':'Off track';
+  const exp=_okrExpectedForNode(o);
+  if(exp===null)return pct>=50?'On track':'Off track';
+  return pct>=exp-15?'On track':'Off track';
 }
 const OKR_ST_META={'Achieved':{bg:'#D1FAE5',fg:'#065F46',dot:'#10B981'},'On track':{bg:'#ECFDF5',fg:'#0B7A55',dot:'#22C55E'},'Off track':{bg:'#FFF1F2',fg:'#BE123C',dot:'#EF4444'},'Not achieved':{bg:'#FEF2F2',fg:'#991B1B',dot:'#B91C1C'},'No data':{bg:'#F6F7F8',fg:'#6B7280',dot:'#9CA3AF'}};
 function okrStatusChip(st,sm){const m=OKR_ST_META[st]||OKR_ST_META['No data'];return`<span style="display:inline-flex;align-items:center;gap:5px;padding:${sm?'2px 8px':'3px 10px'};border-radius:20px;font-size:${sm?'10.5':'11.5'}px;font-weight:800;background:${m.bg};color:${m.fg};white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:${m.dot};flex-shrink:0"></span>${esc(st)}</span>`;}
@@ -6648,13 +6699,35 @@ function _okrCanEditNode(o){return isAdmin()||isSubAdmin()||_okrCanManage()||o.c
 function _okrCanCheckin(o){return o.ownerId===S.uid||_okrCanEditNode(o);}
 function _okrLvlChip(lvl){const c=_OKR_LVL_C[lvl%_OKR_LVL_C.length];return`<span style="flex-shrink:0;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:${c};color:#fff;letter-spacing:.03em">L${lvl}</span>`;}
 App._okrTogExp=(id)=>{_OKR_EXP[id]=!_OKR_EXP[id];rr();};
+App._okrActivity=()=>{
+  const rows=(DB.okrLogs||[]).slice(0,100).map(l=>{
+    const o=okrById(l.okrId);const a=uById(l.actorId);
+    const when=l.createdAt?new Date(l.createdAt).toLocaleString():'';
+    return `<div style="display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid var(--c-border)">
+      <div style="flex-shrink:0;margin-top:1px">${a?avatar(a,'w-7 h-7','text-[10px]'):`<div style="width:28px;height:28px;border-radius:50%;background:var(--c-surface-2)"></div>`}</div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;color:var(--c-text)"><b>${esc(a?fullName(a):'Someone')}</b> · ${esc(l.action||'')}</div>
+        <div style="font-size:11.5px;color:var(--c-text-3)">${esc(o?o.title:'(deleted objective)')} — ${esc(when)}</div>
+      </div></div>`;
+  }).join('');
+  modalShell({title:'OKR activity',sub:'All OKR changes — kept separate from the main audit log',size:'max-w-lg',
+    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No OKR activity yet.</p>'});
+};
+App._okrProgressModal=(id)=>{
+  const o=okrById(id);if(!o)return;
+  const kids=okrChildren(o.id);
+  const pct=okrProgress(o),st=okrStatusOf(o);
+  modalShell({title:'Progress & Updates',sub:(o.title||'')+' — '+(pct===null?'no data yet':pct+'%'),size:'max-w-2xl',
+    body:`<div style="margin:-6px -2px 0">${_okrProgressPanel(o,kids,pct,st)}</div>`});
+  setTimeout(()=>{try{_drawOKRCharts();}catch(e){}},80);
+};
 App._okrTogPanel=(id,which)=>{_OKR_PANEL[id]=_OKR_PANEL[id]===which?null:which;rr();};
 App._okrTogLogs=(id)=>{_OKR_LOGS[id]=!_OKR_LOGS[id];rr();};
 
 function okrPage(){
   const vis=okrVisible(),canCreate=_okrCanCreate();
   const today=todayISO();
-  const head=hdr('OKRs','Objectives & key results — inputs roll up L2 → L1 → L0',canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):'');
+  const head=hdr('OKRs','Objectives & key results — inputs roll up L2 → L1 → L0',btn('Activity','App._okrActivity()',{variant:'ghost',icon:'audit'})+(canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):''));
   // ── Summary cards ──
   const sts=vis.map(o=>okrStatusOf(o));
   const cnt=x=>sts.filter(s=>s===x).length;
@@ -6750,13 +6823,13 @@ function _okrNodeHTML(o,depth){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           ${okrStatusChip(st)}
-          <span class="fd" style="font-size:16px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>
+          <span class="fd" style="font-size:16px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>${!kids.length?`<span style="font-size:11px;font-weight:600;color:var(--c-text-3);white-space:nowrap">${o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,((okrLatestCheckin(o.id)||{}).value??o.startValue))} / ${_okrFmtVal(o,o.targetValue)}`}</span>`:`<span style="font-size:11px;font-weight:600;color:var(--c-text-3)">${kids.length} sub · rolled up</span>`}
         </div>
       </div>
       <div style="height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin-top:9px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
       <div style="display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap">
         ${pTab('rules','Rules & Target','cog')}
-        ${pTab('progress','Progress & Updates','chart')}
+        <button onclick="App._okrProgressModal('${o.id}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:12px;font-weight:700;cursor:pointer">${ic('chart','w-3.5 h-3.5')}Progress & Updates</button>
         <span style="flex:1"></span>
         ${canCk&&!kids.length?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit'}):''}
         ${canCreate?`<button onclick="App._okrEdit(null,'${o.id}')" title="Add sub-objective (L${lvl+1})" style="${icBtn}">${ic('plus','w-4 h-4')}</button>`:''}
@@ -6764,7 +6837,6 @@ function _okrNodeHTML(o,depth){
       </div>
     </div>
     ${panel==='rules'?_okrRulesPanel(o):''}
-    ${panel==='progress'?_okrProgressPanel(o,kids,pct,st):''}
   </div>`;
   return card+(exp?kids.map(k=>_okrNodeHTML(k,depth+1)).join(''):'');
 }
@@ -6955,11 +7027,9 @@ App._okrSave=()=>{
     if(JSON.stringify(prev.frequency||{})!==JSON.stringify(o.frequency||{}))changes.push({field:'Frequency',from:_okrFreqLabel(prev),to:_okrFreqLabel(o)});
     DB.okrs[idx]=o;
     if(changes.length)okrLog(o.id,'Edited objective',{changes:changes});
-    log(fullName(me()),'Edited OKR',o.title);
   }else{
     DB.okrs=DB.okrs||[];DB.okrs.push(o);
     okrLog(o.id,'Created objective',{level:'L'+(o.parentId?okrLevel(o):0)});
-    log(fullName(me()),'Created OKR',o.title);
     if(o.parentId)_OKR_EXP[o.parentId]=true;
     if(o.ownerId&&o.ownerId!==S.uid)DB.notifications.unshift({id:uid('n'),userId:o.ownerId,text:'🎯 New OKR assigned to you: "'+o.title+'" — '+_okrFreqLabel(o),time:new Date().toISOString(),read:false,kind:'okr'});
   }
@@ -6975,7 +7045,6 @@ App._okrDelete=(id)=>{
   DB.okrCheckins=(DB.okrCheckins||[]).filter(c=>!ids.has(c.okrId));
   DB.okrLogs=(DB.okrLogs||[]).filter(l=>!ids.has(l.okrId));
   sb.from('okrs').delete().eq('id',id).then(({error})=>{if(error)_syncErr('OKR delete')(error);}).catch(_syncErr('OKR delete'));
-  log(fullName(me()),'Deleted OKR',(o.title||'')+(desc.length?(' (+'+desc.length+' children)'):''));
   saveDB();toast('OKR deleted','warn');rr();
 };
 App._okrMarkStatus=(id,st)=>{
