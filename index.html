@@ -7150,7 +7150,6 @@ function _okrProgressPanel(o,kids,pct,st){
         <div><div style="${lab}">Start</div><div style="${big}">${strt}</div></div>
         <div><div style="${lab}">Current</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">Target</div><div style="${big}">${tgt}</div></div>
-        <div><div style="${lab}">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>
         <div><div style="${lab}">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
       </div>
       ${canCk?btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'}):''}
