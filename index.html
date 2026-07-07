@@ -927,7 +927,7 @@ function _lazyForRoute(r){
   else if(r==='departments'||r==='locations')_lazyLoad('documents');
   else if(r==='mychecklists'){_lazyLoad('checklists');_lazyLoadDate('mychecklists');}
   else if(r==='teamview'){_lazyLoad('checklists');_lazyLoadDate('teamview');}
-  else if(r==='allcl'){_lazyLoad('checklists');_lazyLoadDate('allcl');}
+  else if(r==='allcl'){_lazyLoad('checklists');_lazyLoadDate('allcl');_lazyLoadDate('teamview');}
   else if(r==='dashboard'){_lazyLoad('tickets');_lazyLoad('checklists');_lazyLoadDate('mychecklists');}
   else if(r==='okr')_lazyLoad('okr');
 }
@@ -1051,6 +1051,17 @@ async function loadFromSB(){
   try{const _rpRow=(rpRows&&rpRows[0])||null;if(_rpRow&&_rpRow.value&&typeof _rpRow.value==='object')DB.roleProfiles={...(DB.roleProfiles||{}),..._rpRow.value};}catch(e){}
   _seedRoleProfiles();
   try{_permsV3Migrate();}catch(e){console.warn('[perms] migrate skipped:',e.message);}
+
+  // ── One-time self-heal: legacy duplicate root departments (unused copies of Operations'
+  //    sub-departments) get resurrected by stale sessions' whole-table sync. Drop them from
+  //    memory (so this client never re-pushes them) and delete server-side (idempotent).
+  try{
+    const _dupIds=['d_v3smuwi','d_fq9j44a'];
+    if((DB.departments||[]).some(d=>_dupIds.includes(d.id))){
+      DB.departments=DB.departments.filter(d=>!_dupIds.includes(d.id));
+      sb.from('departments').delete().in('id',_dupIds).then(()=>{}).catch(()=>{});
+    }
+  }catch(e){}
 
   // ── Questions: load ALL for everyone — needed so checklist cards can show questions ──
   // Questions tab visibility is controlled by nav (users have no tab, manager needs questionsAccess)
@@ -1323,8 +1334,7 @@ const NAV_ALL=[
   ['dashboard','grid','Dashboard',()=>isAdmin()||isSubAdmin()||isMgr()||_isMgrRole()],
   ['mychecklists','check','My Checklists',()=>true],
   ['tickets','ticket','Tickets',()=>can('tickets','view')],
-  ['teamview','users','Team',()=>can('teamview','view')],
-  ['allcl','list','All Checklists',()=>can('allChecklists','view')],
+  ['allcl','list','All Checklists',()=>can('allChecklists','view')||can('teamview','view')],
   ['users','users','Users',()=>can('employees','view')],
   ['hierarchy','tree','Hierarchy',()=>can('hierarchy','view')],
   ['checklists','list','Create Checklist',()=>can('checklists','create')],
@@ -1537,6 +1547,19 @@ App.logout=()=>{
 };
 
 /* ===== ROUTER ===== */
+/* ── All Checklists ⇄ Team: one sidebar entry, two sub-tabs (Team = the employee summary grid) ── */
+function allClTeamPage(){
+  const canAll=can('allChecklists','view'),canTeam=can('teamview','view');
+  let tab=S.filters.aclTab||(canAll?'all':'team');
+  if(tab==='all'&&!canAll)tab='team';
+  if(tab==='team'&&!canTeam)tab='all';
+  const teamN=(isAdmin()||isSubAdmin())?DB.users.filter(u=>u.status==='Active'&&u.id!==S.uid).length:subTree(S.uid).length;
+  const tabs=(canAll&&canTeam)?`<div class="ui-tabs" style="margin-bottom:14px">
+      <button class="ui-tab${tab==='all'?' on':''}" onclick="S.filters.aclTab='all';rr()">All Checklists</button>
+      <button class="ui-tab${tab==='team'?' on':''}" onclick="S.filters.aclTab='team';rr()">Team <span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:99px;background:var(--c-surface-2);color:var(--c-text-2);margin-left:5px">${teamN}</span></button>
+    </div>`:'';
+  return `<div>${tabs}${tab==='team'?teamViewPage():allClsPage()}</div>`;
+}
 function pageContent(){
   const r=S.route;
   if(r==='dashboard'){if(isAdmin()||isSubAdmin())return adminDash();if(isMgr()||_isMgrRole())return mgrDash();S.route='mychecklists';return myClsPage();}
@@ -1553,8 +1576,8 @@ function pageContent(){
   if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';return pageContent();}
   if(r==='questions'){if(can('questions','view'))return questionsPage();return myClsPage();}
   if(r==='mychecklists')return myClsPage();
-  if(r==='teamview'){if(can('teamview','view'))return teamViewPage();S.route='mychecklists';return myClsPage();}
-  if(r==='allcl'){if(can('allChecklists','view'))return allClsPage();S.route='teamview';return pageContent();}
+  if(r==='teamview'){if(can('teamview','view')){S.route='allcl';S.filters.aclTab='team';return pageContent();}S.route='mychecklists';return myClsPage();}
+  if(r==='allcl'){if(can('allChecklists','view')||can('teamview','view'))return allClTeamPage();S.route='dashboard';return pageContent();}
   if(r==='profile')return profilePage();
   if(r==='okr'){if(can('okr','view'))return okrPage();S.route='dashboard';return pageContent();}
   if(r==='accesscontrol'){if(can('accessControl','view'))return accessControlPage();S.route='dashboard';return pageContent();}
@@ -7287,6 +7310,8 @@ function _drawOKRCharts(){
 }
 
 /* ═════════════════ PORTED BLOCK: ACCESS CONTROL PAGE (from Safe Backup) ═════════════════ */
+let _ACD=null; // per-user draft: {uid,perms(overrides),rules,approval,cities,docAccess,dirty}
+let _RPD=null; // role draft: {id,name,description,perms,builtin,isNew,dirty}
 function accessControlPage(){
   if(!can('accessControl','view'))return empty('shield','Restricted','You don\'t have access to Access Control.');
   _seedRoleProfiles();
