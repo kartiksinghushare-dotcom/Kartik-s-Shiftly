@@ -1108,7 +1108,11 @@ async function _sync(){try{
   const results=await Promise.allSettled([
     sb.from('departments').upsert(DB.departments.map(d=>({id:d.id,name:d.name,parent_id:d.parentId||null})),{onConflict:'id'}),
     sb.from('locations').upsert(DB.locations.map(l=>({id:l.id,name:l.name,address:l.address||'',department:l.department||'',status:l.status||'Active'})),{onConflict:'id'}),
-    sb.from('checklists').upsert(DB.checklists.map(c=>({id:c.id,name:c.name,description:c.description||'',department:c.department||'',sub_department:c.subDepartment||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selected_days:c.selectedDays||[],selected_dates:c.selectedDates||[],custom_dates:c.customDates||[],start_date:c.startDate||null,end_date:c.endDate||null,location_ids:c.locationIds||[],assignees:c.assignees||[],tasks:c.tasks||[],question_ids:c.questionIds||[],question_configs:c.questionConfigs||{},schedule_time:c.scheduleTime||null,status:c.status||'Active',any_one:c.anyOne||false,created_by:c.createdBy||null})),{onConflict:'id'}),
+    // ⚠ Checklists are intentionally NOT mirrored in this background whole-table sync.
+    //   This upsert used to let a stale second browser silently overwrite a checklist another
+    //   user had just edited (e.g. reverting a question count back up → the "Mohit sees 15,
+    //   Wendy sees 16" bug). Checklists are now written ONLY through their own confirmed saves
+    //   (_saveCl / dupCl / delCl / delUser / delDept), which are race-safe.
     sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
@@ -1116,7 +1120,12 @@ async function _sync(){try{
     sb.from('feedback').upsert((DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()})),{onConflict:'id'}),
     sb.from('doc_folders').upsert((DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt})),{onConflict:'id'}),
     sb.from('documents').upsert((DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt})),{onConflict:'id'}),
-    sb.from('questions').upsert((DB.questions||[]).map(q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,is_public:q.isPublic!==false,created_by:q.createdBy||null,created_at:q.createdAt||new Date().toISOString(),department_id:q.departmentId||null,sub_department_id:q.subDepartmentId||null})),{onConflict:'id'}),
+    // ⚠ Questions are intentionally NOT mirrored in this background whole-table sync.
+    //   This upsert used to let a stale second browser (a) resurrect a question that another
+    //   user had just deleted and (b) wipe department_id / sub_department_id that another user
+    //   had just set (→ "department resets to unassigned on refresh"). Questions are now written
+    //   ONLY through their own confirmed saves (_saveQuestion / _delQuestion / _importQCSV /
+    //   _togQPublic), so a stale cache can no longer overwrite or resurrect them.
     (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
   ]);
   // Background full-DB mirror. Row-level-security will reject rows owned by other users
@@ -2123,6 +2132,13 @@ App.togUser=(id)=>{
 App.delUser=async(id)=>{
   const u=uById(id);if(!u)return;
   const name=fullName(u);
+  // ── Guard: a user who is still assigned to checklists must not be deleted. ──
+  const _asgCls=(DB.checklists||[]).filter(c=>(c.assignees||[]).includes(id));
+  if(_asgCls.length){
+    const _names=_asgCls.slice(0,4).map(c=>'• '+(c.name||'Untitled')).join('\n')+(_asgCls.length>4?'\n• +'+(_asgCls.length-4)+' more':'');
+    alert("Can't delete "+name+" — they're still assigned to "+_asgCls.length+' checklist'+(_asgCls.length>1?'s':'')+':\n'+_names+".\n\nUnassign them from those checklists first, or use Disable to keep their data.");
+    return;
+  }
   if(!confirm('Permanently delete '+name+'?\n\nThis will delete ALL their submissions and approvals. This cannot be undone.\n\nTo keep their data, use Disable instead.'))return;
   // Optimistic local cleanup first
   DB.users.filter(x=>x.managerId===id).forEach(x=>x.managerId=u.managerId);
@@ -2449,7 +2465,12 @@ function deptsPage(){
 }
 App.editDept=(id=null,parentId=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;_deptParent=d?(d.parentId||null):(parentId||null);const _lbl=_deptParent?'sub-department':'department';openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} ${_lbl}</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #ECEDF0;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#15171C;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
 App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n,parentId:_deptParent||null};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error){console.error('saveDept:',error.message);toast('Couldn’t save to server — a department with this name may already exist here. ('+String(error.message||'').slice(0,50)+')','err');}}).catch(e=>{toast('Couldn’t save department to server','err');});};
-App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;const isSub=!!d.parentId;const kids=DB.departments.filter(x=>x.parentId===id);const msg=isSub?('Delete sub-department '+d.name+'? Questions tagged to it will become untagged.'):('Delete '+d.name+'?'+(kids.length?' Its '+kids.length+' sub-department(s) will also be deleted.':'')+' Users and checklists in this department will not be deleted but will have no department.');if(!confirm(msg))return;if(!DB.departments_deleted)DB.departments_deleted=[];const _toDel=[id,...kids.map(k=>k.id)];_toDel.forEach(did=>{if(!DB.departments_deleted.includes(did))DB.departments_deleted.push(did);});DB.departments=DB.departments.filter(x=>!_toDel.includes(x.id));_toDel.forEach(did=>{sb.from('departments').delete().eq('id',did).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});});// Clear dept from users and checklists (don't delete them)
+App.delDept=(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;const isSub=!!d.parentId;const kids=DB.departments.filter(x=>x.parentId===id);
+// ── Guard: a department (or its sub-departments) that is still tagged to questions,
+//    checklists, or users must not be deleted. Note: questions reference departments by ID,
+//    while checklists and users reference them by NAME. ──
+const _allIds=[id,...kids.map(k=>k.id)];const _allNames=[d.name,...kids.map(k=>k.name)];const _qUsed=(DB.questions||[]).filter(q=>_allIds.includes(q.departmentId)||_allIds.includes(q.subDepartmentId)).length;const _cUsed=(DB.checklists||[]).filter(c=>_allNames.includes(c.department)||_allNames.includes(c.subDepartment)).length;const _uUsed=(DB.users||[]).filter(u=>_allNames.includes(u.department)).length;if(_qUsed||_cUsed||_uUsed){const _p=[];if(_qUsed)_p.push(_qUsed+' question'+(_qUsed>1?'s':''));if(_cUsed)_p.push(_cUsed+' checklist'+(_cUsed>1?'s':''));if(_uUsed)_p.push(_uUsed+' user'+(_uUsed>1?'s':''));alert("Can't delete \""+d.name+"\" — it's still used by "+_p.join(', ')+".\n\nReassign or untag those first (change their department), then delete this "+(isSub?'sub-department':'department')+".");return;}
+const msg=isSub?('Delete sub-department '+d.name+'? Questions tagged to it will become untagged.'):('Delete '+d.name+'?'+(kids.length?' Its '+kids.length+' sub-department(s) will also be deleted.':'')+' Users and checklists in this department will not be deleted but will have no department.');if(!confirm(msg))return;if(!DB.departments_deleted)DB.departments_deleted=[];const _toDel=[id,...kids.map(k=>k.id)];_toDel.forEach(did=>{if(!DB.departments_deleted.includes(did))DB.departments_deleted.push(did);});DB.departments=DB.departments.filter(x=>!_toDel.includes(x.id));_toDel.forEach(did=>{sb.from('departments').delete().eq('id',did).then(({error})=>{if(error)console.error('delDept:',error.message);}).catch(()=>{});});// Clear dept from users and checklists (don't delete them)
 DB.users.forEach(u=>{if(u.department===d.name)u.department='';});DB.checklists.forEach(c=>{if(c.department===d.name)c.department='';});(DB.questions||[]).forEach(q=>{if(_toDel.includes(q.departmentId))q.departmentId=null;if(_toDel.includes(q.subDepartmentId))q.subDepartmentId=null;});log(fullName(me()),'Deleted dept',d.name);toast('Deleted','warn');saveDB();render();};
 
 /* ===== LOCATIONS ===== */
@@ -2870,6 +2891,11 @@ App.dupCl=async(id)=>{
 
 App.delCl=async(id)=>{
   const c=clById(id);if(!c)return;
+  // ── Guard: a checklist that is still assigned to people must not be deleted. ──
+  if((c.assignees||[]).length){
+    alert("Can't delete \""+(c.name||'this checklist')+"\" — it's assigned to "+c.assignees.length+' user'+(c.assignees.length>1?'s':'')+".\n\nOpen the checklist and remove everyone from Assignees first, or set its Status to Inactive to pause it. Past submissions are always kept.");
+    return;
+  }
   if(!confirm('Delete "'+c.name+'"?\n\nPast submissions will be preserved.'))return;
   // ── Delete on the server FIRST. Only update local state / audit log after
   //    the server confirms, so the UI and DB never disagree. ──
@@ -4238,6 +4264,16 @@ App._filterQuestions=(val)=>{
 
 App._delQuestion=(id)=>{
   const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
+  // ── Guard: a question that is still used in ANY checklist must not be deleted. Deleting a
+  //    question that was assigned to someone is exactly what caused the "Mohit 15 / Wendy 16"
+  //    count mismatch. The question must first be removed from those checklists. ──
+  const _usedIn=(DB.checklists||[]).filter(c=>(c.questionIds||[]).includes(id));
+  if(_usedIn.length){
+    const _assignees=new Set();_usedIn.forEach(c=>(c.assignees||[]).forEach(a=>_assignees.add(a)));
+    const _names=_usedIn.slice(0,4).map(c=>'• '+(c.name||'Untitled')).join('\n')+(_usedIn.length>4?'\n• +'+(_usedIn.length-4)+' more':'');
+    alert("Can't delete this question — it's still used in "+_usedIn.length+' checklist'+(_usedIn.length>1?'s':'')+':\n'+_names+(_assignees.size?'\n\nThose checklists are assigned to '+_assignees.size+' user'+(_assignees.size>1?'s':''):'')+".\n\nOpen each checklist and remove this question first, then you can delete it.");
+    return;
+  }
   if(!confirm('Delete "'+q.text+'"?'))return;
   if(!DB.questions_deleted)DB.questions_deleted=[];
   if(!DB.questions_deleted.includes(id))DB.questions_deleted.push(id);
@@ -5935,10 +5971,19 @@ App._execClear=async()=>{
   closeModal();
   // Local deletion
   sel.forEach(k=>catMap[k].local());
-  // Supabase deletion in background
-  await Promise.allSettled(
-    sel.map(k=>sb.from(catMap[k].table).delete().neq('id','00000000-0000-0000-0000-000000000000').then(()=>{}).catch(()=>{}))
-  );
+  // ── Supabase deletion — ORDER MATTERS. The DB integrity guard blocks deleting a question
+  //    that is still referenced by a checklist, so everything that references questions must be
+  //    removed first. When questions are wiped but checklists are kept, detach the questions
+  //    from the surviving checklists so the bulk delete can't be aborted by the guard. ──
+  const _blank='00000000-0000-0000-0000-000000000000';
+  const _del=k=>sb.from(catMap[k].table).delete().neq('id',_blank).then(()=>{}).catch(()=>{});
+  if(sel.includes('questions')&&!sel.includes('checklists')){
+    await sb.from('checklists').update({question_ids:[],question_configs:{}}).neq('id',_blank).then(()=>{}).catch(()=>{});
+    DB.checklists.forEach(c=>{c.questionIds=[];c.questionConfigs={};});
+  }
+  if(sel.includes('checklists')) await _del('checklists');
+  await Promise.allSettled(sel.filter(k=>k!=='checklists'&&k!=='questions').map(_del));
+  if(sel.includes('questions')) await _del('questions');
   log(fullName(me()),'Cleared data',labels);
   toast('Deleted: '+sel.length+' categor'+(sel.length===1?'y':'ies')+' ✓','ok');
   saveDB();S.route='dashboard';render();
