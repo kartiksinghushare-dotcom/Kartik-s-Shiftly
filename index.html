@@ -1113,7 +1113,12 @@ async function _sync(){try{
     //   user had just edited (e.g. reverting a question count back up → the "Mohit sees 15,
     //   Wendy sees 16" bug). Checklists are now written ONLY through their own confirmed saves
     //   (_saveCl / dupCl / delCl / delUser / delDept), which are race-safe.
-    sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,tasks:s.tasks||[],question_responses:s.questionResponses||[],edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
+    // ⚠ tasks & question_responses are intentionally OMITTED from this background mirror. A
+    //   PostgREST upsert only updates the columns it sends, so omitting these two means a stale
+    //   second browser (e.g. a manager who opened the submission before its photos finished
+    //   uploading) can no longer overwrite the durable photo URLs with '[photo]'. These fields
+    //   are written only by the submitter's own confirmed submit / resubmit (targeted upsert).
+    sb.from('submissions').upsert(DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,edit_count:s.editCount||0,edit_history:s.editHistory||[]})),{onConflict:'id'}),
     sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}),
     sb.from('audit_logs').upsert(DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''})),{onConflict:'id'}),
     sb.from('notifications').upsert(DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
@@ -3277,8 +3282,14 @@ async function _uploadSubmissionPhotos(clId,userId,date,responses){
         if(!blob){uploaded.push('[photo]');continue;}
         const ext=(blob.type.split('/')[1]||'jpg').replace(/[^a-z0-9]/gi,'')||'jpg';
         const path='submissions/'+clId+'/'+userId+'/'+date+'/'+r.questionId+'_'+Date.now()+'_'+i+'.'+ext;
-        const {error}=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
-        if(error){console.warn('[photo upload]',error.message);uploaded.push('[photo]');continue;}
+        // Retry transient upload failures (flaky mobile networks) before giving up.
+        let up=null;
+        for(let attempt=0;attempt<3;attempt++){
+          if(attempt>0)await new Promise(res=>setTimeout(res,500*attempt));
+          up=await sb.storage.from('documents').upload(path,blob,{cacheControl:'3600',upsert:true,contentType:blob.type});
+          if(!up||!up.error)break;
+        }
+        if(up&&up.error){console.warn('[photo upload]',up.error.message);uploaded.push('[photo]');continue;}
         const {data:urlData}=sb.storage.from('documents').getPublicUrl(path);
         uploaded.push(urlData?.publicUrl||'[photo]');
       }catch(e){console.warn('[photo upload failed]',e.message);uploaded.push('[photo]');}
@@ -3329,55 +3340,53 @@ App._submitRun=async(clId,date)=>{
     if(adminU2&&adminU2.id!==mgrId)DB.notifications.unshift({id:uid('n'),userId:adminU2.id,text:apprText,time:new Date().toISOString(),read:false});
   }
   log(fullName(u),'Submitted '+run.status,c.name);
-  toast(needsAppr?'Submitted — pending approval':'Submitted ✓',late||needsAppr?'warn':'ok');
   // Process escalations — only on first submission, not resubmits
   if(!isResub)_processEscalations(clId,date,run.questionResponses||[]);
-  // questionResponses already in run — will be included in push/update below
-  // Capture the original responses (may contain base64 photos) so we can persist photos
-  // to Storage in the background after the instant render (Fix #5).
   const _origQR=JSON.parse(JSON.stringify(run.questionResponses||[]));
   const _subId=run.id;
   const _inlineP=r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('data:')))||(typeof r.photo==='string'&&r.photo.startsWith('data:'));
   const _hasInlinePhoto=_origQR.some(_inlineP);
-  // Strip base64 photos before sending to Supabase (store placeholder; URLs persisted in bg)
+  // Strip base64 photos before sending to Supabase (store placeholder; real URLs added below)
   const _stripP=p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p;
-  const srQR=(run.questionResponses||[]).map(r=>{
-    const o={...r};
-    if(Array.isArray(o.photos))o.photos=o.photos.map(_stripP);
-    if(o.photo)o.photo=_stripP(o.photo);
-    return o;
-  });
-  const sr={id:run.id,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:srQR,edit_count:run.editCount||0,edit_history:run.editHistory||[]};
-  // 1. Save immediately (saveDB strips photos before writing)
+  const _mkRow=qr=>({id:_subId,checklist_id:clId,user_id:S.uid,date,status:run.status,submitted_at:run.submittedAt,tasks:run.tasks,question_responses:qr,edit_count:run.editCount||0,edit_history:run.editHistory||[]});
+  const srQR=(run.questionResponses||[]).map(r=>{const o={...r};if(Array.isArray(o.photos))o.photos=o.photos.map(_stripP);if(o.photo)o.photo=_stripP(o.photo);return o;});
+  // Mark the Submit button busy so the user waits while photos upload. The OLD bug was that the
+  // photo upload ran fire-and-forget AFTER 'Submitted', so if the tab was closed the images
+  // never reached the server — managers then saw responses but no photos.
+  const _sbtn=document.querySelector('.submit-pill[data-cl="'+clId+'"]');
+  if(_sbtn){_sbtn.disabled=true;_sbtn.style.opacity='.6';_sbtn.style.pointerEvents='none';_sbtn.textContent=_hasInlinePhoto?'Uploading photos…':'Saving…';}
   saveDB();
-  // 2. Render immediately — UI updates in <50ms
+  // 1. Save the response text immediately (photos as placeholders) — safety net so a submission
+  //    is NEVER lost even if a photo upload fails.
+  let _txtOk=false;
+  for(let attempt=0;attempt<3&&!_txtOk;attempt++){
+    if(attempt>0)await new Promise(res=>setTimeout(res,500*attempt));
+    try{const {error}=await sb.from('submissions').upsert(_mkRow(srQR),{onConflict:'id'});_txtOk=!error;if(error)console.warn('sub upsert:',error.message);}
+    catch(e){console.warn('sub upsert:',e&&e.message);}
+  }
+  // 2. Upload photos to Storage NOW (foreground, awaited) and re-save the submission with the
+  //    durable public URLs, so managers/admins can see them. This is the core fix.
+  if(_hasInlinePhoto){
+    try{
+      const uploadedQR=await _uploadSubmissionPhotos(clId,S.uid,date,_origQR);
+      const rec=DB.submissions.find(s=>s.id===_subId);
+      if(rec)rec.questionResponses=uploadedQR;
+      saveDB();
+      const anyUrl=uploadedQR.some(r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('http')))||(typeof r.photo==='string'&&r.photo.startsWith('http')));
+      if(anyUrl){try{await sb.from('submissions').upsert(_mkRow(uploadedQR),{onConflict:'id'});}catch(e){console.warn('[photo re-upsert]',e&&e.message);}}
+      const _lost=uploadedQR.some(r=>(Array.isArray(r.photos)&&r.photos.includes('[photo]'))||r.photo==='[photo]');
+      if(_lost)toast('⚠ Some photos couldn’t be uploaded — please re-open the checklist and re-attach them','warn');
+    }catch(e){console.warn('[photo persist]',e&&e.message);toast('⚠ Photos couldn’t be uploaded — submission saved without them','warn');}
+  }
+  // 3. Finalize the UI now that text + photos are persisted.
+  toast(needsAppr?'Submitted — pending approval':'Submitted ✓',late||needsAppr?'warn':'ok');
   delete RUN[clId];S.expandedCl=null;_invalidateNotifCache();_touchAction();render();
-  // 3. Save ONLY this submission to Supabase (targeted — not full _sync of 11 tables)
-  sb.from('submissions').upsert(sr,{onConflict:'id'}).then(({error})=>{
-    if(error)console.warn('sub upsert:',error.message);
-    // 3a. Persist photos to Storage in the background, then re-save the submission with
-    // durable URLs (Fix #5). Entirely optional — submission already succeeded above.
-    if(_hasInlinePhoto){
-      _uploadSubmissionPhotos(clId,S.uid,date,_origQR).then(uploadedQR=>{
-        const anyUrl=uploadedQR.some(r=>(Array.isArray(r.photos)&&r.photos.some(p=>typeof p==='string'&&p.startsWith('http')))||(typeof r.photo==='string'&&r.photo.startsWith('http')));
-        if(!anyUrl)return; // nothing persisted (all failed) — leave placeholders, no-op
-        // Patch the in-memory record so managers see the real photo without a reload
-        const rec=DB.submissions.find(s=>s.id===_subId);
-        if(rec)rec.questionResponses=uploadedQR;
-        saveDB();
-        // Re-upsert just this submission with the URL-bearing responses
-        sb.from('submissions').upsert({id:_subId,checklist_id:clId,user_id:S.uid,date,status:sr.status,submitted_at:sr.submitted_at,tasks:sr.tasks,question_responses:uploadedQR,edit_count:sr.edit_count,edit_history:sr.edit_history},{onConflict:'id'})
-          .then(({error})=>{if(error)console.warn('[photo re-upsert]',error.message);})
-          .catch(e=>console.warn('[photo re-upsert failed]',e.message));
-      }).catch(e=>console.warn('[photo persist]',e.message));
-    }
-    // After submission saved, sync notifications/approvals/issues in background
-    Promise.allSettled([
-      DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
-      sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
-      DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
-    ]).catch(()=>{});
-  }).catch(e=>console.warn('sub upsert failed:',e.message));
+  // 4. Background: sync notifications / approvals / tickets (non-blocking).
+  Promise.allSettled([
+    DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
+    sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
+    DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
+  ]).catch(()=>{});
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
@@ -3888,7 +3897,9 @@ App._decide=async(id,status)=>{
   // Targeted Supabase save — only affected rows, not full 11-table sync
   Promise.allSettled([
     sb.from('approvals').update({status:a.status}).eq('id',a.id),
-    s ? sb.from('submissions').update({status:s.status,question_responses:s.questionResponses||[]}).eq('id',s.id) : Promise.resolve(),
+    // Approving/rejecting changes ONLY the status — never rewrite question_responses here, or an
+    // approver whose cache is stale would clobber the submitter's uploaded photo URLs with '[photo]'.
+    s ? sb.from('submissions').update({status:s.status}).eq('id',s.id) : Promise.resolve(),
     sb.from('notifications').upsert(DB.notifications.slice(0,20).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
   ]).catch(()=>{});
 };
@@ -6914,7 +6925,9 @@ App._okrCkDel=(okrId,ckId)=>{
   const o=okrById(okrId);if(!o)return;
   const c=(DB.okrCheckins||[]).find(x=>x.id===ckId);if(!c)return;
   if(!(c.userId===S.uid||_okrCanManage()))return toast('Only the author or a manager can delete an update','err');
-  confirmModal?confirmModal({title:'Delete this update?',body:'The value '+esc(_okrFmtVal(o,c.value))+' from '+esc(fmtS(c.date))+' will be removed. This is logged.',confirmLabel:'Delete',danger:true,onConfirm:`App._okrCkDelGo('${okrId}','${ckId}')`}):App._okrCkDelGo(okrId,ckId);
+  // (was: an undefined `confirmModal` here threw a ReferenceError, so the delete button did nothing)
+  if(!confirm('Delete this update?\n\nThe value '+_okrFmtVal(o,c.value)+' from '+fmtS(c.date)+' will be removed. This is logged.'))return;
+  App._okrCkDelGo(okrId,ckId);
 };
 App._okrCkDelGo=(okrId,ckId)=>{
   const c=(DB.okrCheckins||[]).find(x=>x.id===ckId);if(!c)return;
@@ -7088,6 +7101,7 @@ function _okrProgressPanel(o,kids,pct,st){
   const _ownCur=_okrOwnCur(o);
   const cur=esc(_okrFmtVal(o,last?last.value:(o.startValue??null)));
   const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue));
+  const strt=o.metricType==='yesno'?'No':esc(_okrFmtVal(o,o.startValue));
   // manual status marking (owner / manager) — every mark is logged
   const markRow=canCk?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:11px;font-weight:700;color:var(--c-text-3)">MARK:</span>
@@ -7129,6 +7143,7 @@ function _okrProgressPanel(o,kids,pct,st){
   return `<div style="border-top:1px solid var(--c-border);background:var(--c-surface-2);padding:14px 16px">
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="display:flex;gap:22px;flex-wrap:wrap">
+        <div><div style="${lab}">Start</div><div style="${big}">${strt}</div></div>
         <div><div style="${lab}">Current</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">Target</div><div style="${big}">${tgt}</div></div>
         <div><div style="${lab}">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>
