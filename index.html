@@ -339,6 +339,25 @@ main#content [style*="border-radius:18px"][style*="border:1px solid #EEECE8"]{ b
 main#content input:focus,main#content select:focus,main#content textarea:focus{ box-shadow:0 0 0 3px rgba(16,185,129,.16)!important }
 
 
+
+/* ── Org chart (hierarchy page) — real top-down tree with connectors ── */
+.oc{display:inline-block;min-width:100%;text-align:center}
+.oc ul{display:flex;justify-content:center;position:relative;padding:22px 0 0;margin:0;list-style:none}
+.oc ul::before{content:'';position:absolute;top:0;left:50%;height:22px;border-left:1.5px solid var(--c-border-2)}
+.oc>ul{padding-top:0}
+.oc>ul::before{display:none}
+.oc li{display:flex;flex-direction:column;align-items:center;position:relative;padding:22px 9px 0}
+.oc>ul>li{padding-top:0}
+.oc li::before,.oc li::after{content:'';position:absolute;top:0;right:50%;width:50%;height:22px;border-top:1.5px solid var(--c-border-2)}
+.oc li::after{right:auto;left:50%;border-left:1.5px solid var(--c-border-2)}
+.oc li:only-child::before,.oc li:only-child::after{border-top:0}
+.oc li:only-child::after{height:22px;border-left:1.5px solid var(--c-border-2)}
+.oc>ul>li:only-child::after{display:none}
+.oc li:first-child::before,.oc li:last-child::after{border-top:0}
+.oc li:last-child::before{border-right:1.5px solid var(--c-border-2);border-radius:0 8px 0 0}
+.oc li:first-child::after{border-radius:8px 0 0 0}
+.oc>ul>li::before,.oc>ul>li::after{display:none}
+
 /* ════════ PORTED: Safe Backup 2026 design tokens + component kit (appended; cascade wins) ════════ */
 
 /* ════════ Bridge DESIGN TOKENS (2026 refresh) ════════
@@ -1358,11 +1377,11 @@ const NAV_SECTION_OF={
   // People
   users:'People',teamview:'People',hierarchy:'People',lifecycle:'People',discipline:'People',
   // Insights
-  analytics:'Insights',hrmanalytics:'Insights',okr:'Insights',
+  okr:'People',
   // Setup (admin plumbing — collapsed unless you're in it)
   hrmconfig:'Setup',payroll:'Setup',locations:'Setup',departments:'Setup',settings:'Setup',audit:'Setup',accesscontrol:'Setup',
 };
-const NAV_SECTION_ORDER=['Time','Work','People','Insights','Setup'];
+const NAV_SECTION_ORDER=['Work','People','Setup'];
 const NAV_SECTION_ICON={Time:'clock',Work:'list',People:'users',Insights:'chart',Setup:'cog'};
 function navSectionsFor(){
   const flat=navFor();
@@ -1573,15 +1592,15 @@ function _dashChartsPage(){
   const pendA=subs.filter(s=>s.status==='Pending Approval').length;
   const rate=(onTime+late)?Math.round(onTime/(onTime+late)*100):null;
   const tkOpen=tickets.filter(t=>t.status==='Open'||t.status==='In Progress').length;
-  const kpi=(label,val,fg,bg,icon)=>`<div style="flex:1;min-width:130px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:13px 15px;display:flex;align-items:center;gap:11px"><div style="width:36px;height:36px;border-radius:10px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</div><div><div class="fd" style="font-size:19px;font-weight:800;line-height:1.1;color:var(--c-text)">${val}</div><div style="font-size:11px;font-weight:600;color:var(--c-text-3)">${label}</div></div></div>`;
+  const kpi=(label,val,fg,bg,icon,go)=>`<button onclick="${go||''}" ${go?'':'disabled'} style="flex:1;min-width:130px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:12px 14px;display:flex;align-items:center;gap:11px;cursor:${go?'pointer':'default'};text-align:left;transition:box-shadow .15s,border-color .15s" ${go?`onmouseover="this.style.boxShadow='var(--sh-md)';this.style.borderColor='var(--c-border-2)'" onmouseout="this.style.boxShadow='none';this.style.borderColor='var(--c-border)'"`:''}><div style="width:36px;height:36px;border-radius:10px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</div><div><div class="fd" style="font-size:19px;font-weight:800;line-height:1.1;color:var(--c-text)">${val}</div><div style="font-size:11px;font-weight:600;color:var(--c-text-3)">${label} <span style="color:var(--c-text-3);font-weight:800">›</span></div></div></button>`;
   const chartCard=(key,title,sub,h)=>`<div class="ui-card" style="padding:16px 18px;min-width:0"><div style="margin-bottom:10px"><div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text)">${title}</div><div style="font-size:11px;color:var(--c-text-3)">${sub}</div></div><div style="height:${h||230}px;position:relative"><canvas data-dash-chart="${key}"></canvas></div></div>`;
   return `<div class="fade">${hdr('Dashboard','Live picture of submissions, compliance, tickets'+(okrs.length?' & OKRs':''))}
     <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px">
-      ${kpi('On-time rate (30d)',rate===null?'—':rate+'%','#0A6B49','var(--c-brand-soft)','approve')}
-      ${kpi('On time (30d)',onTime,'#0A6B49','var(--c-brand-soft)','check')}
-      ${kpi('Late (30d)',late,'#991B1B','var(--c-danger-soft)','alert')}
-      ${kpi('Pending approval',pendA,'#92560A','var(--c-warn-soft)','clock')}
-      ${kpi('Open tickets',tkOpen,'#075985','var(--c-info-soft)','ticket')}
+      ${kpi('On-time rate (30d)',rate===null?'—':rate+'%','#0A6B49','var(--c-brand-soft)','approve',"S.filters.dashTab='cards';S.filters.stats=[];rr()")}
+      ${kpi('On time (30d)',onTime,'#0A6B49','var(--c-brand-soft)','check',"S.filters.dashTab='cards';S.filters.stats=['On Time'];rr()")}
+      ${kpi('Late (30d)',late,'#991B1B','var(--c-danger-soft)','alert',"S.filters.dashTab='cards';S.filters.stats=['Late'];rr()")}
+      ${kpi('Pending approval',pendA,'#92560A','var(--c-warn-soft)','clock',"App.go('approvals')")}
+      ${kpi('Open tickets',tkOpen,'#075985','var(--c-info-soft)','ticket',"App.go('tickets')")}
     </div>
     <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(310px,1fr));gap:12px">
       ${chartCard('daily','Daily submissions','On time vs late — last 14 days')}
@@ -5079,26 +5098,24 @@ function hierarchyPage(){
   const admin=isAdmin()||isSubAdmin();
   const roots=admin?DB.users.filter(u=>u.status!=='Inactive'&&(!u.managerId||!uById(u.managerId))):[me()].filter(Boolean);
   return`<div class="fade">${hdr(admin?'Organisation':'My Team','Reporting structure')}
-  <div class="ui-card" style="padding:20px 22px;overflow-x:auto"><div style="min-width:fit-content">${roots.map(r=>_tNode(r,0)).join('')}</div></div></div>`;
+  <div class="ui-card" style="padding:26px 18px;overflow:auto"><div class="oc"><ul>${roots.map(r=>_tNode(r,0)).join('')}</ul></div></div></div>`;
 }
 function _tNode(u,d){
+  if(d>9)return'';
   const kids=DB.users.filter(x=>x.managerId===u.id&&x.id!==u.id&&x.status!=='Inactive');
   const col=COLL[u.id];
   const rp=(typeof _roleOf==='function')?_roleOf(u):null;
   const tag=u.role==='Admin'?['SUPER ADMIN','#15171C','#fff']:u.role==='SubAdmin'?['ADMIN','#EEF2FF','#4338CA']:((rp&&rp.id==='manager')||kids.length)?['MANAGER','#E0F2FE','#0369A1']:null;
-  const card=`<div style="display:inline-flex;align-items:center;gap:10px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:7px 14px 7px 8px;box-shadow:var(--sh-xs)">
-      ${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" title="${col?'Expand':'Collapse'}" style="width:22px;height:22px;display:grid;place-items:center;border-radius:7px;border:1px solid var(--c-border-2);background:var(--c-surface-2);cursor:pointer;color:var(--c-text-2);font-size:12px;font-weight:800;line-height:1">${col?'+':'–'}</button>`:''}
-      ${avatar(u,'w-8 h-8','text-[11px]')}
-      <div style="min-width:0">
-        <div style="font-size:13px;font-weight:700;color:var(--c-text);white-space:nowrap">${esc(fullName(u))}${tag?` <span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:4px;background:${tag[1]};color:${tag[2]};margin-left:4px;vertical-align:1px">${tag[0]}</span>`:''}</div>
-        <div style="font-size:11px;color:var(--c-text-3);white-space:nowrap">${esc(u.position||'')}${u.position&&u.department?' · ':''}${esc(u.department||'')}</div>
+  const card=`<div style="display:inline-flex;flex-direction:column;align-items:center;gap:6px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px 14px;box-shadow:var(--sh-xs);min-width:118px;max-width:170px;position:relative">
+      ${avatar(u,'w-9 h-9','text-[11px]')}
+      <div style="min-width:0;text-align:center">
+        <div style="font-size:12px;font-weight:700;color:var(--c-text);line-height:1.25">${esc(fullName(u))}</div>
+        <div style="font-size:10px;color:var(--c-text-3);margin-top:1px;line-height:1.3">${esc(u.position||u.department||'')}</div>
+        ${tag?`<div style="margin-top:4px"><span style="font-size:8.5px;font-weight:800;padding:1px 7px;border-radius:4px;background:${tag[1]};color:${tag[2]};letter-spacing:.03em">${tag[0]}</span></div>`:''}
       </div>
-      ${kids.length?`<span title="${kids.length} direct report${kids.length===1?'':'s'}" style="font-size:10px;font-weight:800;padding:2px 8px;border-radius:10px;background:var(--c-brand-soft);color:var(--c-brand-ink)">${kids.length}</span>`:''}
+      ${kids.length?`<button onclick="COLL['${u.id}']=!COLL['${u.id}'];rr()" title="${col?'Expand':'Collapse'} ${kids.length} report${kids.length===1?'':'s'}" style="position:absolute;bottom:-11px;left:50%;transform:translateX(-50%);min-width:22px;height:22px;padding:0 6px;display:inline-flex;align-items:center;justify-content:center;gap:2px;border-radius:11px;border:1.5px solid var(--c-border-2);background:var(--c-surface);cursor:pointer;color:var(--c-text-2);font-size:10px;font-weight:800;line-height:1;box-shadow:var(--sh-xs);z-index:1">${col?'+'+kids.length:'–'}</button>`:''}
     </div>`;
-  return`<div>
-    <div style="display:flex;align-items:center;padding:3px 0">${d?`<span style="width:14px;height:1.5px;background:var(--c-border-2);margin-right:8px;flex-shrink:0"></span>`:''}${card}</div>
-    ${kids.length&&!col?`<div style="margin-left:${d?36:14}px;border-left:1.5px solid var(--c-border-2);padding-left:0px">${kids.map(k=>_tNode(k,d+1)).join('')}</div>`:''}
-  </div>`;
+  return`<li>${card}${kids.length&&!col?`<ul>${kids.map(k2=>_tNode(k2,d+1)).join('')}</ul>`:''}</li>`;
 }
 function ticketsPage(){
   // Mark assigned tickets as viewed when page opens (no rr() — already rendering)
@@ -6876,10 +6893,26 @@ function okrPage(){
   const vis=okrVisible(),canCreate=_okrCanCreate();
   const today=todayISO();
   const head=hdr('OKRs','Objectives & key results — inputs roll up L2 → L1 → L0',btn('Activity','App._okrActivity()',{variant:'ghost',icon:'audit'})+(canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):''));
+  // ── L0 overview graph: every root objective's progress over time ──
+  const _gran=S.filters.okrOvGran||'m';
+  const roots0=okrVisibleRoots();
+  const overview=roots0.length?`<div class="ui-card" style="padding:14px 16px;margin-bottom:14px">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px;flex-wrap:wrap">
+      <div><div class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text)">All objectives — progress over time</div>
+      <div style="font-size:11px;color:var(--c-text-3)">One thin line per L0 · roll-up of every level beneath it</div></div>
+      <span style="flex:1"></span>
+      <div class="ui-tabs" style="padding:3px">
+        <button class="ui-tab${_gran==='m'?' on':''}" style="min-height:28px;padding:4px 12px;font-size:11.5px" onclick="S.filters.okrOvGran='m';rr()">Monthly</button>
+        <button class="ui-tab${_gran==='q'?' on':''}" style="min-height:28px;padding:4px 12px;font-size:11.5px" onclick="S.filters.okrOvGran='q';rr()">Quarterly</button>
+      </div>
+    </div>
+    <div style="height:210px;position:relative"><canvas data-okr-overview="1"></canvas></div>
+  </div>`:'';
+
   // ── Summary cards ──
   const sts=vis.map(o=>okrStatusOf(o));
   const cnt=x=>sts.filter(s=>s===x).length;
-  const scard=(label,n,bg,fg,icon)=>`<div style="flex:1;min-width:118px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;padding:13px 14px;display:flex;align-items:center;gap:10px"><span style="width:36px;height:36px;border-radius:10px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:20px;font-weight:800;line-height:1;color:var(--c-text)">${n}</span><span style="display:block;font-size:11px;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${label}</span></span></div>`;
+  const scard=(label,n,bg,fg,icon)=>`<div style="flex:1;min-width:118px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:9px 12px;display:flex;align-items:center;gap:9px"><span style="width:36px;height:36px;border-radius:10px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:20px;font-weight:800;line-height:1;color:var(--c-text)">${n}</span><span style="display:block;font-size:11px;color:var(--c-text-2);margin-top:3px;white-space:nowrap">${label}</span></span></div>`;
   const summary=`<div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px">
     ${scard('Total OKRs',vis.length,'var(--c-brand-soft)','var(--c-brand-ink)','chart')}
     ${scard('Achieved',cnt('Achieved'),'#D1FAE5','#065F46','check')}
@@ -6935,7 +6968,7 @@ function okrPage(){
     tree=roots.length?roots.map(o=>_okrNodeHTML(o,0)).join('')
       :empty('chart','No OKRs yet',canCreate?'Create your first L0 objective, assign it to a department and an owner, then add L1 / L2 sub-objectives under it.':'No OKRs have been assigned to you yet. Your manager creates them.');
   }
-  return `<div class="fade">${head}${_howBar('okr')}${summary}${duePanel}${fBar}<div>${tree}</div></div>`;
+  return `<div class="fade">${head}${_howBar('okr')}${overview}${summary}${duePanel}${fBar}<div>${tree}</div></div>`;
 }
 
 function _okrNodeHTML(o,depth){
@@ -6951,16 +6984,16 @@ function _okrNodeHTML(o,depth){
   const dept=(DB.departments||[]).find(d=>d.id===o.departmentId);
   const subDept=(DB.departments||[]).find(d=>d.id===o.subDepartmentId);
   const canEdit=_okrCanEditNode(o),canCk=_okrCanCheckin(o),canCreate=_okrCanCreate();
-  const icBtn='width:28px;height:28px;display:grid;place-items:center;border-radius:8px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
-  const meta='font-size:11.5px;color:var(--c-text-2);display:inline-flex;align-items:center;gap:4px';
-  const pTab=(which,label,icon)=>`<button onclick="App._okrTogPanel('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid ${panel===which?'var(--c-text)':'var(--c-border)'};background:${panel===which?'var(--c-ink)':'var(--c-surface)'};color:${panel===which?'#fff':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer">${ic(icon,'w-3.5 h-3.5')}${label}<span style="font-size:9px;transform:${panel===which?'rotate(180deg)':'none'};display:inline-block">▼</span></button>`;
-  const card=`<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:14px;margin-bottom:8px;${depth?'margin-left:'+Math.min(depth,5)*18+'px;':''}overflow:hidden">
-    <div style="padding:13px 14px 10px">
+  const icBtn='width:24px;height:24px;display:grid;place-items:center;border-radius:7px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
+  const meta='font-size:10.5px;color:var(--c-text-2);display:inline-flex;align-items:center;gap:4px';
+  const pTab=(which,label,icon)=>`<button onclick="App._okrTogPanel('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:8px;font-size:11px;border:1px solid ${panel===which?'var(--c-text)':'var(--c-border)'};background:${panel===which?'var(--c-ink)':'var(--c-surface)'};color:${panel===which?'#fff':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer">${ic(icon,'w-3.5 h-3.5')}${label}<span style="font-size:9px;transform:${panel===which?'rotate(180deg)':'none'};display:inline-block">▼</span></button>`;
+  const card=`<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:11px;margin-bottom:6px;${depth?'margin-left:'+Math.min(depth,5)*14+'px;':''}overflow:hidden">
+    <div style="padding:9px 12px 7px">
       <div style="display:flex;align-items:flex-start;gap:9px">
         ${kids.length?`<button onclick="App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${icBtn};margin-top:1px;transform:${exp?'rotate(90deg)':'none'}">${ic('chevR','w-4 h-4')}</button>`:`<span style="width:28px;flex-shrink:0;display:grid;place-items:center;margin-top:8px"><span style="width:5px;height:5px;border-radius:50%;background:var(--c-border)"></span></span>`}
         ${_okrLvlChip(lvl)}
         <div style="flex:1;min-width:0">
-          <div class="fd" style="font-size:14.5px;font-weight:800;color:var(--c-text);line-height:1.25">${esc(o.title||'Untitled')}</div>
+          <div class="fd" style="font-size:13px;font-weight:800;color:var(--c-text);line-height:1.25">${esc(o.title||'Untitled')}</div>
           <div style="display:flex;flex-wrap:wrap;gap:10px;margin-top:4px">
             ${owner?`<span style="${meta}">${avatar(owner,'w-4 h-4','text-[8px]')}${esc(fullName(owner))}</span>`:''}
             ${dept?`<span style="${meta}">${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
@@ -6971,13 +7004,13 @@ function _okrNodeHTML(o,depth){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           ${okrStatusChip(st)}
-          <span class="fd" style="font-size:16px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>${!kids.length?`<span style="font-size:11px;font-weight:600;color:var(--c-text-3);white-space:nowrap">${o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,((okrLatestCheckin(o.id)||{}).value??o.startValue))} / ${_okrFmtVal(o,o.targetValue)}`}</span>`:`<span style="font-size:11px;font-weight:600;color:var(--c-text-3)">${kids.length} sub · rolled up</span>`}
+          <span class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>${!kids.length?`<span style="font-size:11px;font-weight:600;color:var(--c-text-3);white-space:nowrap">${o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,((okrLatestCheckin(o.id)||{}).value??o.startValue))} / ${_okrFmtVal(o,o.targetValue)}`}</span>`:`<span style="font-size:11px;font-weight:600;color:var(--c-text-3)">${kids.length} sub · rolled up</span>`}
         </div>
       </div>
-      <div style="height:6px;background:var(--c-border);border-radius:3px;overflow:hidden;margin-top:9px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
-      <div style="display:flex;align-items:center;gap:7px;margin-top:10px;flex-wrap:wrap">
+      <div style="height:4px;background:var(--c-border);border-radius:2px;overflow:hidden;margin-top:7px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
+      <div style="display:flex;align-items:center;gap:6px;margin-top:7px;flex-wrap:wrap">
         ${pTab('rules','Rules & Target','cog')}
-        <button onclick="App._okrProgressModal('${o.id}')" style="display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:12px;font-weight:700;cursor:pointer">${ic('chart','w-3.5 h-3.5')}Progress & Updates</button>
+        <button onclick="App._okrProgressModal('${o.id}')" style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:8px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:11px;font-weight:700;cursor:pointer">${ic('chart','w-3.5 h-3.5')}Progress & Updates</button>
         <span style="flex:1"></span>
         ${canCk&&!kids.length?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit'}):''}
         ${canCreate?`<button onclick="App._okrEdit(null,'${o.id}')" title="Add sub-objective (L${lvl+1})" style="${icBtn}">${ic('plus','w-4 h-4')}</button>`:''}
@@ -7400,12 +7433,30 @@ function _drawOKRCharts(){
   if(typeof Chart==='undefined')return;
   _destroyACharts();
   const T=_aChartTheme();
+  // ── overview: all L0s, monthly or quarterly points ──
+  try{
+    const ocv=document.querySelector('canvas[data-okr-overview]');
+    if(ocv){
+      const roots=okrVisibleRoots();
+      if(roots.length){
+        const gran=S.filters.okrOvGran||'m';
+        const pts=[];const now=new Date();
+        if(gran==='m'){for(let i=11;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i+1,0);pts.push(d.toISOString().slice(0,10));}}
+        else{for(let i=7;i>=0;i--){const qm=Math.floor(now.getMonth()/3)*3-i*3;const d=new Date(now.getFullYear(),qm+3,0);pts.push(d.toISOString().slice(0,10));}}
+        const t0=todayISO();const labels=pts.map(p=>{const d=new Date(p+'T00:00:00');return gran==='m'?d.toLocaleDateString(undefined,{month:'short'}):'Q'+(Math.floor(d.getMonth()/3)+1)+' '+String(d.getFullYear()).slice(2);});
+        const clr=['#0E9F6E','#0284C7','#8B5CF6','#F59E0B','#EC4899','#14B8A6','#F97316','#6366F1','#84CC16','#E11D48'];
+        const dsets=roots.slice(0,10).map((r,i)=>({label:(r.title||'Objective').slice(0,26),data:pts.map(p=>p>t0?null:_okrProgressAt(r,p)),spanGaps:true,borderColor:clr[i%clr.length],pointRadius:2,pointBackgroundColor:clr[i%clr.length],fill:false,tension:.3,borderWidth:1.4}));
+        _aCharts.push(new Chart(ocv.getContext('2d'),{type:'line',data:{labels:labels,datasets:dsets},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10},boxWidth:12,padding:7}}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0},grid:{display:false}},y:{beginAtZero:true,suggestedMax:110,ticks:{color:T.tick,font:{size:10},callback:v=>v+'%'},grid:{color:T.grid}}}}}));
+      }
+    }
+  }catch(e){console.warn('[okr overview]',e.message);}
   document.querySelectorAll('canvas[data-okr-chart]').forEach(cv=>{
     const o=okrById(cv.getAttribute('data-okr-chart'));if(!o)return;
     const kids=okrChildren(o.id);
     const fail=(msg)=>{const p=cv.parentElement;if(p)p.innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--c-text-3);font-size:12px;text-align:center;padding:0 14px">'+msg+'</div>';};
     try{
       let labels,dates,actual,ideal,pctMode;
+      const ds=[];
       // Chart x-axis includes the objective's period bounds so the IDEAL line always runs
       // start → target as a straight (linear) trajectory, with ACTUAL plotted against it.
       const _tnow=todayISO();
@@ -7420,6 +7471,9 @@ function _drawOKRCharts(){
         const cset=new Set(cdates);
         actual=dates.map(d=>cset.has(d)?_okrProgressAt(o,d):null);
         ideal=dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],true));
+        // Every direct child (e.g. each L1 under an L0) plotted as its own thin line
+        const _kidClr=['#0284C7','#8B5CF6','#F59E0B','#EC4899','#14B8A6','#F97316','#6366F1'];
+        kids.slice(0,7).forEach((k,i)=>{ds.push({label:(k.title||'Sub-objective').slice(0,24),data:dates.map(d=>cset.has(d)?_okrProgressAt(k,d):null),spanGaps:true,borderColor:_kidClr[i%_kidClr.length],pointRadius:0,fill:false,tension:.3,borderWidth:1.3});});
       }else{
         pctMode=false;
         const cs=okrCheckinsOf(o.id).filter(c=>c.value!==null&&c.value!==undefined);
@@ -7430,11 +7484,12 @@ function _drawOKRCharts(){
         ideal=o.metricType==='yesno'?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
       }
       labels=dates.map(d=>fmtS(d));
-      const ds=[];
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:'Ideal (planned pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
-      ds.push({label:pctMode?'Actual progress %':'Actual (reported)',data:actual,spanGaps:true,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
-      if(!pctMode&&o.metricType!=='yesno'&&o.targetValue!==null&&o.targetValue!==undefined&&!o.periodStart)ds.push({label:'Target',data:labels.map(()=>Number(o.targetValue)),borderColor:'#F59E0B',borderDash:[3,4],pointRadius:0,fill:false,tension:0,borderWidth:1.5});
+      ds.push({label:pctMode?'Roll-up (all levels)':'Actual (reported)',data:actual,spanGaps:true,order:-1,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
+      if(!pctMode&&o.metricType!=='yesno'&&o.targetValue!==null&&o.targetValue!==undefined)ds.push({label:'Target ('+_okrFmtVal(o,o.targetValue)+')',data:labels.map(()=>Number(o.targetValue)),borderColor:'#F59E0B',borderDash:[3,4],pointRadius:0,fill:false,tension:0,borderWidth:1.5});
+      if(!pctMode&&o.metricType!=='yesno'&&Number(o.startValue||0)!==0)ds.push({label:'Start ('+_okrFmtVal(o,o.startValue)+')',data:labels.map(()=>Number(o.startValue||0)),borderColor:'#9CA3AF',borderDash:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:1.2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
+      if(!pctMode&&Number(o.startValue||0)>0){yOpts.beginAtZero=false;const _lo=Math.min(Number(o.startValue||0),...actual.filter(v=>v!==null));yOpts.suggestedMin=Math.floor(_lo*0.95);}
       if(pctMode)yOpts.suggestedMax=110;
       if(o.metricType==='yesno'&&!kids.length)yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};
       _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:T.grid}},y:yOpts}}}));
