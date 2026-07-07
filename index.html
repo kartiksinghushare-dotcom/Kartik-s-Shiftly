@@ -6724,17 +6724,10 @@ function _okrLeafPct(o){
 }
 // Node progress %: children average (roll-up) if it has children, else its own check-ins. Cycle-safe.
 function okrProgress(o,_seen){
-  if(!o)return null;_seen=_seen||new Set();
-  if(_seen.has(o.id))return null;_seen.add(o.id);
-  const kids=okrChildren(o.id);
-  if(kids.length){
-    const vals=kids.map(k=>okrProgress(k,_seen)).filter(v=>v!==null&&isFinite(v));
-    if(!vals.length)return null;
-    return Math.round((vals.reduce((a,b)=>a+b,0)/vals.length)*10)/10;
-  }
+  // Progress at EVERY level comes from the objective's OWN check-ins against its OWN
+  // start → target. Children no longer feed the parent's number (owner's request).
   return _okrLeafPct(o);
 }
-// Expected pace: % of the period window elapsed today (null when no window is set).
 function _okrExpectedPct(o){
   if(!o.periodStart||!o.periodEnd)return null;
   const t=todayISO();
@@ -6745,15 +6738,9 @@ function _okrExpectedPct(o){
 // Status: a manual mark (statusMode 'manual') wins; otherwise derived from progress vs expected pace.
 //   ≥100% → Achieved · period over & <100% → Not achieved · within 10 pts of pace → On track · else Off track.
 function _okrExpectedForNode(o,_seen){
-  // Pace for a node: leaves use their own period window; parents average their children's pace
-  // (a parent with no window of its own no longer defaults to a hard 70% bar — that wrongly
-  // flagged healthy trees as Off track).
-  _seen=_seen||new Set();if(_seen.has(o.id))return null;_seen.add(o.id);
-  const kids=okrChildren(o.id);
-  if(kids.length){
-    const vals=kids.map(k=>_okrExpectedForNode(k,_seen)).filter(v=>v!==null&&isFinite(v));
-    if(vals.length)return Math.round(vals.reduce((a,b)=>a+b,0)/vals.length);
-  }
+  if(o.periodStart&&o.periodEnd)return _okrExpectedPct(o);
+  const eff=_okrEffPeriod(o);
+  if(eff.ps&&eff.pe)return _okrExpectedPct({periodStart:eff.ps,periodEnd:eff.pe});
   return _okrExpectedPct(o);
 }
 function okrStatusOf(o){
@@ -7001,7 +6988,7 @@ function _okrNodeHTML(o,depth){
         </div>
         <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0">
           ${okrStatusChip(st)}
-          <span class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>${!kids.length?`<span style="font-size:11px;font-weight:600;color:var(--c-text-3);white-space:nowrap">${o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`Cur ${_okrFmtVal(o,((okrLatestCheckin(o.id)||{}).value??o.startValue))} · Tgt ${_okrFmtVal(o,o.targetValue)}`}</span>`:`<span style="font-size:11px;font-weight:600;color:var(--c-text-3)">${_okrHasOwnScale(o)&&_okrOwnCur(o)!==null?`Cur ${_okrFmtVal(o,_okrOwnCur(o))} · Tgt ${_okrFmtVal(o,o.targetValue)}`:`Cur ${pct===null?'—':pct+'%'} · Tgt 100%`} · ${kids.length} sub</span>`}
+          <span class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span>${!kids.length?`<span style="font-size:11px;font-weight:600;color:var(--c-text-3);white-space:nowrap">${o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`Cur ${_okrFmtVal(o,((okrLatestCheckin(o.id)||{}).value??o.startValue))} · Tgt ${_okrFmtVal(o,o.targetValue)}`}</span>`:`<span style="font-size:11px;font-weight:600;color:var(--c-text-3)">Cur ${_okrFmtVal(o,_okrOwnCur(o))} · Tgt ${_okrFmtVal(o,o.targetValue)} · ${kids.length} sub</span>`}
         </div>
       </div>
       <div style="height:4px;background:var(--c-border);border-radius:2px;overflow:hidden;margin-top:7px"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
@@ -7038,7 +7025,7 @@ function _okrRulesPanel(o){
       ${row('Owner',owner?esc(fullName(owner)):'—')}
       ${dept?row('Department',esc(dept.name)):''}
       ${subDept?row('Sub-department',esc(subDept.name)):''}
-      ${kids.length?row('Progress source','Average of '+kids.length+' sub-objective'+(kids.length===1?'':'s')):row('Progress source','Own check-ins')}
+      ${row('Progress source','Own check-ins')}
       ${row('Status',o.statusMode==='manual'?('Marked manually ('+esc(o.statusManual||'—')+')'):'Automatic')}
       ${creator?row('Created by',esc(fullName(creator))+(o.createdAt?' · '+fmtS(String(o.createdAt).slice(0,10)):'')):''}
     </div>
@@ -7054,8 +7041,8 @@ function _okrProgressPanel(o,kids,pct,st){
   const lab='font-size:10px;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;font-weight:700';
   const big='font-size:20px;font-weight:800;color:var(--c-text)';
   const _ownCur=_okrOwnCur(o);
-  const cur=kids.length?((_okrHasOwnScale(o)&&_ownCur!==null)?esc(_okrFmtVal(o,_ownCur)):(pct===null?'—':pct+'%')):esc(_okrFmtVal(o,last?last.value:null));
-  const tgt=kids.length?(_okrHasOwnScale(o)?esc(_okrFmtVal(o,o.targetValue)):'100%'):(o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue)));
+  const cur=esc(_okrFmtVal(o,last?last.value:(o.startValue??null)));
+  const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue));
   // manual status marking (owner / manager) — every mark is logged
   const markRow=canCk?`<div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:10px">
       <span style="font-size:11px;font-weight:700;color:var(--c-text-3)">MARK:</span>
@@ -7084,12 +7071,12 @@ function _okrProgressPanel(o,kids,pct,st){
   }).join('')||`<div style="padding:12px 0;color:var(--c-text-3);font-size:12.5px;border-top:1px solid var(--c-border)">No updates yet${canCk?' — add the first one.':'.'}</div>`;
   // children breakdown (roll-up view)
   const kidRows=kids.length?`<div style="margin-top:12px">
-      <div style="${lab};margin-bottom:6px">Roll-up · sub-objectives feeding this level</div>
+      <div style="${lab};margin-bottom:6px">Sub-objectives (each tracks its own progress)</div>
       ${kids.map(k=>{const kp=okrProgress(k),ks=okrStatusOf(k);return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0">
         ${_okrLvlChip(okrLevel(k))}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
         <div style="width:90px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${kp===null?0:Math.max(0,Math.min(100,kp))}%;background:${_okrBarColor(ks)}"></div></div>
-        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${okrChildren(k.id).length?(_okrHasOwnScale(k)&&_okrOwnCur(k)!==null?esc(_okrFmtVal(k,_okrOwnCur(k)))+' / '+esc(_okrFmtVal(k,k.targetValue)):`Tgt 100%`):(k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,((okrLatestCheckin(k.id)||{}).value??k.startValue)))+' / '+esc(_okrFmtVal(k,k.targetValue)))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
+        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+' / '+esc(_okrFmtVal(k,k.targetValue))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
         ${okrStatusChip(ks,true)}
       </div>`;}).join('')}
     </div>`:'';
@@ -7097,7 +7084,7 @@ function _okrProgressPanel(o,kids,pct,st){
   return `<div style="border-top:1px solid var(--c-border);background:var(--c-surface-2);padding:14px 16px">
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="display:flex;gap:22px;flex-wrap:wrap">
-        <div><div style="${lab}">${kids.length?(_okrHasOwnScale(o)?'Current (from roll-up)':'Roll-up progress'):'Current'}</div><div style="${big}">${cur}</div></div>
+        <div><div style="${lab}">Current</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">Target</div><div style="${big}">${tgt}</div></div>
         <div><div style="${lab}">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>
         <div><div style="${lab}">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
@@ -7405,18 +7392,8 @@ function _okrLeafPctAt(o,date){
 }
 // Roll-up progress as it stood on `date` (only check-ins ≤ date count). Cycle-safe.
 function _okrProgressAt(o,date,_seen){
-  if(!o)return null;_seen=_seen||new Set();
-  if(_seen.has(o.id))return null;_seen.add(o.id);
-  const kids=okrChildren(o.id);
-  if(kids.length){
-    const vals=kids.map(k=>_okrProgressAt(k,date,_seen)).filter(v=>v!==null&&isFinite(v));
-    if(!vals.length)return null;
-    return Math.round((vals.reduce((x,y)=>x+y,0)/vals.length)*10)/10;
-  }
-  return _okrLeafPctAt(o,date);
+  return _okrLeafPctAt(o,date); // own inputs only (matches okrProgress)
 }
-// Ideal value on a given date: linear from start → target across the period window
-// (falls back to the first→last data-point span when no period is set).
 function _okrIdealAt(o,date,span,pctMode){
   const ps=o.periodStart||span[0],pe=o.periodEnd||span[1];
   const lo=pctMode?0:Number(o.startValue||0);
@@ -7432,12 +7409,8 @@ function _okrIdealAt(o,date,span,pctMode){
    the roll-up % mapped onto that scale — rollup 20% of 98→99 = 98.2. */
 function _okrHasOwnScale(o){return o.targetValue!==null&&o.targetValue!==undefined&&o.metricType!=='yesno';}
 function _okrOwnCur(o){
-  const kids=okrChildren(o.id);
-  if(!kids.length){const last=okrLatestCheckin(o.id);return(last&&last.value!==null&&last.value!==undefined)?Number(last.value):Number(o.startValue||0);}
-  if(!_okrHasOwnScale(o))return null;
-  const pct=okrProgress(o);if(pct===null)return null;
-  const s=Number(o.startValue||0),t=Number(o.targetValue);
-  return Math.round((s+(t-s)*Math.max(0,Math.min(100,pct))/100)*100)/100;
+  const last=okrLatestCheckin(o.id);
+  return(last&&last.value!==null&&last.value!==undefined)?Number(last.value):Number(o.startValue||0);
 }
 function _okrEffPeriod(o){
   let ps=o.periodStart||null,pe=o.periodEnd||null;
