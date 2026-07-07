@@ -1331,7 +1331,7 @@ const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
 /* ── PORTED NAV v2 (perms-driven, HRM entries removed; analytics kept from production) ── */
 const _isMgrRole=()=>{const r=(typeof _roleOf==='function')?_roleOf(me()):null;return !!r&&r.id==='manager';};
 const NAV_ALL=[
-  ['dashboard','grid','Dashboard',()=>isAdmin()||isSubAdmin()||isMgr()||_isMgrRole()],
+  ['dashboard','grid','Dashboard',()=>isAdmin()||isSubAdmin()||isMgr()||_isMgrRole()||can('analytics','view')],
   ['mychecklists','check','My Checklists',()=>true],
   ['tickets','ticket','Tickets',()=>can('tickets','view')],
   ['allcl','list','All Checklists',()=>can('allChecklists','view')||can('teamview','view')],
@@ -1341,7 +1341,6 @@ const NAV_ALL=[
   ['questions','help','Questions',()=>can('questions','view')],
   ['approvals','approve','Inbox — Approvals',()=>can('approvals','view')],
   ['notifications','bell','Inbox — Alerts',()=>true],
-  ['analytics','chart','Analytics',()=>can('analytics','view')],
   ['okr','chart','OKRs',()=>can('okr','view')],
   ['locations','pin','Locations',()=>can('locations','view')],
   ['departments','dept','Departments',()=>can('departments','view')],
@@ -1547,6 +1546,19 @@ App.logout=()=>{
 };
 
 /* ===== ROUTER ===== */
+/* ── Dashboard: Visuals (the analytics charts) + Cards (stat cards) sub-tabs ── */
+function dashboardTabsPage(){
+  const canCharts=can('analytics','view');
+  const cardsFn=(isAdmin()||isSubAdmin())?adminDash:((isMgr()||_isMgrRole())?mgrDash:null);
+  let tab=S.filters.dashTab||(canCharts?'charts':'cards');
+  if(tab==='charts'&&!canCharts)tab='cards';
+  if(tab==='cards'&&!cardsFn)tab='charts';
+  const tabs=(canCharts&&cardsFn)?`<div class="ui-tabs" style="margin-bottom:14px">
+      <button class="ui-tab${tab==='charts'?' on':''}" onclick="S.filters.dashTab='charts';rr()">${ic('chart','w-3.5 h-3.5')}Visuals</button>
+      <button class="ui-tab${tab==='cards'?' on':''}" onclick="S.filters.dashTab='cards';rr()">${ic('grid','w-3.5 h-3.5')}Cards</button>
+    </div>`:'';
+  return `<div>${tabs}${tab==='charts'&&canCharts?analyticsPage():(cardsFn?cardsFn():analyticsPage())}</div>`;
+}
 /* ── All Checklists ⇄ Team: one sidebar entry, two sub-tabs (Team = the employee summary grid) ── */
 function allClTeamPage(){
   const canAll=can('allChecklists','view'),canTeam=can('teamview','view');
@@ -1562,7 +1574,7 @@ function allClTeamPage(){
 }
 function pageContent(){
   const r=S.route;
-  if(r==='dashboard'){if(isAdmin()||isSubAdmin())return adminDash();if(isMgr()||_isMgrRole())return mgrDash();S.route='mychecklists';return myClsPage();}
+  if(r==='dashboard'){if(isAdmin()||isSubAdmin()||isMgr()||_isMgrRole()||can('analytics','view'))return dashboardTabsPage();S.route='mychecklists';return myClsPage();}
   if(r==='users'){if(can('employees','view'))return usersPage();S.route='dashboard';return pageContent();}
   if(r==='departments'){if(can('departments','view'))return deptsPage();S.route='dashboard';return pageContent();}
   if(r==='locations'){if(can('locations','view'))return locsPage();S.route='dashboard';return pageContent();}
@@ -1571,7 +1583,7 @@ function pageContent(){
   if(r==='notifications')return notificationsPage();
   if(r==='tickets'){if(can('tickets','view'))return ticketsPage();S.route='mychecklists';return myClsPage();}
   if(r==='hierarchy')return hierarchyPage();
-  if(r==='analytics'){if(can('analytics','view'))return analyticsPage();S.route='dashboard';return pageContent();}
+  if(r==='analytics'){S.route='dashboard';S.filters.dashTab='charts';return pageContent();} // analytics lives inside Dashboard now
   if(r==='audit'){if(can('audit','view'))return auditPage();S.route='dashboard';return pageContent();}
   if(r==='settings'){if(can('settings','view'))return settingsPage();S.route='dashboard';return pageContent();}
   if(r==='questions'){if(can('questions','view'))return questionsPage();return myClsPage();}
@@ -4051,24 +4063,31 @@ function qCard(q){
 
 function _qGroupHTML(list){
   if(!list.length)return empty('help','No questions yet','Create questions or upload a CSV template.');
+  const C=S.filters.qColl=S.filters.qColl||{};
   const tops=topDepts();
   const used=new Set();
   let html='';
-  const deptHdr=(name,count)=>`<div style="display:flex;align-items:center;gap:8px;margin:18px 0 8px"><div style="width:30px;height:30px;border-radius:9px;background:#ECFDF5;display:grid;place-items:center;flex-shrink:0">${ic('dept','w-4 h-4 text-brand-600')}</div><div class="fd" style="font-size:15px;font-weight:800;color:#15171C">${esc(name)}</div><span style="font-size:11px;font-weight:700;color:#9CA3AF;background:#F3F4F6;padding:2px 8px;border-radius:20px">${count}</span></div>`;
-  const subHdr=(name)=>`<div style="display:flex;align-items:center;gap:6px;margin:10px 0 6px 8px"><span style="width:6px;height:6px;border-radius:50%;background:#0E9F6E"></span><div style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">${esc(name)}</div></div>`;
+  const chev=(open)=>`<span style="display:inline-grid;place-items:center;width:20px;height:20px;border-radius:6px;background:#F3F4F6;color:#6B7280;font-size:9px;flex-shrink:0;transform:rotate(${open?90:0}deg);transition:transform .15s">▶</span>`;
+  const deptHdr=(key,name,count,open)=>`<button onclick="App._qTogGroup('${key}')" style="width:100%;display:flex;align-items:center;gap:8px;margin:18px 0 8px;background:transparent;border:none;cursor:pointer;text-align:left;padding:0">${chev(open)}<div style="width:30px;height:30px;border-radius:9px;background:#ECFDF5;display:grid;place-items:center;flex-shrink:0">${ic('dept','w-4 h-4')}</div><div style="font-size:14px;font-weight:800;color:#111827">${esc(name)}</div><span style="font-size:11px;font-weight:800;padding:1px 8px;border-radius:10px;background:#F3F4F6;color:#6B7280">${count}</span></button>`;
+  const subHdr=(key,name,count,open)=>`<button onclick="App._qTogGroup('${key}')" style="display:flex;align-items:center;gap:7px;margin:10px 0 6px 8px;background:transparent;border:none;cursor:pointer;padding:0">${chev(open)}<span style="width:6px;height:6px;border-radius:50%;background:#0E9F6E"></span><div style="font-size:12px;font-weight:700;color:#6B7280;text-transform:uppercase;letter-spacing:.04em">${esc(name)}</div><span style="font-size:10.5px;font-weight:800;color:#9CA3AF">${count}</span></button>`;
   tops.forEach(dep=>{
     const direct=list.filter(q=>q.departmentId===dep.id&&!q.subDepartmentId);
     const subBlocks=subDepts(dep.id).map(sd=>({sd,qs:list.filter(q=>q.subDepartmentId===sd.id)}));
     const total=direct.length+subBlocks.reduce((a,b)=>a+b.qs.length,0);
+    direct.forEach(q=>used.add(q.id));subBlocks.forEach(({qs})=>qs.forEach(q=>used.add(q.id)));
     if(!total)return;
-    html+=deptHdr(dep.name,total);
-    if(direct.length){html+=subHdr('General');html+='<div class="space-y-2">'+direct.map(q=>{used.add(q.id);return qCard(q);}).join('')+'</div>';}
-    subBlocks.forEach(({sd,qs})=>{if(!qs.length)return;html+=subHdr(sd.name);html+='<div class="space-y-2">'+qs.map(q=>{used.add(q.id);return qCard(q);}).join('')+'</div>';});
+    const dKey='d:'+dep.id,dOpen=!C[dKey];
+    html+=deptHdr(dKey,dep.name,total,dOpen);
+    if(dOpen){
+      if(direct.length){const k='s:'+dep.id+':general',sOpen=!C[k];html+=subHdr(k,'General',direct.length,sOpen);if(sOpen)html+='<div class="space-y-2">'+direct.map(q=>qCard(q)).join('')+'</div>';}
+      subBlocks.forEach(({sd,qs})=>{if(!qs.length)return;const k='s:'+sd.id,sOpen=!C[k];html+=subHdr(k,sd.name,qs.length,sOpen);if(sOpen)html+='<div class="space-y-2">'+qs.map(q=>qCard(q)).join('')+'</div>';});
+    }
   });
   const rest=list.filter(q=>!used.has(q.id));
-  if(rest.length){html+=deptHdr('Unassigned',rest.length);html+='<div class="space-y-2">'+rest.map(q=>qCard(q)).join('')+'</div>';}
+  if(rest.length){const k='d:rest',rOpen=!C[k];html+=deptHdr(k,'Unassigned',rest.length,rOpen);if(rOpen)html+='<div class="space-y-2">'+rest.map(q=>qCard(q)).join('')+'</div>';}
   return html;
 }
+App._qTogGroup=(k)=>{const C=S.filters.qColl=S.filters.qColl||{};C[k]=!C[k];App._filterQuestions(S.filters.qSearch||'');};
 function questionsPage(){
   // Questions tab: admin sees all; others see public questions + their own private questions
   let allQ=visibleQuestions();
@@ -4111,7 +4130,10 @@ App._filterQuestions=(val)=>{
   S.filters.qSearch=val;
   const box=document.getElementById('qResults');
   if(!box)return;
-  const allQ=visibleQuestions();
+  let allQ=visibleQuestions();
+  const _qd=S.filters.qDept||'',_qsd=S.filters.qSubDept||'';
+  if(_qd)allQ=allQ.filter(q=>q.departmentId===_qd||(_qsd?false:(DB.departments||[]).some(sd=>sd.parentId===_qd&&sd.id===q.subDepartmentId)));
+  if(_qsd)allQ=allQ.filter(q=>q.subDepartmentId===_qsd);
   const filtered=val?allQ.filter(q=>q.text.toLowerCase().includes(val.toLowerCase())):allQ;
   box.innerHTML=_qGroupHTML(filtered);
 };
@@ -6722,6 +6744,25 @@ function _okrCanEditNode(o){return isAdmin()||isSubAdmin()||_okrCanManage()||o.c
 function _okrCanCheckin(o){return o.ownerId===S.uid||_okrCanEditNode(o);}
 function _okrLvlChip(lvl){const c=_OKR_LVL_C[lvl%_OKR_LVL_C.length];return`<span style="flex-shrink:0;font-size:10px;font-weight:800;padding:2px 7px;border-radius:6px;background:${c};color:#fff;letter-spacing:.03em">L${lvl}</span>`;}
 App._okrTogExp=(id)=>{_OKR_EXP[id]=!_OKR_EXP[id];rr();};
+App._okrNodeLogs=(id)=>{
+  const o=okrById(id);if(!o)return;
+  const logs=(DB.okrLogs||[]).filter(l=>l.okrId===id).slice(0,80);
+  const fmtDetail=(d)=>{
+    if(!d||typeof d!=='object'||!Object.keys(d).length)return'';
+    if(Array.isArray(d.changes))return d.changes.map(c=>typeof c==='string'?c:(c.field?`${c.field}: ${c.from??'—'} → ${c.to??'—'}`:JSON.stringify(c))).join(' · ');
+    return Object.entries(d).map(([k,v])=>`${k}: ${typeof v==='object'?JSON.stringify(v):v}`).join(' · ');
+  };
+  const rows=logs.map(l=>{const a=uById(l.actorId);const det=fmtDetail(l.details);
+    return `<div style="display:flex;gap:10px;padding:9px 2px;border-bottom:1px solid var(--c-border)">
+      <div style="flex-shrink:0;margin-top:1px">${a?avatar(a,'w-7 h-7','text-[10px]'):`<div style="width:28px;height:28px;border-radius:50%;background:var(--c-surface-2)"></div>`}</div>
+      <div style="min-width:0;flex:1">
+        <div style="font-size:12.5px;color:var(--c-text)"><b>${esc(a?fullName(a):'Someone')}</b> · ${esc(l.action||'')}</div>
+        ${det?`<div style="font-size:11.5px;color:var(--c-text-2);margin-top:1px">${esc(det)}</div>`:''}
+        <div style="font-size:11px;color:var(--c-text-3);margin-top:1px">${esc(l.createdAt?new Date(l.createdAt).toLocaleString():'')}</div>
+      </div></div>`;}).join('');
+  modalShell({title:'Change log',sub:o.title||'',size:'max-w-lg',
+    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No changes logged yet.</p>'});
+};
 App._okrActivity=()=>{
   const rows=(DB.okrLogs||[]).slice(0,100).map(l=>{
     const o=okrById(l.okrId);const a=uById(l.actorId);
@@ -6955,7 +6996,7 @@ function _okrProgressPanel(o,kids,pct,st){
       <div style="${lab};margin-bottom:2px">Updates & inputs</div>
       <div style="max-height:300px;overflow-y:auto">${feed}</div>
     </div>
-    ${can('audit','view')&&logs.length?`<button onclick="S.filters.audCat='OKRs';S.filters.audQ='${esc((o.title||'').slice(0,40))}';App.go('audit')" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--c-text-3)">${ic('audit','w-3.5 h-3.5')}${logs.length} logged changes — view in Audit →</button>`:''}
+    ${logs.length?`<button onclick="App._okrNodeLogs('${o.id}')" style="margin-top:10px;display:inline-flex;align-items:center;gap:6px;background:transparent;border:none;cursor:pointer;font-size:11.5px;font-weight:700;color:var(--c-text-3)">${ic('audit','w-3.5 h-3.5')}${logs.length} logged changes — view →</button>`:''}
   </div>`;
 }
 
@@ -7076,7 +7117,7 @@ App._okrMarkStatus=(id,st)=>{
   if(st==='auto'){
     if(o.statusMode!=='auto'){o.statusMode='auto';o.statusManual=null;okrLog(id,'Status switched to automatic',{});_okrPush(o);}
   }else{
-    if(!(o.statusMode==='manual'&&o.statusManual===st)){o.statusMode='manual';o.statusManual=st;okrLog(id,'Marked status',{to:st});_okrPush(o);log(fullName(me()),'OKR status marked',(o.title||'')+' → '+st);}
+    if(!(o.statusMode==='manual'&&o.statusManual===st)){o.statusMode='manual';o.statusManual=st;okrLog(id,'Marked status',{to:st});_okrPush(o);}
   }
   saveDB();rr();
 };
@@ -7280,26 +7321,33 @@ function _drawOKRCharts(){
     const fail=(msg)=>{const p=cv.parentElement;if(p)p.innerHTML='<div style="height:100%;display:grid;place-items:center;color:var(--c-text-3);font-size:12px;text-align:center;padding:0 14px">'+msg+'</div>';};
     try{
       let labels,dates,actual,ideal,pctMode;
+      // Chart x-axis includes the objective's period bounds so the IDEAL line always runs
+      // start → target as a straight (linear) trajectory, with ACTUAL plotted against it.
+      const _tnow=todayISO();
+      const _addBounds=(ds)=>{const s=new Set(ds);if(o.periodStart)s.add(o.periodStart);if(o.periodEnd)s.add(o.periodEnd);else if(!s.has(_tnow))s.add(_tnow);return[...s].sort();};
       if(kids.length){
         pctMode=true;
         const dset=new Set();
         [o,...okrDescendants(o.id)].forEach(n=>okrCheckinsOf(n.id).forEach(c=>dset.add(c.date)));
-        dates=[...dset].sort().slice(-40);
-        if(!dates.length)return fail('No updates below this level yet — the graph appears after the first check-in.');
-        actual=dates.map(d=>_okrProgressAt(o,d));
+        const cdates=[...dset].sort().slice(-40);
+        if(!cdates.length)return fail('No updates below this level yet — the graph appears after the first check-in.');
+        dates=_addBounds(cdates);
+        const cset=new Set(cdates);
+        actual=dates.map(d=>cset.has(d)?_okrProgressAt(o,d):null);
         ideal=dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],true));
       }else{
         pctMode=false;
         const cs=okrCheckinsOf(o.id).filter(c=>c.value!==null&&c.value!==undefined);
         if(!cs.length)return fail('No updates yet — the graph appears after the first check-in.');
-        dates=cs.map(c=>c.date);
-        actual=cs.map(c=>Number(c.value));
+        dates=_addBounds(cs.map(c=>c.date));
+        const byDate={};cs.forEach(c=>byDate[c.date]=Number(c.value));
+        actual=dates.map(d=>(d in byDate)?byDate[d]:null);
         ideal=o.metricType==='yesno'?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
       }
       labels=dates.map(d=>fmtS(d));
       const ds=[];
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:'Ideal (planned pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
-      ds.push({label:pctMode?'Actual progress %':'Actual (reported)',data:actual,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
+      ds.push({label:pctMode?'Actual progress %':'Actual (reported)',data:actual,spanGaps:true,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
       if(!pctMode&&o.metricType!=='yesno'&&o.targetValue!==null&&o.targetValue!==undefined&&!o.periodStart)ds.push({label:'Target',data:labels.map(()=>Number(o.targetValue)),borderColor:'#F59E0B',borderDash:[3,4],pointRadius:0,fill:false,tension:0,borderWidth:1.5});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
       if(pctMode)yOpts.suggestedMax=110;
