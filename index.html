@@ -4451,6 +4451,10 @@ App._saveQuestion=()=>{
   const qRow={id:savedQ.id,text:savedQ.text||'',type:savedQ.type||'answer',options:savedQ.options||[],photo:savedQ.photo||false,approval:savedQ.approval||false,comment:savedQ.comment||false,is_public:savedQ.isPublic!==false,created_by:savedQ.createdBy||null,created_at:savedQ.createdAt||new Date().toISOString(),department_id:savedQ.departmentId||null,sub_department_id:savedQ.subDepartmentId||null};
   sb.from('questions').upsert(qRow,{onConflict:'id'}).then(({error})=>{
     if(error){console.error('Question sync error:',error.message);toast('⚠ Question saved locally but not synced: '+error.message.slice(0,60),'warn');}
+    // Department & sub-department are protected by a DB freeze-trigger so stale browser tabs can't
+    // wipe them. A plain upsert can no longer change them — apply this deliberate assignment
+    // through the sanctioned RPC (works for both a new and an existing question).
+    sb.rpc('set_question_department',{p_id:savedQ.id,p_dept:savedQ.departmentId||null,p_subdept:savedQ.subDepartmentId||null}).then(({error})=>{if(error)console.warn('set_question_department:',error.message);}).catch(e=>console.warn('set dept:',e&&e.message));
   }).catch(e=>console.error('Question sync:',e));
 };
 
@@ -7152,7 +7156,10 @@ function _okrProgressPanel(o,kids,pct,st){
       ${canCk?btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'}):''}
     </div>
     ${markRow}
-    <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px"><canvas data-okr-chart="${o.id}"></canvas></div>
+    <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px;position:relative">
+      <div style="position:absolute;top:10px;right:12px;z-index:2;display:flex;align-items:baseline;gap:4px;background:var(--c-surface);padding:1px 8px;border-radius:8px;border:1px solid var(--c-border)"><span style="font-size:15px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--c-text-3)">progress</span></div>
+      <canvas data-okr-chart="${o.id}"></canvas>
+    </div>
     ${kidRows}
     <div style="margin-top:12px">
       <div style="${lab};margin-bottom:2px">Updates & inputs</div>
@@ -7496,8 +7503,28 @@ function _drawOKRCharts(){
         if(arr.length<2){const d0=new Date((arr[0]||_tnow)+'T00:00:00');d0.setDate(d0.getDate()+60);arr.push(d0.toISOString().slice(0,10));arr.sort();}
         return arr;};
       const cs=okrCheckinsOf(o.id).filter(c=>c.value!==null&&c.value!==undefined);
-      if(!cs.length)return fail(kids.length?'No check-ins on this objective yet — use “Add note / update” to record its own numbers.':'No updates yet — the graph appears after the first check-in.');
-      dates=_addBounds(cs.map(c=>c.date));
+      const _hasPeriod=!!(_eff.ps&&_eff.pe);
+      if(!cs.length&&!_hasPeriod)return fail(kids.length?'No check-ins on this objective yet — use “Add note / update” to record its own numbers.':'No updates yet — set a period (start & end date) or add the first update to see the graph.');
+      // Build the X-axis across the WHOLE configured period (e.g. 1st → 31st) so the timeline is
+      // there from day one, not only on the dates that already have an input.
+      const _spanDates=(ps,pe)=>{
+        const d=new Date(ps+'T00:00:00'),end=new Date(pe+'T00:00:00');
+        if(isNaN(d)||isNaN(end)||end<d)return null;
+        const days=Math.round((end-d)/86400000);
+        const step=days<=45?1:days<=180?7:days<=550?30:90; // day / week / ~month / ~quarter granularity
+        const out=[];for(let cur=new Date(d);cur<=end;cur.setDate(cur.getDate()+step))out.push(cur.toISOString().slice(0,10));
+        if(out[out.length-1]!==pe)out.push(pe);
+        return out;
+      };
+      const _span=_hasPeriod?_spanDates(_eff.ps,_eff.pe):null;
+      if(_span){
+        const s=new Set(_span);
+        cs.forEach(c=>{if(c.date>=_eff.ps&&c.date<=_eff.pe)s.add(c.date);}); // land actual points on their exact date
+        if(_tnow>=_eff.ps&&_tnow<=_eff.pe)s.add(_tnow);
+        dates=[...s].sort();
+      } else {
+        dates=_addBounds(cs.map(c=>c.date));
+      }
       const byDate={};cs.forEach(c=>byDate[c.date]=Number(c.value));
       actual=dates.map(d=>(d in byDate)?byDate[d]:null);
       ideal=o.metricType==='yesno'?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
@@ -7505,7 +7532,19 @@ function _drawOKRCharts(){
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:'Ideal (planned pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
       ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
-      if(o.metricType!=='yesno'&&Number(o.startValue||0)>0){yOpts.beginAtZero=false;const _lo=Math.min(Number(o.startValue||0),Number(o.targetValue??o.startValue),...actual.filter(v=>v!==null));yOpts.suggestedMin=Math.floor(_lo*0.98);}
+      if(o.metricType!=='yesno'){
+        // Y-axis baseline = the Start value; only drop lower if an actual input dips below it.
+        const _act=actual.filter(v=>v!==null&&v!==undefined&&isFinite(v));
+        const _start=Number(o.startValue||0);
+        const _tgt=(o.targetValue===null||o.targetValue===undefined)?_start:Number(o.targetValue);
+        // Include target so "reduce" goals (target below start) still show the whole line; for an
+        // "increase" goal (target above start) this leaves the baseline sitting exactly on Start.
+        const _lo=Math.min(_start,_tgt,...(_act.length?_act:[_start]));
+        const _hi=Math.max(_start,_tgt,...(_act.length?_act:[_start]));
+        yOpts.beginAtZero=false;
+        yOpts.min=_lo;
+        yOpts.suggestedMax=_hi+Math.max((_hi-_lo)*0.08,(_hi===_lo?1:0));
+      }
       if(o.metricType==='yesno')yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};
       _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:T.grid}},y:yOpts}}}));
     }catch(e){fail("Couldn't draw chart.");}
