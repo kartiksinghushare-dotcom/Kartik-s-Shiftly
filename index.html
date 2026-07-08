@@ -7528,6 +7528,8 @@ function _drawOKRCharts(){
       actual=dates.map(d=>(d in byDate)?byDate[d]:null);
       ideal=o.metricType==='yesno'?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
       labels=dates.map(d=>fmtS(d));
+      // Daily granularity (period ≤45 days): show EVERY day on the x-axis (7,8,9…31), not just ~8.
+      const _daily=_hasPeriod&&(Math.round((new Date(_eff.pe+'T00:00:00')-new Date(_eff.ps+'T00:00:00'))/86400000)<=45);
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:'Ideal (planned pace)',data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
       ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#0E9F6E',backgroundColor:'rgba(14,159,110,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#0E9F6E',borderWidth:2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
@@ -7545,7 +7547,7 @@ function _drawOKRCharts(){
         yOpts.suggestedMax=_hi+Math.max((_hi-_lo)*0.08,(_hi===_lo?1:0));
       }
       if(o.metricType==='yesno')yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};
-      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:10},maxRotation:0,autoSkip:true,maxTicksLimit:8},grid:{color:T.grid}},y:yOpts}}}));
+      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:9},autoSkip:false,maxRotation:_daily?90:60,minRotation:0,padding:4,callback:function(v,i){const _iso=dates[i];if(!_iso)return '';if(_daily){const _dd=new Date(_iso+'T00:00:00');return (i===0||_dd.getDate()===1)?fmtS(_iso):String(_dd.getDate());}return fmtS(_iso);}},grid:{color:T.grid,drawOnChartArea:false}},y:yOpts}}}));
     }catch(e){fail("Couldn't draw chart.");}
   });
 }
