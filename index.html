@@ -831,6 +831,7 @@ function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace
 const _mQrow=q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at,departmentId:q.department_id||null,subDepartmentId:q.sub_department_id||null});
 function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],hrm:(p.hrm&&typeof p.hrm==='object')?p.hrm:null,password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',subDepartment:c.sub_department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
+function _mDraft(r){return{id:r.id,checklistId:r.checklist_id,userId:r.user_id,date:r.date,questionResponses:r.question_responses||[],tasks:r.tasks||[],updatedAt:r.updated_at||null};}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
 function _mA(r){return(r||[]).map(a=>({id:a.id,type:a.type||'Submission',requesterId:a.requester_id,checklistId:a.checklist_id||null,date:a.date||null,status:a.status||'Pending',note:a.note||'',createdAt:a.created_at,isResubmit:a.is_resubmit||false,usedAt:a.used_at||null}));}
 /* ===== Egress-reduction helpers: 30-day windowing + lazy per-tab loading ===== */
@@ -1103,6 +1104,21 @@ async function loadFromSB(){
       if(error){console.error('[TK] error:',error.message);return;}
       _applyTickets(data);saveDB();rr();
     }).catch(e=>console.error('[TK] fetch failed:',e.message));
+  // ── Drafts: this user's own in-progress checklist drafts (personal, syncs across devices) ──
+  sb.from('submission_drafts').select('*').eq('user_id',S.uid)
+    .then(({data,error})=>{
+      if(error){console.warn('[draft] load error:',error.message);return;}
+      DB.drafts=(data||[]).map(_mDraft);
+      // Seed any freshly-opened (still-empty) RUN with its saved draft so progress shows up.
+      DB.drafts.forEach(d=>{
+        const r=RUN[d.checklistId];
+        if(r&&r.date===d.date&&r.status!=='Editing'&&(!r.questionResponses||!r.questionResponses.length)){
+          r.questionResponses=JSON.parse(JSON.stringify(d.questionResponses||[]));
+          r.tasks=d.tasks||[];
+        }
+      });
+      rr();
+    }).catch(e=>console.warn('[draft] fetch failed:',e&&e.message));
 }
 async function _sync(){try{
   const results=await Promise.allSettled([
@@ -1153,7 +1169,7 @@ const chip=s=>{const st=CHIP_STYLE[s]||'background:#FFFBEB;color:#B45309';const 
 /* ===== DATA MODEL ===== */
 let DB={
   departments:[],
-  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[],tickets:[],okrs:[],okrCheckins:[],okrLogs:[]
+  users:[],checklists:[],submissions:[],approvals:[],feedback:[],folders:[],documents:[],locations:[],audit:[],notifications:[],questions:[],tickets:[],okrs:[],okrCheckins:[],okrLogs:[],drafts:[]
 };
 function log(a,b,c){
   if(!a||!b)return;
@@ -1185,6 +1201,9 @@ function saveDB(){
     (dbCopy.DB.okrCheckins||[]).forEach(c=>{
       if(Array.isArray(c.photos))c.photos=c.photos.map(p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p);
     });
+    // Drafts can carry photo URLs/large payloads and are always reloaded fresh from Supabase
+    // per user — keep them out of the localStorage cache so they can never blow the 5MB limit.
+    dbCopy.DB.drafts=[];
     localStorage.setItem(LS_KEY,JSON.stringify(dbCopy));
   }catch(e){
     // If still too large, save without submissions
@@ -1203,7 +1222,7 @@ function loadDB(){
     const r=localStorage.getItem(LS_KEY);
     if(!r)return false;
     const p=JSON.parse(r);if(!p.DB)return false;DB=p.DB;
-    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted','okrs','okrCheckins','okrLogs'].forEach(k=>{if(!DB[k])DB[k]=[];});
+    ['users','departments','locations','checklists','submissions','approvals','feedback','folders','documents','audit','notifications','questions','checklists_deleted','questions_deleted','folders_deleted','documents_deleted','users_deleted','departments_deleted','locations_deleted','okrs','okrCheckins','okrLogs','drafts'].forEach(k=>{if(!DB[k])DB[k]=[];});
     if(!DB.roleProfiles||typeof DB.roleProfiles!=='object')DB.roleProfiles={};
     try{DB.users.forEach(u=>_ensureHrm(u));_seedRoleProfiles();_permsV3Migrate();}catch(e){console.warn('[perms] cache init:',e.message);}
     DB.users.forEach(u=>{
@@ -3044,7 +3063,10 @@ function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   if(!sub){
     if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#B36A00;font-weight:600">No permission for past dates</span><span></span>';
     if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#9CA3AF">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
-    return '<span></span><button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button>';
+    const _hasDraft=(DB.drafts||[]).some(d=>d.checklistId===cid&&d.userId===S.uid&&d.date===date);
+    const _draftBtn='<button onclick="App._saveDraft(\''+cid+'\',\''+date+'\')" class="draft-pill" data-cl="'+cid+'" style="padding:8px 18px;border-radius:9px;font-size:13px;font-weight:700;border:1.5px solid #E5E7EB;background:#fff;color:#374151;cursor:pointer">'+(_hasDraft?'Update draft':'Save as Draft')+'</button>';
+    const _leftBlk=_hasDraft?'<span style="display:inline-flex;align-items:center;gap:8px">'+_draftBtn+'<span style="font-size:11px;color:#0E9F6E;font-weight:700">\u2713 Draft saved</span></span>':_draftBtn;
+    return _leftBlk+'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button>';
   }
   // Editing mode
   if(sub.status==='Editing'){
@@ -3076,9 +3098,11 @@ function _clCard(c,date){
   const isSubmitted=!!sub&&sub.status!=='Editing';
   // Only initialise fresh RUN if: no entry, date changed, OR not currently editing
   if(!RUN[c.id]||(RUN[c.id].date!==date&&RUN[c.id].status!=='Editing')){
-    // Restore questionResponses from existing submission if available
+    // Restore questionResponses from an existing submission if available; otherwise from a saved draft.
     const _existSub=subForCl(c,S.uid,date);
-    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:[],questionResponses:JSON.parse(JSON.stringify(_existSub?.questionResponses||[]))};
+    const _draft=(!_existSub)?(DB.drafts||[]).find(d=>d.checklistId===c.id&&d.userId===S.uid&&d.date===date):null;
+    const _seed=_existSub?.questionResponses||_draft?.questionResponses||[];
+    RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(_draft&&_draft.tasks)||[],questionResponses:JSON.parse(JSON.stringify(_seed))};
   }
   const run=RUN[c.id];
   const hasEditReq=DB.approvals.some(a=>a.type==='Edit Request'&&a.requesterId===S.uid&&a.checklistId===c.id&&a.date===date&&a.status==='Pending');
@@ -3108,6 +3132,7 @@ function _clCard(c,date){
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
+        ${(!isSubmitted&&(DB.drafts||[]).some(d=>d.checklistId===c.id&&d.userId===S.uid&&d.date===date))?'<span title="You have a saved draft" style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;background:#EEF2FF;color:#4338CA">📝 Draft</span>':''}
         <span style="font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;${stCls[st]?'':'background:#F5F4F0;color:#9CA3AF'}" class="${stCls[st]||''}">${st}</span>
         <span style="color:#C8C5BD;transform:rotate(${exp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
       </div>
@@ -3381,6 +3406,8 @@ App._submitRun=async(clId,date)=>{
     try{const {error}=await sb.from('submissions').upsert(_mkRow(srQR),{onConflict:'id'});_txtOk=!error;if(error)console.warn('sub upsert:',error.message);}
     catch(e){console.warn('sub upsert:',e&&e.message);}
   }
+  // Submitted successfully → remove any saved draft for this checklist/date (local + server).
+  if(_txtOk)_clearDraft(clId,date);
   // 2. Upload photos to Storage NOW (foreground, awaited) and re-save the submission with the
   //    durable public URLs, so managers/admins can see them. This is the core fix.
   if(_hasInlinePhoto){
@@ -3404,6 +3431,45 @@ App._submitRun=async(clId,date)=>{
     sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
     DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
   ]).catch(()=>{});
+};
+function _clearDraft(clId,date){
+  const draftId='draft_'+clId+'__'+S.uid+'__'+date;
+  DB.drafts=(DB.drafts||[]).filter(d=>d.id!==draftId);
+  sb.from('submission_drafts').delete().eq('id',draftId).then(()=>{}).catch(e=>console.warn('[draft] clear:',e&&e.message));
+}
+// Save the current in-progress answers (all questions together) as a draft — no validation,
+// stored server-side so it survives refresh and syncs across devices. Cleared on submit.
+App._saveDraft=async(clId,date)=>{
+  const run=RUN[clId];
+  if(!run){toast('Open the checklist first','warn');return;}
+  const _btn=document.querySelector('.draft-pill[data-cl="'+clId+'"]');
+  if(_btn){_btn.disabled=true;_btn.style.opacity='.6';_btn.style.pointerEvents='none';_btn.textContent='Saving…';}
+  // Upload any NEW base64 photos to Storage (same helper the submit flow uses) so the draft row
+  // stays small and photos are viewable from any device. Already-uploaded URLs are kept as-is.
+  // IMPORTANT: if an upload soft-fails (returns a '[photo]' placeholder on a flaky network) we keep
+  // the base64 originals so a photo is NEVER silently lost — the user can reopen and re-save to retry.
+  const _orig=JSON.parse(JSON.stringify(run.questionResponses||[]));
+  let _uploaded=_orig;
+  try{_uploaded=await _uploadSubmissionPhotos(clId,S.uid,date,_orig);}catch(e){console.warn('[draft photo]',e&&e.message);_uploaded=_orig;}
+  const _photoLost=(_uploaded||[]).some(r=>(Array.isArray(r.photos)&&r.photos.includes('[photo]'))||r.photo==='[photo]');
+  const qr=_photoLost?_orig:_uploaded; // on failure keep base64 (safe + still syncs); else durable URLs
+  run.questionResponses=JSON.parse(JSON.stringify(qr)); // keep in memory so re-saving won't re-upload the successful ones
+  const draftId='draft_'+clId+'__'+S.uid+'__'+date;
+  const nowISO=new Date().toISOString();
+  const _tasks=JSON.parse(JSON.stringify(run.tasks||[]));
+  const row={id:draftId,checklist_id:clId,user_id:S.uid,date:date,question_responses:qr,tasks:_tasks,updated_at:nowISO};
+  const rec={id:draftId,checklistId:clId,userId:S.uid,date:date,questionResponses:JSON.parse(JSON.stringify(qr)),tasks:JSON.parse(JSON.stringify(_tasks)),updatedAt:nowISO};
+  const di=(DB.drafts=DB.drafts||[]).findIndex(d=>d.id===draftId);
+  if(di>-1)DB.drafts[di]=rec;else DB.drafts.push(rec);
+  let ok=false;
+  for(let attempt=0;attempt<3&&!ok;attempt++){
+    if(attempt>0)await new Promise(r=>setTimeout(r,500*attempt));
+    try{const{error}=await sb.from('submission_drafts').upsert(row,{onConflict:'id'});ok=!error;if(error)console.warn('[draft] save:',error.message);}
+    catch(e){console.warn('[draft] save:',e&&e.message);}
+  }
+  if(ok){log(fullName(me()),'Saved draft',clById(clId)?.name||'');toast(_photoLost?'Draft saved — but a photo couldn’t upload; reopen the checklist to retry':'Draft saved ✓ — resume on any device',_photoLost?'warn':'ok');}
+  else toast('Couldn’t save draft — please retry','err');
+  rr();
 };
 App._reqEdit=(clId,date)=>{openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Request edit</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><p class="text-sm text-ink-400 mb-4">Manager approval required to edit a submission.</p><textarea id="re-n" rows="3" placeholder="Reason for edit…" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"></textarea><button onclick="App._sendReq('${clId}','${date}')" style="margin-top:16px;width:100%;background:#15171C;color:#fff;font-weight:600;padding:12px;border-radius:12px;border:none;cursor:pointer">Send request</button></div>`,'max-w-sm');};
 App._sendReq=(clId,date)=>{
