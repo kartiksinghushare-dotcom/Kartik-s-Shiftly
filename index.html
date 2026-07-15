@@ -883,13 +883,16 @@ function _applyDocuments(docRows){
 }
 function _applyTickets(rows){
   const {_uid,_isAdmin,_isSubAdmin}=_roleCtx();
-  const allTk=_mapTk(rows||[]);
+  // Deleted-overlay: ids the user deleted locally are never re-shown, even if a slow/stale
+  // server read still returns them. Mirrors DB.checklists_deleted / DB.questions_deleted.
+  const _delTk=new Set(DB.tickets_deleted||[]);
+  const allTk=_mapTk(rows||[]).filter(t=>!_delTk.has(t.id));
   // Admin/subadmin see all; everyone else only tickets assigned to them.
   const visible=(_isAdmin||_isSubAdmin)?allTk:allTk.filter(t=>t.assignedTo===_uid);
   // Keep any local-only tickets (just created, or older than the 30-day window) that the
-  // server query didn't return — never drop them.
+  // server query didn't return — never drop them (but never re-add a deleted one).
   const fromSB=new Set(allTk.map(t=>t.id));
-  const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id));
+  const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id)&&!_delTk.has(t.id));
   DB.tickets=[...visible,...localOnly];
   _invalidateNotifCache();
 }
@@ -1147,7 +1150,12 @@ async function _sync(){try{
     //   had just set (→ "department resets to unassigned on refresh"). Questions are now written
     //   ONLY through their own confirmed saves (_saveQuestion / _delQuestion / _importQCSV /
     //   _togQPublic), so a stale cache can no longer overwrite or resurrect them.
-    (DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve()),
+    // ⚠ Tickets are intentionally NOT mirrored in this background whole-table sync.
+    //   This bulk upsert used to let a stale second browser resurrect a ticket that another
+    //   admin had just deleted (the "delete a ticket → it comes back" bug). Tickets are now
+    //   written ONLY through their own confirmed writes — escalation insert (direct), resolve/
+    //   status/viewed_by updates, and _delTicket (delete + DB.tickets_deleted overlay) — so a
+    //   stale cache can no longer recreate a deleted ticket.
   ]);
   // Background full-DB mirror. Row-level-security will reject rows owned by other users
   // (notifications, audit_logs, feedback, etc.) — that is expected and harmless, because all
@@ -1243,10 +1251,21 @@ function loadDB(){
 /* ===== STATE ===== */
 let S={uid:null,route:'dashboard',search:'',calDate:todayISO(),calWk:0,expandedCl:null,filters:{},filterOpen:false,tvUser:null,tvCalDate:null,tvCalWk:0,tvExpanded:null,afOpen:null};
 const me=()=>DB.users.find(u=>u.id===S.uid);
-const isAdmin=()=>me()?.role==='Admin';
-// 'Admin' (internal value, unchanged in DB) is displayed as "Super Admin".
-// 'SubAdmin' (new internal value) is displayed as "Admin": manager powers + the All Checklists tab.
-const isSubAdmin=()=>me()?.role==='SubAdmin';
+// ── Admin standing is DYNAMIC-FIRST (roles-first v3) ──
+// A user's admin standing comes from their assigned ROLE PROFILE (u.hrm.roleProfileId),
+// NOT the legacy u.role string. Legacy u.role is retained ONLY as (a) a fallback for any
+// user not yet migrated to a role profile and (b) first-load routing before profiles load.
+// This stops the two systems diverging — the bug where a dynamic "Administrator" (legacy
+// SubAdmin, e.g. Mohit) was refused admin-only behaviour because the old string still
+// read "SubAdmin". Access Control itself stays separately gated by can('accessControl',…),
+// which the Administrator profile omits, so broadening isAdmin() here never leaks it.
+const _rpid=u=>(u&&u.hrm&&u.hrm.roleProfileId)||null;
+// Super Admin only (the top profile, incl. Access Control). Legacy 'Admin' as fallback.
+const isSuperAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return id?id==='superadmin':u.role==='Admin';};
+// Full org-wide admin = Super Admin OR Administrator profile. 'Admin' displays as "Super
+// Admin"; 'SubAdmin' displays as "Admin" (manager powers + the All Checklists tab).
+const isAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return id?(id==='superadmin'||id==='admin'):(u.role==='Admin'||u.role==='SubAdmin');};
+const isSubAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return id?id==='admin':u.role==='SubAdmin';};
 const roleLabel=r=>r==='Admin'?'Super Admin':r==='SubAdmin'?'Admin':(r||'User');
 const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
@@ -3429,7 +3448,9 @@ App._submitRun=async(clId,date)=>{
   Promise.allSettled([
     DB.approvals.length?sb.from('approvals').upsert(DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null})),{onConflict:'id'}):Promise.resolve(),
     sb.from('notifications').upsert(DB.notifications.slice(0,50).map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString()})),{onConflict:'id'}),
-    DB.tickets&&DB.tickets.length?sb.from('tickets').upsert(DB.tickets.map(t=>({id:t.id,title:t.title||'',description:t.description||'',priority:t.priority||'Medium',status:t.status||'Open',assigned_to:t.assignedTo||null,created_by:t.createdBy||null,checklist_id:t.checklistId||null,question_id:t.questionId||null,question_text:t.questionText||'',answer_given:t.answerGiven||'',submitter_id:t.submitterId||null,date:t.date||null,created_at:t.createdAt||new Date().toISOString(),resolved_at:t.resolvedAt||null,resolve_note:t.resolveNote||'',viewed_by:t.viewedBy||[]})),{onConflict:'id'}):Promise.resolve(),
+    // ⚠ Tickets are intentionally NOT mirrored here anymore (same reason as _sync): a stale
+    //   browser could resurrect a just-deleted ticket. Escalation tickets are inserted directly
+    //   to Supabase at creation time, so this bulk upsert is redundant.
   ]).catch(()=>{});
 };
 function _clearDraft(clId,date){
@@ -5443,11 +5464,19 @@ App._confirmResolve=(id)=>{
   sb.from('tickets').update({status:'Resolved',resolved_at:t.resolvedAt,resolve_note:note}).eq('id',id).then(()=>{}).catch(e=>console.warn('resolve:',e.message));
 };
 
-App._delTicket=(id)=>{
+App._delTicket=async(id)=>{
   if(!can('tickets','delete')){toast('You don’t have permission to delete tickets','err');return;}
+  // ── Delete on the server FIRST, then reflect locally and record the id in a deleted-overlay.
+  //    Tickets are no longer mirrored by the background whole-table sync, so a stale second
+  //    browser can no longer resurrect a ticket another admin just deleted (the "delete a
+  //    ticket → it comes back" bug). ──
+  let _dr;
+  try{_dr=await sb.from('tickets').delete().eq('id',id);}catch(e){_dr={error:e};}
+  if(_dr&&_dr.error){console.error('del ticket failed:',_dr.error.message||_dr.error);toast('Couldn’t delete — please retry.','err');return;}
   DB.tickets=(DB.tickets||[]).filter(t=>t.id!==id);
+  if(!DB.tickets_deleted)DB.tickets_deleted=[];
+  if(!DB.tickets_deleted.includes(id))DB.tickets_deleted.push(id);
   saveDB();rr();
-  sb.from('tickets').delete().eq('id',id).then(()=>{}).catch(e=>console.warn('del ticket:',e.message));
 };
 
 
