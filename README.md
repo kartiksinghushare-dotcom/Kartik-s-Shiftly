@@ -1,5 +1,10 @@
 # Bridge (v3.9)
 
+## v3.9.1 — Annual & level-below roll-up: two independent, manual toggles
+
+- **Both toggles are always visible and fully manual** — enabling Annual never touches the roll-up toggle (and vice versa); nothing flips, hides or locks. A one-time data fix cleared the roll-up flag that the old annual toggle had silently set on all 43 existing annuals.
+- **Clear precedence when reading the number**: roll-up ON → level-below aggregation drives it (explicit override, shown with an amber "both toggles are on" note in the editor and panels) · Annual ON with roll-up OFF → the **combined progress of its quarters, nothing else** (regular children and own check-ins can't feed it, even with no quarters at all) · both OFF → own check-ins. Cards, panels, graphs and the "Progress source" row all state which source is active.
+
 ## v3.9 — Annual progress from quarters · Close status · quarterly hierarchy view
 
 - **Annual progress = combined progress of its quarters, each counting equally.** L0 Q1 done 10% with the rest untouched → the L0 annual reads **2.5%** ("out of all progress"); its current value maps that % onto its own start → target scale, and the graph follows. Only quarter-tagged children feed an annual — an L1's updates never move the L0 annual (the L1's own quarters move the L1). The per-annual "how quarters combine" dropdown was removed — this rule replaces it.
