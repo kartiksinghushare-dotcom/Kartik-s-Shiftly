@@ -1,3 +1,12 @@
+# Bridge (v3.9)
+
+## v3.9 — Annual progress from quarters · Close status · quarterly hierarchy view
+
+- **Annual progress = combined progress of its quarters, each counting equally.** L0 Q1 done 10% with the rest untouched → the L0 annual reads **2.5%** ("out of all progress"); its current value maps that % onto its own start → target scale, and the graph follows. Only quarter-tagged children feed an annual — an L1's updates never move the L0 annual (the L1's own quarters move the L1). The per-annual "how quarters combine" dropdown was removed — this rule replaces it.
+- **Close status (with reason, required).** New 🔒 action on every card: closing freezes the objective — no updates, check-ins, reminders or revisions — but keeps it in the list, greyed with a **Closed** chip (reason on hover), full history intact. Reason + who + when show in Rules & Target; reopen anytime with 🔓. Closed shows in the status filter and a summary card appears when any exist. DB: additive `okrs.closed / closed_reason / closed_at / closed_by` (migration applied).
+- **Revision reason is now required** when revising targets, and shows in the **Rules & Target** tab too: `Revised 17 Jul by <name>: 1M → 750k — "reason" · same updates feed both numbers`.
+- **Views: Annual / Quarterly only** (All removed; Annual is the default clean tree). **Quarterly view is now a hierarchy**, not a flat list: every quarter nests under the matching quarter of its nearest ancestor annual — an L1's Q1 sits under the L0's Q1, exactly mirroring the annual tree (expanded by default; label-matched; all other filters still apply).
+
 # Bridge (v3.8)
 
 ## v3.8.2 — Compact, cleaner OKR cards
