@@ -371,7 +371,19 @@ const OKR_METRICS=[['number','Number'],['percent','Percentage'],['currency','Cur
 const OKR_STATUSES=['On track','Off track','Achieved','Not achieved'];
 const okrById=id=>(DB.okrs||[]).find(o=>o.id===id);
 function okrChildren(id){return(DB.okrs||[]).filter(o=>o.parentId===id).sort((a,b)=>((a.sort||0)-(b.sort||0))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
-function okrLevel(o){let l=0,cur=o,g=0;while(cur&&cur.parentId&&g++<15){cur=okrById(cur.parentId);if(cur)l++;}return l;}
+/* Level of an objective. A QUARTERLY SPLIT is the same objective time-boxed, not a sub-objective:
+   the step from a quarter (quarterLabel set) up to its annual doesn't count as a level — so an
+   L0 annual's quarters read “L0 · Q1”, their children read L1, and so on down the tree. */
+function okrLevel(o){
+  let l=0,cur=o,g=0;
+  while(cur&&cur.parentId&&g++<15){
+    const p=okrById(cur.parentId);
+    if(!p)break;
+    if(!cur.quarterLabel)l++; // quarter → annual is a sideways step, not down
+    cur=p;
+  }
+  return l;
+}
 function okrDescendants(id,_seen){_seen=_seen||new Set();if(_seen.has(id))return[];_seen.add(id);return okrChildren(id).flatMap(c=>[c,...okrDescendants(c.id,_seen)]);}
 function okrRootOf(o){let cur=o,g=0;while(cur&&cur.parentId&&g++<15){const p=okrById(cur.parentId);if(!p)break;cur=p;}return cur;}
 function okrCheckinsOf(id){return(DB.okrCheckins||[]).filter(c=>c.okrId===id).sort((a,b)=>String(a.date).localeCompare(String(b.date))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
@@ -569,7 +581,7 @@ App._renderOKRMove=()=>{
   const opts=_okrMoveOptions(excl);
   const desc=okrDescendants(o.id);
   const target=d.targetId?okrById(d.targetId):null;
-  const newLvl=target?okrLevel(target)+1:0;
+  const newLvl=target?(okrLevel(target)+(o.quarterLabel?0:1)):0; // a quarterly split lands AT the target's level, not below it
   const curParent=o.parentId?okrById(o.parentId):null;
   const L='display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
   const deptOpts=(topDepts()||[]).map(x=>[x.id,x.name]);
@@ -1009,8 +1021,18 @@ App._okrEdit=(id,parentId)=>{
   if(existing&&!_okrCanEditNode(existing))return toast('You can\'t edit this OKR','err');
   if(!existing&&!_okrCanCreate())return toast('You can\'t create OKRs','err');
   _OKRED=existing?JSON.parse(JSON.stringify(existing)):{id:uid('okr'),parentId:parentId||null,title:'',description:'',departmentId:null,subDepartmentId:null,ownerId:S.uid,metricType:'number',startValue:0,targetValue:null,unit:'',direction:'up',frequency:{type:'weekly',day:'Mon'},periodStart:null,periodEnd:null,statusMode:'auto',statusManual:null,isAnnual:false,quarterLabel:null,sort:okrChildren(parentId||null).length,createdBy:S.uid,createdAt:new Date().toISOString()};
-  delete _OKRED._qRows;
+  delete _OKRED._qRows;delete _OKRED._qEdit;
+  if(existing&&existing.isAnnual)_OKRED._qEdit=_okrBuildQEdit(existing.id); // live quarter values — edits made on the quarters themselves show up here
   App._renderOKREdit();
+};
+/* Editable snapshot of the EXISTING quarterly objectives, always read fresh from the tree
+   (so a change made on a quarter directly is what the annual's editor shows — and edits made
+   here write back to those same quarter objectives on Save). */
+function _okrBuildQEdit(id){return okrChildren(id).filter(k=>k.quarterLabel).map(k=>({id:k.id,label:k.quarterLabel,start:k.periodStart,end:k.periodEnd,startVal:(k.startValue===null||k.startValue===undefined)?0:k.startValue,target:(k.targetValue===null||k.targetValue===undefined)?null:k.targetValue}));}
+App._okrEdQESet=(i,field,val)=>{
+  const o=_OKRED;if(!o||!o._qEdit||!o._qEdit[i])return;
+  if(field==='startVal'||field==='target')o._qEdit[i][field]=val===''?null:parseFloat(val);
+  else o._qEdit[i][field]=val;
 };
 /* ── Annual objective → quarterly split (editor-side helpers) ──
    _OKRED._qRows holds the NEW quarterly periods being defined: [{label,start,end,startVal,target}].
@@ -1053,7 +1075,8 @@ App._okrEdTogAnnual=()=>{
     if(!['latest','sum','avg','max','min'].includes(o.rollupMode))o.rollupMode='latest';
     const hasQKids=okrById(o.id)&&okrChildren(o.id).some(k=>k.quarterLabel);
     o._qRows=hasQKids?[]:_okrGenQRows(o);
-  }else{o.rollup=false;delete o._qRows;}
+    o._qEdit=hasQKids?_okrBuildQEdit(o.id):null;
+  }else{o.rollup=false;delete o._qRows;delete o._qEdit;}
   App._renderOKREdit();
 };
 App._okrEdReQ=()=>{const o=_OKRED;if(!o||!o.isAnnual)return;o._qRows=_okrGenQRows(o);App._renderOKREdit();};
@@ -1096,11 +1119,15 @@ function _okrEdAnnualSection(o,L){
       <input type="number" step="any" value="${r.target!==null&&r.target!==undefined?r.target:''}" oninput="App._okrEdQSet(${i},'target',this.value)" ${inp} placeholder="Target"/>
       <button type="button" onclick="App._okrEdQRm(${i})" title="Remove this period" style="width:24px;height:24px;border-radius:7px;border:none;background:var(--c-surface-2);color:var(--c-text-3);cursor:pointer;font-size:13px;line-height:1">×</button>
     </div>`;
-  const kidRow=(k)=>`<div style="display:flex;align-items:center;gap:8px;padding:5px 0;border-top:1px solid var(--c-border);font-size:12px">
-      ${_okrQtrChip(k.quarterLabel)}
-      <span style="flex:1;min-width:0;color:var(--c-text);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title||'')}</span>
-      <span style="color:var(--c-text-3);white-space:nowrap">${fmtS(k.periodStart)} – ${fmtS(k.periodEnd)}</span>
-      <span style="color:var(--c-text-2);font-weight:700;white-space:nowrap">Tgt ${esc(_okrFmtVal(k,k.targetValue))}</span>
+  const qEdit=o._qEdit||[];
+  const gridHead=`<div style="display:grid;grid-template-columns:64px 1fr 1fr 86px 86px 26px;gap:6px;font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px"><span>Label</span><span>From</span><span>To</span><span>Start</span><span>Target</span><span></span></div>`;
+  const eRow=(r,i)=>`<div style="display:grid;grid-template-columns:64px 1fr 1fr 86px 86px 26px;gap:6px;align-items:center;margin-top:6px">
+      <input type="text" value="${esc(r.label||'')}" oninput="App._okrEdQESet(${i},'label',this.value)" ${inp}/>
+      <input type="date" value="${r.start||''}" onchange="App._okrEdQESet(${i},'start',this.value)" ${inp}/>
+      <input type="date" value="${r.end||''}" onchange="App._okrEdQESet(${i},'end',this.value)" ${inp}/>
+      <input type="number" step="any" value="${r.startVal!==null&&r.startVal!==undefined?r.startVal:''}" oninput="App._okrEdQESet(${i},'startVal',this.value)" ${inp}/>
+      <input type="number" step="any" value="${r.target!==null&&r.target!==undefined?r.target:''}" oninput="App._okrEdQESet(${i},'target',this.value)" ${inp}/>
+      <span title="Existing quarterly objective — your edits save with this form" style="display:grid;place-items:center;color:#0B7A55">${ic('check','w-3.5 h-3.5')}</span>
     </div>`;
   return `<div style="border-top:1px dashed var(--c-border);padding-top:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
@@ -1115,13 +1142,14 @@ function _okrEdAnnualSection(o,L){
         </select>
         <div style="font-size:11px;color:var(--c-text-3);margin-top:6px">${qKids.length?'Changing this only changes how the annual number is computed.':'Changing this re-fills the suggested quarterly values below.'}</div>
       </div>
-      ${qKids.length?`<div style="margin-top:12px"><label style="${L}">Existing quarterly objectives (${qKids.length})</label>
-        <div>${qKids.map(kidRow).join('')}</div>
-        <div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Edit dates, targets or owners of each one directly from the tree — they're normal objectives. Add extra periods below if you need more.</div>
+      ${qEdit.length?`<div style="margin-top:12px"><label style="${L}">Quarterly objectives (${qEdit.length}) — edit them right here</label>
+        ${gridHead}
+        ${qEdit.map(eRow).join('')}
+        <div style="font-size:11px;color:var(--c-text-3);margin-top:6px;line-height:1.45">Label, dates, start and target save onto each quarterly objective when you press <b>Save</b> — their check-in history is never touched. Edits made on a quarter from the tree show up here too.</div>
       </div>`:''}
       <div style="margin-top:12px">
         <label style="${L}">${qKids.length?'Add more periods':'Quarterly periods & targets'}</label>
-        ${rows.length?`<div style="display:grid;grid-template-columns:64px 1fr 1fr 86px 86px 26px;gap:6px;font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.04em;margin-top:4px"><span>Label</span><span>From</span><span>To</span><span>Start</span><span>Target</span><span></span></div>`:''}
+        ${rows.length?gridHead:''}
         ${rows.map(rowHTML).join('')||(qKids.length?'':'<div style="font-size:11.5px;color:var(--c-text-3);margin-top:4px">No periods yet — add one below.</div>')}
         <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap">
           <button type="button" onclick="App._okrEdQAdd()" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('plus','w-3.5 h-3.5')}Add period</button>
@@ -1135,7 +1163,7 @@ App._renderOKREdit=()=>{
   const o=_OKRED;if(!o)return;
   const isExisting=!!okrById(o.id);
   const parent=o.parentId?okrById(o.parentId):null;
-  const lvl=parent?okrLevel(parent)+1:0;
+  const lvl=isExisting?okrLevel(o):(parent?okrLevel(parent)+1:0); // existing nodes show their real (display) level — a quarter reads L0, not L1
   const L='display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
   const users=visU().filter(u=>u&&u.status==='Active');
   const f=o.frequency||{};
@@ -1212,8 +1240,9 @@ App._okrSave=()=>{
   if(o.rollup&&o.metricType==='yesno')o.rollup=false;
   if(o.isAnnual&&o.metricType==='yesno')o.isAnnual=false;
   // ── Annual objective: enforce the auto-update link + validate the quarterly rows ──
+  //    (qRows = NEW periods to create · qEdit = EXISTING quarterly objectives edited inline)
   const qRows=(o.isAnnual&&Array.isArray(o._qRows))?o._qRows:null;
-  delete o._qRows; // editor-only — never persisted on the objective itself
+  const qEdit=(o.isAnnual&&Array.isArray(o._qEdit))?o._qEdit:null;
   if(o.isAnnual){
     o.rollup=true;
     if(!['latest','sum','avg','max','min'].includes(o.rollupMode))o.rollupMode='latest';
@@ -1228,6 +1257,14 @@ App._okrSave=()=>{
       if(r.target===null||r.target===undefined||!isFinite(r.target))return toast(String(r.label)+': set a target value','err');
       if(r.startVal===null||r.startVal===undefined||!isFinite(r.startVal))r.startVal=0;
     }
+    for(let i=0;i<(qEdit||[]).length;i++){
+      const r=qEdit[i];if(!r||!okrById(r.id))continue; // quarter deleted meanwhile — just skip it
+      if(!(r.label||'').trim())return toast('Quarterly objective '+(i+1)+': give it a label','err');
+      if(!r.start||!r.end)return toast(String(r.label)+': set both dates','err');
+      if(r.end<r.start)return toast(String(r.label)+': end date is before its start','err');
+      if(r.target===null||r.target===undefined||!isFinite(r.target))return toast(String(r.label)+': set a target value','err');
+      if(r.startVal===null||r.startVal===undefined||!isFinite(r.startVal))r.startVal=0;
+    }
   }
   if(!o.rollup||o.isAnnual){
   if(f.type==='weekly'&&!WKDAYS.includes(f.day))return toast('Pick the weekday for check-ins','err');
@@ -1235,6 +1272,7 @@ App._okrSave=()=>{
   if(f.type==='custom'&&!(f.dates||[]).length)return toast('Add at least one check-in date','err');
   }
   if(o.periodStart&&o.periodEnd&&o.periodEnd<o.periodStart)return toast('Period end is before its start','err');
+  delete o._qRows;delete o._qEdit; // editor-only — dropped AFTER validation so a failed save keeps the rows on screen
   if(o.metricType==='yesno'){o.startValue=0;o.targetValue=1;o.direction='up';}
   const idx=(DB.okrs||[]).findIndex(x=>x.id===o.id);
   if(idx>-1){
@@ -1250,6 +1288,37 @@ App._okrSave=()=>{
     if(JSON.stringify(prev.frequency||{})!==JSON.stringify(o.frequency||{}))changes.push({field:'Frequency',from:_okrFreqLabel(prev),to:_okrFreqLabel(o)});
     DB.okrs[idx]=o;
     if(changes.length)okrLog(o.id,'Edited objective',{changes:changes});
+    /* ── Annual ⇄ quarterly sync ──
+       1) The inline rows from the annual's editor write back onto each quarterly objective.
+       2) Shared fields changed on the annual (owner, goal, unit, direction, metric, schedule,
+          auto-pattern title) follow onto quarters that still MATCH the annual's old value —
+          a quarter you customised by hand keeps its own value. Check-ins are never touched. */
+    if(o.isAnnual){
+      const qeById={};(qEdit||[]).forEach(r=>{if(r&&r.id)qeById[r.id]=r;});
+      okrChildren(o.id).filter(k=>k.quarterLabel).forEach(k=>{
+        const kc=[];
+        const oldLabel=k.quarterLabel;
+        const qe=qeById[k.id];
+        if(qe){
+          const lbl=String(qe.label||'').trim();
+          if(lbl&&lbl!==k.quarterLabel){kc.push({field:'Quarter label',from:k.quarterLabel,to:lbl});k.quarterLabel=lbl;}
+          if(qe.start&&qe.start!==k.periodStart){kc.push({field:'Period start',from:k.periodStart,to:qe.start});k.periodStart=qe.start;}
+          if(qe.end&&qe.end!==k.periodEnd){kc.push({field:'Period end',from:k.periodEnd,to:qe.end});k.periodEnd=qe.end;}
+          if(qe.startVal!==null&&qe.startVal!==undefined&&isFinite(qe.startVal)&&Number(qe.startVal)!==Number(k.startValue||0)){kc.push({field:'Start value',from:k.startValue,to:qe.startVal});k.startValue=Number(qe.startVal);}
+          if(qe.target!==null&&qe.target!==undefined&&isFinite(qe.target)&&Number(qe.target)!==Number(k.targetValue)){kc.push({field:'Target',from:k.targetValue,to:qe.target});k.targetValue=Number(qe.target);}
+        }
+        [['ownerId','Owner'],['description','Goal'],['unit','Unit'],['direction','Direction'],['metricType','Metric']].forEach(([fk,label])=>{
+          if(String(prev[fk]??'')!==String(o[fk]??'')&&String(k[fk]??'')===String(prev[fk]??'')){kc.push({field:label,from:prev[fk],to:o[fk]});k[fk]=o[fk];}
+        });
+        if(JSON.stringify(prev.frequency||{})!==JSON.stringify(o.frequency||{})&&JSON.stringify(k.frequency||{})===JSON.stringify(prev.frequency||{})){kc.push({field:'Frequency',from:_okrFreqLabel(prev),to:_okrFreqLabel(o)});k.frequency=JSON.parse(JSON.stringify(o.frequency||{}));}
+        const autoOld=(prev.title||'')+' — '+oldLabel;
+        if(k.title===autoOld){
+          const autoNew=(o.title||'')+' — '+k.quarterLabel;
+          if(k.title!==autoNew){kc.push({field:'Title',from:k.title,to:autoNew});k.title=autoNew;}
+        }
+        if(kc.length){k.updatedAt=new Date().toISOString();okrLog(k.id,'Edited objective',{via:'annual editor',changes:kc});_okrPush(k);}
+      });
+    }
   }else{
     DB.okrs=DB.okrs||[];DB.okrs.push(o);
     okrLog(o.id,'Created objective',{level:'L'+(o.parentId?okrLevel(o):0)});

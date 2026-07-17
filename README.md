@@ -1,3 +1,12 @@
+# Bridge (v3.8)
+
+## v3.8 — Quarterly OKRs: same level as their annual + editable from the annual
+
+- **Levels**: a quarterly split now sits AT its annual's level — an L0 annual's quarters read **L0 · Q1**, not L1. Children created under a quarter are L1, and deeper nesting stays consistent. The level filter, editor titles and Move preview all follow (a quarter moved under another objective lands at that objective's level).
+- **Edit quarters from the annual**: opening an annual objective's editor now shows its quarterly objectives as **editable rows** (label, dates, start value, target) — change them there and Save writes onto each quarterly objective (logged as "via annual editor"; check-in history untouched). A failed validation keeps everything you typed.
+- **Two-way sync**: shared fields changed on the annual (title pattern, owner, goal, unit, direction, metric, check-in schedule) follow onto quarters that still match the annual's old value — a quarter you customised by hand keeps its own value. Edits made on a quarter directly appear in the annual's editor next time it opens, and its numbers keep feeding the annual as before.
+- No database changes needed.
+
 # Bridge (v3.7)
 
 ## v3.7 — OKR visibility is scope-driven (Access Control) + cache-busting
