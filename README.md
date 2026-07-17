@@ -1,4 +1,12 @@
-# Bridge (v3.6)
+# Bridge (v3.7)
+
+## v3.7 — OKR visibility is scope-driven (Access Control) + cache-busting
+
+- **Who sees which OKRs is now set per role (or per person) in Access Control.** The OKRs area gained the standard **“sees”** scope: **Everyone / Their department / Their team / Only their own** — no more hardcoded "admins see all, managers see team". Two rules always hold on top of the scope: owners **always** see objectives they own or created (they have to update them), and everything **below** a visible objective is visible with it.
+  - Department scope = objectives owned by people in their department **plus** trees assigned to their department, even if the root's owner sits elsewhere.
+  - Per-person overrides work like every other area (Access Control → person → Personal → Override on OKRs).
+  - Built-in roles re-seeded: Super Admin & Administrator → everyone · Team Lead / Manager → their team · Basic Employee → only their own. **Custom roles keep their toggles but start at "only their own" — open the role in Access Control and pick its OKR scope.**
+- **Cache-busting**: all app scripts in `index.html` now load with `?v=37`. Bump this number whenever you deploy changed JS so browsers stop serving stale files (the reason recent changes "didn't show up").
 
 ## v3.6 — Users: one role system + bulk edit
 
