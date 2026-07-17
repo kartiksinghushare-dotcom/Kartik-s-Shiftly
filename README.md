@@ -1,5 +1,14 @@
 # Bridge (v3.8)
 
+## v3.8.2 — Compact OKR cards
+
+- Each objective card is now ~⅓ of its old height: one header line (chips · title · owner/schedule/period meta inline, wrapping only when needed), the big full-width progress bar replaced by a **small inline meter** next to the % and status, and a tighter action strip (smaller Update / panel buttons and icons). Summary cards on top slimmed too. Nothing functional changed — same buttons, same panels, same data.
+
+## v3.8.1 — OKR list: fixed ordering + chip alignment
+
+- **Quarters always group together**: under an annual, children now render Q1 → Q2 → Q3 → Q4 (by their period dates) first, then the regular sub-objectives — a sub-objective created between two "add period" batches no longer lands in the middle of the quarters. The flat filtered list follows the same tree order too.
+- **Alignment**: the L-level / Q / ANNUAL chips moved into the title line (equal heights, vertically centred, wrap cleanly) and the leading dot/chevron column is one width everywhere — titles line up whether or not a row has chips or children.
+
 ## v3.8 — Quarterly OKRs: same level as their annual + editable from the annual
 
 - **Levels**: a quarterly split now sits AT its annual's level — an L0 annual's quarters read **L0 · Q1**, not L1. Children created under a quarter are L1, and deeper nesting stays consistent. The level filter, editor titles and Move preview all follow (a quarter moved under another objective lands at that objective's level).
