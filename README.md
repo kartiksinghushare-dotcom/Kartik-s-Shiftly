@@ -1,5 +1,10 @@
 # Bridge (v3.9)
 
+## v3.9.2 — Progress panel shows only the feeders · revised target visible in the editor
+
+- **An annual's Progress & Updates panel now lists ONLY its quarters** (the objectives that actually feed it) with their Q tags — regular L1 sub-objectives no longer appear there; they have their own panels. (With the roll-up override on, all feeding children show, as that's what drives the number.)
+- **The edit form now shows the revision**: when a target has been revised, the form shows "Original target" plus an amber **Revised target (drives progress)** field — editable inline, with who/when/why next to it. Changing it updates the revision (logged); clearing it or setting it back to the original removes the revision.
+
 ## v3.9.1 — Annual & level-below roll-up: two independent, manual toggles
 
 - **Both toggles are always visible and fully manual** — enabling Annual never touches the roll-up toggle (and vice versa); nothing flips, hides or locks. A one-time data fix cleared the roll-up flag that the old annual toggle had silently set on all 43 existing annuals.

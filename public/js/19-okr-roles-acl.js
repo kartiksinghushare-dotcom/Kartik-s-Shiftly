@@ -825,7 +825,9 @@ App._okrCkDelGo=(okrId,ckId)=>{
 };
 App._okrProgressModal=(id)=>{
   const o=okrById(id);if(!o)return;
-  const kids=okrChildren(o.id);
+  // An annual's progress panel lists ONLY what feeds it — its quarters. Regular sub-objectives
+  // (L1s etc.) have their own cards and panels. With the roll-up override on, all children feed it.
+  const kids=(o.isAnnual&&!o.rollup)?okrChildren(o.id).filter(k=>k.quarterLabel):okrChildren(o.id);
   const pct=okrProgress(o),st=okrStatusOf(o);
   modalShell({title:'Progress & Updates',sub:(o.title||'')+' — '+(pct===null?'no data yet':pct+'%'),size:'max-w-2xl',key:'okr-pm',
     body:`<div id="okr-pm" data-okr="${o.id}" style="margin:-6px -2px 0">${_okrProgressPanel(o,kids,pct,st)}</div>`});
@@ -1111,9 +1113,9 @@ function _okrProgressPanel(o,kids,pct,st){
   }).join('')||`<div style="padding:12px 0;color:var(--c-text-3);font-size:12.5px;border-top:1px solid var(--c-border)">No updates yet${canCk?' — add the first one.':'.'}</div>`;
   // children breakdown (roll-up view)
   const kidRows=kids.length?`<div style="margin-top:12px">
-      <div style="${lab};margin-bottom:6px">${o.rollup?('Sub-objectives — feeding this objective ('+esc(_okrModeLabel(o.rollupMode))+')'):o.isAnnual?'Quarterly objectives feed this annual — other sub-objectives track their own progress':'Sub-objectives (each tracks its own progress)'}</div>
+      <div style="${lab};margin-bottom:6px">${o.rollup?('Sub-objectives — feeding this objective ('+esc(_okrModeLabel(o.rollupMode))+')'):o.isAnnual?'Quarterly objectives — feeding this annual (other sub-objectives have their own panels)':'Sub-objectives (each tracks its own progress)'}</div>
       ${kids.map(k=>{const kp=okrProgress(k),ks=okrStatusOf(k);return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0">
-        ${_okrLvlChip(okrLevel(k))}
+        ${_okrLvlChip(okrLevel(k))}${k.quarterLabel?_okrQtrChip(k.quarterLabel):''}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
         <div style="width:90px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${kp===null?0:Math.max(0,Math.min(100,kp))}%;background:${_okrBarColor(ks)}"></div></div>
         <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+' / '+esc(_okrFmtVal(k,k.targetValue))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
@@ -1305,8 +1307,15 @@ App._renderOKREdit=()=>{
       </div>
       ${o.metricType!=='yesno'?`<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label style="${L}">Start value</label><input type="number" step="any" value="${o.startValue!==null&&o.startValue!==undefined?o.startValue:''}" oninput="_OKRED.startValue=this.value===''?0:parseFloat(this.value)" placeholder="0" class="ui-input rf"/></div>
-        <div><label style="${L}">Target value *</label><input type="number" step="any" value="${o.targetValue!==null&&o.targetValue!==undefined?o.targetValue:''}" oninput="_OKRED.targetValue=this.value===''?null:parseFloat(this.value)" placeholder="e.g. 100" class="ui-input rf"/></div>
+        <div><label style="${L}">${okrHasRevision(o)?'Original target *':'Target value *'}</label><input type="number" step="any" value="${o.targetValue!==null&&o.targetValue!==undefined?o.targetValue:''}" oninput="_OKRED.targetValue=this.value===''?null:parseFloat(this.value)" placeholder="e.g. 100" class="ui-input rf"/></div>
       </div>
+      ${okrHasRevision(o)?`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:11px;padding:10px 12px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">
+          <div><label style="${L};color:#92400E">Revised target (drives progress)</label><input type="number" step="any" value="${o.revisedTarget!==null&&o.revisedTarget!==undefined?o.revisedTarget:''}" oninput="_OKRED.revisedTarget=this.value===''?null:parseFloat(this.value)" class="ui-input rf" style="border-color:#FDE68A"/></div>
+          <div style="font-size:11px;color:#92400E;line-height:1.5;padding-bottom:4px">Revised ${o.revisedAt?esc(fmtS(String(o.revisedAt).slice(0,10))):''}${o.revisedBy&&uById(o.revisedBy)?' by '+esc(fullName(uById(o.revisedBy))):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''}</div>
+        </div>
+        <div style="font-size:11px;color:#B45309;margin-top:6px">This number is what progress is measured against; the original stays for comparison. Clear it (or set it back to the original) to remove the revision.</div>
+      </div>`:''}
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
         <div><label style="${L}">${o.metricType==='currency'?'Currency':'Unit'} ${o.metricType==='percent'?'(auto: %)':''}</label><input type="text" value="${esc(o.unit||'')}" oninput="_OKRED.unit=this.value" placeholder="${o.metricType==='currency'?'e.g. AED / $':'e.g. orders, hrs'}" class="ui-input rf" ${o.metricType==='percent'?'disabled':''}/></div>
         <div><label style="${L}">Better when</label><select class="ui-select rf" onchange="_OKRED.direction=this.value"><option value="up" ${o.direction!=='down'?'selected':''}>Higher is better</option><option value="down" ${o.direction==='down'?'selected':''}>Lower is better</option></select></div>
@@ -1406,6 +1415,18 @@ App._okrSave=()=>{
       changes.push({field:label,from:from,to:to});
     }});
     if(JSON.stringify(prev.frequency||{})!==JSON.stringify(o.frequency||{}))changes.push({field:'Frequency',from:_okrFreqLabel(prev),to:_okrFreqLabel(o)});
+    // Revised target edited inline in this form: keep the revision coherent —
+    // clearing it or setting it back to the original REMOVES the revision.
+    if(String(prev.revisedTarget??'')!==String(o.revisedTarget??'')){
+      const orig=(o.targetValue===null||o.targetValue===undefined)?null:Number(o.targetValue);
+      if(o.revisedTarget===null||o.revisedTarget===undefined||(orig!==null&&Number(o.revisedTarget)===orig)){
+        changes.push({field:'Revised target',from:prev.revisedTarget,to:'(removed — back to original '+(orig??'—')+')'});
+        o.revisedTarget=null;o.revisedNote='';o.revisedAt=null;o.revisedBy=null;
+      }else{
+        changes.push({field:'Revised target',from:(prev.revisedTarget===null||prev.revisedTarget===undefined)?'(none)':prev.revisedTarget,to:o.revisedTarget});
+        o.revisedAt=new Date().toISOString();o.revisedBy=S.uid;
+      }
+    }
     DB.okrs[idx]=o;
     if(changes.length)okrLog(o.id,'Edited objective',{changes:changes});
     /* ── Annual ⇄ quarterly sync ──
