@@ -1,8 +1,9 @@
 # Bridge (v3.8)
 
-## v3.8.2 — Compact OKR cards
+## v3.8.2 — Compact, cleaner OKR cards
 
-- Each objective card is now ~⅓ of its old height: one header line (chips · title · owner/schedule/period meta inline, wrapping only when needed), the big full-width progress bar replaced by a **small inline meter** next to the % and status, and a tighter action strip (smaller Update / panel buttons and icons). Summary cards on top slimmed too. Nothing functional changed — same buttons, same panels, same data.
+- Each objective card is now one slim line: chips · title · **owner as initials only** (full name on hover) · department · period · sub-count. The check-in schedule text left the card (it lives in Rules & Target), "Cur X · Tgt Y" became plain **`4.6% / 8%`**, and the big full-width progress bar is a **small inline meter** next to the % and status.
+- **Rules & Target / Progress & Updates** buttons shrunk; the per-card **Update button was removed** — updates are added from the Progress & Updates popup (its "Add update" button). Summary cards slimmed too. Nothing functional changed.
 
 ## v3.8.1 — OKR list: fixed ordering + chip alignment
 

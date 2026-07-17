@@ -882,10 +882,10 @@ function _okrNodeHTML(o,depth){
   const canEdit=_okrCanEditNode(o),canCk=_okrCanCheckin(o),canCreate=_okrCanCreate();
   const icBtn='width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0';
   const meta='font-size:10px;color:var(--c-text-2);display:inline-flex;align-items:center;gap:3px';
-  const pTab=(which,label,icon)=>`<button onclick="App._okrTogPanel('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;min-height:22px;border:1px solid ${panel===which?'var(--c-text)':'var(--c-border)'};background:${panel===which?'var(--c-ink)':'var(--c-surface)'};color:${panel===which?'#fff':'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">${ic(icon,'w-3 h-3')}${label}<span style="font-size:8px;transform:${panel===which?'rotate(180deg)':'none'};display:inline-block">▼</span></button>`;
-  /* Compact card: ONE header line (chips · title · meta), the progress bar is a small inline
-     meter next to the % — no full-width bar row — and one tight action strip below. */
-  const curTgt=o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`Cur ${_okrFmtVal(o,_okrOwnCur(o))} · Tgt ${okrHasRevision(o)?`<s style="opacity:.55">${_okrFmtVal(o,o.targetValue)}</s> ${_okrFmtVal(o,o.revisedTarget)}`:_okrFmtVal(o,o.targetValue)}`;
+  const pTab=(which,label,icon)=>`<button onclick="App._okrTogPanel('${o.id}','${which}')" style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;min-height:20px;border:1px solid ${panel===which?'var(--c-text)':'var(--c-border)'};background:${panel===which?'var(--c-ink)':'var(--c-surface)'};color:${panel===which?'#fff':'var(--c-text-2)'};font-size:10px;font-weight:700;cursor:pointer">${ic(icon,'w-3 h-3')}${label}<span style="font-size:7px;transform:${panel===which?'rotate(180deg)':'none'};display:inline-block">▼</span></button>`;
+  /* Compact card: ONE header line (chips · title · slim meta), plain "current / target" numbers,
+     a small inline meter next to the % — no full-width bar row — and one tight action strip. */
+  const curTgt=o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,_okrOwnCur(o))} / ${okrHasRevision(o)?`<s style="opacity:.55">${_okrFmtVal(o,o.targetValue)}</s> ${_okrFmtVal(o,o.revisedTarget)}`:_okrFmtVal(o,o.targetValue)}`;
   const card=`<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:10px;margin-bottom:4px;${depth?'margin-left:'+Math.min(depth,5)*14+'px;':''}overflow:hidden">
     <div style="padding:6px 10px 5px">
       <div style="display:flex;align-items:flex-start;gap:8px;flex-wrap:wrap;row-gap:3px">
@@ -893,9 +893,8 @@ function _okrNodeHTML(o,depth){
         <div style="flex:1;min-width:180px">
           <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;min-width:0;row-gap:2px">
             ${_okrLvlChip(lvl)}${o.quarterLabel?_okrQtrChip(o.quarterLabel):''}${o.isAnnual?_okrAnnualChip():''}<span class="fd" style="font-size:12.5px;font-weight:800;color:var(--c-text);line-height:1.3;min-width:0">${esc(o.title||'Untitled')}</span>
-            ${owner?`<span style="${meta}">${avatar(owner,'w-4 h-4','text-[8px]')}${esc(fullName(owner))}</span>`:''}
+            ${owner?`<span title="Owner: ${esc(fullName(owner))}" style="flex-shrink:0;display:inline-flex;cursor:default">${avatar(owner,'w-4 h-4','text-[8px]')}</span>`:''}
             ${dept?`<span style="${meta}">${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
-            <span style="${meta}">${ic('clock','w-3 h-3')}${esc(_okrFreqLabel(o))}</span>
             ${o.periodStart||o.periodEnd?`<span style="${meta}">${ic('doc','w-3 h-3')}${fmtS(o.periodStart)} → ${fmtS(o.periodEnd)}</span>`:''}
             ${kids.length?`<span style="${meta}">${ic('tree','w-3 h-3')}${kids.length} sub</span>`:''}
             ${okrHasRevision(o)?`<span style="${meta};color:#B45309;font-weight:800" title="Target was revised — original kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
@@ -910,9 +909,8 @@ function _okrNodeHTML(o,depth){
       </div>
       <div style="display:flex;align-items:center;gap:5px;margin-top:4px;flex-wrap:wrap">
         ${pTab('rules','Rules & Target','cog')}
-        <button onclick="App._okrProgressModal('${o.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:7px;min-height:22px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:11px;font-weight:700;cursor:pointer">${ic('chart','w-3 h-3')}Progress & Updates</button>
+        <button onclick="App._okrProgressModal('${o.id}')" style="display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:6px;min-height:20px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-2);font-size:10px;font-weight:700;cursor:pointer">${ic('chart','w-3 h-3')}Progress & Updates</button>
         <span style="flex:1"></span>
-        ${canCk&&!kids.length?btn('Update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'ghost',size:'sm',icon:'edit',attrs:'style="min-height:22px;padding:2px 9px;font-size:11px;border-radius:7px"'}):''}
         ${canCreate?`<button onclick="App._okrEdit(null,'${o.id}')" title="Add sub-objective (L${lvl+1})" style="${icBtn}">${ic('plus','w-4 h-4')}</button>`:''}
         ${canEdit?`<button onclick="App._okrMove('${o.id}')" title="Move to another parent or level — sub-objectives move with it" style="${icBtn}">${ic('move','w-3.5 h-3.5')}</button>`:''}
         ${canEdit&&o.metricType!=='yesno'?`<button onclick="App._okrRevise('${o.id}')" title="Revise targets — the original stays for comparison" style="${icBtn}">${ic('refresh','w-3.5 h-3.5')}</button>`:''}${canEdit?`<button onclick="App._okrEdit('${o.id}')" title="Edit" style="${icBtn}">${ic('edit','w-3.5 h-3.5')}</button><button onclick="App._okrDelete('${o.id}')" title="Delete" style="${icBtn}">${ic('trash','w-3.5 h-3.5')}</button>`:''}
