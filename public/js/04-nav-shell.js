@@ -17,12 +17,13 @@ const _isMgrRole=()=>{const r=(typeof _roleOf==='function')?_roleOf(me()):null;r
 const NAV_ALL=[
   ['hub:dash','grid','Dashboard',()=>!!_hubHome('dash')],
   ['mychecklists','check','My Checklists',()=>true],
+  ['okr','flag','OKRs',()=>can('okr','view')],
+  ['crm','msg','CRM',()=>can('crm','view')],
   ['hub:inbox','bell','Inbox',()=>true],
 
   ['hub:cl','list','Checklists',()=>!!_hubHome('cl')],
   ['questions','help','Questions',()=>can('questions','view')],
   ['tickets','ticket','Tickets',()=>can('tickets','view')],
-  ['crm','msg','CRM',()=>can('crm','view')],
 
   ['hub:people','users','People',()=>!!_hubHome('people')],
 
@@ -34,8 +35,7 @@ const HUB_DEF={
     ['notifications','Alerts',()=>true],
     ['approvals','Approvals',()=>can('approvals','view')]]},
   dash:{label:'Dashboard',tabs:[
-    ['dashboard','Overview',()=>can('analytics','view')],
-    ['okr','OKRs',()=>can('okr','view')]]},
+    ['dashboard','Overview',()=>can('analytics','view')]]},
   cl:{label:'Checklists',tabs:[
     ['checklists','Builder',()=>can('checklists','create')],
     ['allcl','All results',()=>can('allChecklists','view')||can('teamview','view')],
@@ -59,9 +59,9 @@ function _hubStrip(k){
     return `<button onclick="App.go('${r}')" style="flex-shrink:0;padding:8px 15px;border-radius:10px;border:none;background:${on?'var(--c-surface)':'transparent'};box-shadow:${on?'0 1px 3px rgba(21,23,28,.1)':'none'};color:${on?'var(--c-text)':'var(--c-text-2)'};font-size:13px;font-weight:${on?'800':'600'};cursor:pointer;transition:background .15s,color .15s;white-space:nowrap">${l}${(r==='notifications'||r==='approvals')?_navBadgeFor(r):''}</button>`;}).join('')}</div>`;
 }
 const navFor=()=>NAV_ALL.filter(n=>{try{return !!n[3]();}catch(e){return false;}}).map(n=>[n[0],n[1],n[2]]);
-const NAV_DAILY=['hub:dash','mychecklists','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
+const NAV_DAILY=['hub:dash','mychecklists','okr','crm','hub:inbox']; // keep the daily strip tiny — everything else lives in named sections
 const NAV_SECTION_OF={
-  'hub:cl':'Work',questions:'Work',tickets:'Work',crm:'Work',
+  'hub:cl':'Work',questions:'Work',tickets:'Work',
   'hub:people':'People',
   'hub:admin':'Manage',
 };
@@ -163,7 +163,7 @@ function shell(content){
   }).join('');
 
   return`<div style="min-height:100vh;display:flex">
-  <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="${S.route==='crm'?'display:none !important;':''}background:linear-gradient(177deg,#1C212B 0%,#14171E 100%);color:#fff;border-right:1px solid rgba(255,255,255,.05)">
+  <aside class="sidebar hidden md:flex flex-col w-56 fixed inset-y-0 left-0 z-30 overflow-y-auto" style="${S.route==='crm'?'display:none !important;':''}background:#1A140D;background-image:linear-gradient(177deg,#221B12 0%,#15100A 100%);color:#fff;border-right:1px solid rgba(255,255,255,.05)">
     <button onclick="App.go('dashboard')" style="padding:14px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid rgba(255,255,255,.06);background:transparent;border-left:none;border-right:none;border-top:none;cursor:pointer;width:100%;text-align:left" onmouseover="this.style.background='rgba(255,255,255,.05)'" onmouseout="this.style.background='transparent'">
       <div class="nav-brand">B</div>
       <span class="fd" style="font-weight:800;font-size:18px;letter-spacing:-.5px;color:#fff">Bridge</span>
@@ -184,7 +184,7 @@ function shell(content){
     </div>
   </aside>
   <div class="flex flex-col" style="flex:1;min-width:0;margin-left:0" id="main-wrap">
-    <header class="topbar sticky top-0 z-20" style="${S.route==='crm'?'display:none !important;':''}background:rgba(247,248,250,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--c-border)">
+    <header class="topbar sticky top-0 z-20" style="${S.route==='crm'?'display:none !important;':''}background:rgba(250,246,239,.82);backdrop-filter:saturate(180%) blur(20px);-webkit-backdrop-filter:saturate(180%) blur(20px);border-bottom:1px solid var(--c-border)">
       <div style="height:56px;padding:0 18px;display:flex;align-items:center;gap:10px">
         <button onclick="App.moreMenu()" class="md:hidden" aria-label="Open menu" style="${S.route==='crm'?'display:grid !important;':''}width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--c-text);display:grid;place-items:center;cursor:pointer">${ic('menu','w-5 h-5')}</button>
         <div class="md:hidden flex items-center gap-2">
