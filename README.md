@@ -1,3 +1,37 @@
+# Bridge (v3.10)
+
+## v3.10.2 — Theme polish + compact CRM chat
+
+- **Refined palette** (replaces v3.10.1's copper, which read muddy): interactive accent is now a **deep gold `#8B6B41`** (AA contrast with white text) with hover `#6F5430`, decorative gold stays brand `#D1B68F`, soft fills calmed to `#F5EEE1`, canvas/sidebars to warm porcelain `#F5F3EF`, ink stays Carbon `#13171B`. Same theme on every page — one sweep across all tokens, tailwind config and inline styles.
+- **Buttons back to normal case** (the all-caps CTA experiment is gone); success chips (On Time / Submitted / Active / Approved / Resolved) are properly **green** again instead of champagne, and the default "Resolved" ticket status is green too.
+- **CRM chat is compact**: message gap cut from ~20px to 7px, slimmer bubbles (7×11px padding, 13px text), smaller avatars (26px), tighter chat header, composer and conversation list rows.
+- **Column delete validation**: a board column that still holds values on any ticket can no longer be deleted — the delete is blocked with a message showing how many tickets still use it; clear the values first. Empty columns delete as before (with confirmation).
+- **Add members by group**: the Board members and Channel members dialogs now have an "Add a whole group" section — one tap adds every (active) member of a people-group who isn't already in; the button shows how many it will add.
+- **Column reorder rebuilt**: drag the ⠿ grip in a column header (the header itself is no longer draggable, so clicking the name to edit and resizing no longer fight the drag). While dragging, a gold insertion bar shows exactly where the column will land — left half of a header inserts before it, right half after — and the dragged column dims. (v=55)
+- **Conversations compact everywhere** (chats, tickets, thread panels): consecutive messages from the same person within 5 minutes now **group** — one name header, bubbles 2px apart (9px between speakers). Sender name and time share one line (full date on bubble hover), the separate timestamp row is gone, avatars are 24px, bubbles 6×10px, and the thread side-panel slimmed to 320px with a tighter reply box. A back-and-forth that took a screen now fits in a third of it. (v=56)
+- Cache-busting bumped to `?v=54`.
+
+## v3.10.1 — BloomingBox brand theme (BB Brand Guidelines 2023)
+
+The whole UI now follows the BloomingBox brand guidelines:
+
+- **Palette** (was coral/salmon): primary accent is now **Copper `#936659`** with **Gold `#D1B68F`** for light accents/borders, **Champagne `#FFEAD7`** for soft fills, **Leather Brown `#54433C`** for accent text, ink is **Carbon Black `#13171B`**, and the app canvas/sidebars use a **Sand Beige** tint (`#F1ECE4`, borders `#D8CCC0`). Mapped everywhere — tailwind config, CSS tokens (`--c-brand`, `--grad-brand`, focus rings) and every inline style across all pages (CRM, checklists, OKRs, dashboards, settings…).
+- **Typography**: Poppins everywhere (the brand's digital primary — already loaded). Primary/brand CTAs now use the brand's button style: **uppercase + wide letter-spacing** (like the guidelines' ADD TO CART). Display headings get subtle tracking.
+- **Login screen** rebuilt in brand style: Carbon Black panel, letterspaced `B R I D G E · BY BLOOMINGBOX` wordmark, gold rule + gold/nude glows.
+- Cache-busting bumped to `?v=53`.
+
+## v3.10 — CRM: Assignee column, chat fix, renaming, scoped people, resizable columns, People groups
+
+- **Assignee in the table.** Every ticket board's table now shows the built-in **Assignee** column right after the Ticket column — an inline dropdown (gated by CRM → Assign), listing only people on that board/channel. No more creating a custom "Assigned" people column to see it.
+- **Ticket chat fixed: scrolling + composer.** Opening a ticket from a table board rendered the message pane without a height constraint, so long threads pushed the message box below the fold with no scrollbar (the chat pane was missing `min-height:0`). The thread now scrolls and the composer (textarea + send, @mentions, image attach) is always visible.
+- **Rename everything** (new CRM → **Rename** permission): the sidebar's "Hubs" title is now a workspace label — click it to rename (e.g. "Workspaces", "Cities"); hubs, channels and boards each get a pencil to rename them, synced for everyone.
+- **People pickers are scoped to the board.** Person-type columns, the details-panel Assignee, the chat Assign button and every automation picker (assign to…, notify…, person-column values) now list **only members of that board or its channel** — not the whole company. Existing values from non-members still display.
+- **Tagging is scoped too.** @mention suggestions and who actually gets notified are limited to people assigned to that channel/board (chat boards and ticket boards alike). `@all` notifies board+channel members only.
+- **Resizable columns.** Drag the edge of any table header (Ticket, Assignee, custom columns) to resize. Widths are **shared per board** (stored in `board.settings.colWidths`, no schema change) and only people with CRM → Edit can resize.
+- **People groups** (new CRM → **People groups** permission): a Groups section at the bottom of the CRM sidebar. Create a group once (e.g. *Night Shift*) and use it everywhere: tag the whole group with `@NightShift` in any conversation, tick it in automation "notify" actions, in per-board notification rules and in global CRM defaults — in-app + email fan out to every member. Group tags only notify members who can see that board. Stored in `workspace_settings.crm_settings` — no schema change.
+- **Permissions:** the CRM area gains **Rename** and **People groups** toggles (Access Control → role → CRM). Built-in roles re-seeded (v12): Super Admin / Administrator / Team Lead-Manager get both; Basic Employee gets neither. Custom roles keep their toggles — flip the two new ones on per role as needed.
+- Cache-busting bumped to `?v=52`.
+
 # Bridge (v3.9)
 
 ## v3.9.2 — Progress panel shows only the feeders · revised target visible in the editor
