@@ -64,16 +64,16 @@ App._howModal=()=>{
 function _howBar(key){
   const h=HOW[key];if(!h)return'';
   try{if(localStorage.getItem('bridge_how_'+key))return'';}catch(e){}
-  return `<div style="display:flex;gap:10px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:12px;padding:10px 14px;margin-bottom:14px">
+  return `<div style="display:flex;gap:10px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BCD9FB;border-radius:12px;padding:10px 14px;margin-bottom:14px">
     <span style="flex-shrink:0;margin-top:1px">${ic('help','w-4 h-4')}</span>
     <div style="flex:1;min-width:0">
-      <div style="font-size:12.5px;color:#1E40AF;line-height:1.55">${h.t}</div>
+      <div style="font-size:12.5px;color:#14509E;line-height:1.55">${h.t}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
-        <span style="font-size:10px;font-weight:800;color:#1E40AF;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
-        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BFDBFE;background:var(--c-surface);color:#1E40AF;cursor:pointer">${x[1]} →</button>`).join('')}
+        <span style="font-size:10px;font-weight:800;color:#14509E;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
+        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BCD9FB;background:var(--c-surface);color:#14509E;cursor:pointer">${x[1]} →</button>`).join('')}
       </div>
     </div>
-    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" style="border:none;background:transparent;color:#1E40AF;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
+    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" style="border:none;background:transparent;color:#14509E;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
   </div>`;
 }
 /* dismissNote(key,html,opts) — an informational note the user can dismiss with × ("got it,
@@ -82,13 +82,13 @@ function _howBar(key){
 function dismissNote(key,html,opts={}){
   try{if(localStorage.getItem('bridge_note_'+key))return'';}catch(e){}
   const after=opts.onDismiss||'rr()';
-  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:10px;padding:8px 12px;font-size:12px;color:#1E40AF;${opts.style||''}">
+  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BCD9FB;border-radius:10px;padding:8px 12px;font-size:12px;color:#14509E;${opts.style||''}">
     ${opts.icon?`<span style="flex-shrink:0;margin-top:1px">${ic(opts.icon,'w-3.5 h-3.5')}</span>`:''}
     <div style="flex:1;min-width:0;line-height:1.5">${html}</div>
-    <button type="button" onclick="event.stopPropagation();try{localStorage.setItem('bridge_note_${key}','1')}catch(e){};${after}" title="Got it — don't show this again" aria-label="Dismiss" style="flex-shrink:0;width:18px;height:18px;border:none;background:transparent;color:#1E40AF;cursor:pointer;font-size:14px;line-height:1;padding:0;display:grid;place-items:center">×</button>
+    <button type="button" onclick="event.stopPropagation();try{localStorage.setItem('bridge_note_${key}','1')}catch(e){};${after}" title="Got it — don't show this again" aria-label="Dismiss" style="flex-shrink:0;width:18px;height:18px;border:none;background:transparent;color:#14509E;cursor:pointer;font-size:14px;line-height:1;padding:0;display:grid;place-items:center">×</button>
   </div>`;
 }
-function _aChartTheme(){return {tick:'#9C9184',grid:'rgba(138,147,163,0.18)'};}
+function _aChartTheme(){return {tick:'#5F777E',grid:'rgba(144,165,171,0.18)'};}
 App._searchRR=(inputId)=>{const a=document.activeElement;const ss=a?a.selectionStart:null,se=a?a.selectionEnd:null;rr();const el=document.getElementById(inputId);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,se);}catch(e){}}};
 
 /* shims for ported shell (index approvals model; announcements not included) */
@@ -148,7 +148,7 @@ const PERM_AREAS=[
   {key:'allChecklists',label:'All Checklists',desc:'Browse every checklist across the company',actions:['view','export'],scoped:false,group:'Tasks & Tickets'},
   {key:'questions',label:'Questions',desc:'The questions feature',actions:['view','create','edit','manage','delete','import','export'],scoped:false,group:'Tasks & Tickets'},
   {key:'tickets',label:'Tickets',desc:'Issue tickets',actions:['view','create','edit','assign','comment','resolve','reopen','close','manage','delete','export'],scoped:true,group:'Tasks & Tickets'},
-  {key:'crm',label:'CRM',desc:'CRM inbox — hubs, boards, chats & tickets. “Rename” covers hubs/boards + the sidebar title; “People groups” manages the reusable @taggable groups; “Filtered views” lets them create member-scoped filtered views on a board',actions:['view','create','edit','convert','assign','rename','groups','views','delete','manage'],scoped:false,group:'Tasks & Tickets'},
+  {key:'crm',label:'Workspace',desc:'Workspace inbox — hubs, boards, chats & tickets. “Rename” covers hubs/boards + the sidebar title; “People groups” manages the reusable @taggable groups; “Filtered views” lets them create member-scoped filtered views on a board',actions:['view','create','edit','convert','assign','rename','groups','views','delete','manage'],scoped:false,group:'Tasks & Tickets'},
   {key:'documentsOrg',label:'Documents (organization)',desc:'Shared dept/location files',actions:['view','create','edit','delete','upload','download','approve'],scoped:true,group:'Content'},
   {key:'documentsPersonal',label:'Personal documents',desc:'Files on a person\'s profile',actions:['view','create','edit','delete','upload','download'],scoped:true,group:'Content'},
   {key:'analytics',label:'Analytics',desc:'Operational analytics dashboard (checklists, compliance, tickets)',actions:['view','export'],scoped:false,group:'Insights'},
@@ -368,7 +368,7 @@ function chipBar(items,activeKey,fnName,opts={}){
   }).join('');
   return pill?`<div style="display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch">${inner}</div>`:`<div class="ui-tabs">${inner}</div>`;
 }
-const COUNT_TONE={danger:'#EF4444',approve:'#F97316',rose:'#E11D48',brand:'#8B6B41'};
+const COUNT_TONE={danger:'#EF4444',approve:'#FF7F11',rose:'#DE2440',brand:'#FF7F11'};
 const countBadge=(n,tone='danger',extra='')=>!n?'':`<span class="ui-count" style="background:${COUNT_TONE[tone]||tone};${extra}">${n}</span>`;
 /* badge(text,tone) — generic soft pill */
 
@@ -445,6 +445,10 @@ function okrIsLimit(o){
   return t!==null&&t!==undefined&&isFinite(t)&&t>Number(o.startValue||0);
 }
 function okrDirLabel(o){return okrDirDown(o)?'Lower is better':'Higher is better';}
+/* On lower-is-better objectives the target is a CEILING, so it renders as "\u226450" not "50".
+   Use this wherever a TARGET is shown; never for current/start/check-in values. */
+function _okrFmtTarget(o,v){const t=_okrFmtVal(o,v);return(okrDirDown(o)&&t!=='\u2014')?('\u2264'+t):t;}
+function _okrTargetWord(o){return okrDirDown(o)?'limit':'target';}
 function _okrPctVs(o,t){
   const v0=okrCurrentOf(o);if(v0===null||v0===undefined)return null;
   if(o.metricType==='yesno')return Number(v0)>=1?100:0;
@@ -517,7 +521,7 @@ function okrStatusOf(o){
   if(exp===null)return pct>=50?'On track':'Off track';
   return pct>=exp-15?'On track':'Off track';
 }
-const OKR_ST_META={'Achieved':{bg:'#EBDFC9',fg:'#065F46',dot:'#9C7A4D'},'On track':{bg:'#F5EEE1',fg:'#6F5430',dot:'#22C55E'},'Off track':{bg:'#FFF1F2',fg:'#BE123C',dot:'#EF4444'},'Not achieved':{bg:'#FEF2F2',fg:'#991B1B',dot:'#B91C1C'},'No data':{bg:'#F6F7F8',fg:'#6B7280',dot:'#9CA3AF'},'Closed':{bg:'#E5E7EB',fg:'#374151',dot:'#6B7280'}};
+const OKR_ST_META={'Achieved':{bg:'#FFE0C7',fg:'#0B5F37',dot:'#FF8F33'},'On track':{bg:'#FFF1E4',fg:'#C25A00',dot:'#22C55E'},'Off track':{bg:'#FEEEEF',fg:'#C41E32',dot:'#EF4444'},'Not achieved':{bg:'#FEF0F0',fg:'#991B1B',dot:'#B91C1C'},'No data':{bg:'#F4F9FA',fg:'#5E767D',dot:'#90A5AB'},'Closed':{bg:'#DFEAEC',fg:'#2F4C55',dot:'#5E767D'}};
 function okrStatusChip(st,sm){const m=OKR_ST_META[st]||OKR_ST_META['No data'];return`<span style="display:inline-flex;align-items:center;gap:5px;padding:${sm?'2px 8px':'3px 10px'};border-radius:20px;font-size:${sm?'10.5':'11.5'}px;font-weight:800;background:${m.bg};color:${m.fg};white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:${m.dot};flex-shrink:0"></span>${esc(st)}</span>`;}
 function _okrBarColor(st){return(OKR_ST_META[st]||OKR_ST_META['No data']).dot;}
 /* Abbreviate big values: 1000 → 1k · 10000 → 10k · 1000000 → 1M (2 decimals max: 1.25M) */
@@ -583,10 +587,17 @@ function okrCheckinForDate(okrId,date){const cs=(DB.okrCheckins||[]).filter(c=>c
      1) OWNERSHIP FLOOR — you always see objectives you own or created (you must update them).
      2) SUBTREE RULE — everything below a visible node is visible ("their level and below"). */
 function okrVisible(){
-  const all=DB.okrs||[];
+  /* _shadow rows are numeric stand-ins for objectives RLS hides from this user.
+     They feed roll-up math only and must never appear in any list. */
+  const all=(DB.okrs||[]).filter(o=>!o._shadow);
   if(!S.uid||!can('okr','view'))return[];
   const sc=scopeOf('okr');
   if(sc==='everyone')return all;
+  // 'none' means none. Previously it fell through and behaved like 'self'.
+  if(sc==='none')return[];
+  // 'self' means STRICTLY the objectives they own or co-own: no sub-objective
+  // expansion, and creating an OKR for someone else does not grant sight of it.
+  if(sc==='self')return all.filter(o=>okrOwnerIs(o,S.uid));
   const mine=new Set();
   // 1) ownership floor
   all.forEach(o=>{if(okrOwnerIs(o,S.uid)||o.createdBy===S.uid)mine.add(o.id);});
@@ -606,16 +617,30 @@ function okrVisible(){
   [...mine].forEach(id=>okrDescendants(id).forEach(d=>mine.add(d.id)));
   return all.filter(o=>mine.has(o.id));
 }
+/* Single source of truth for "may this user lay eyes on this objective at all".
+   Used to guard the detail, edit, move, revise and check-in paths — the list was
+   already filtered, but those entry points are reachable directly by id. */
+function okrCanSee(o){
+  if(!o||o._shadow)return false;
+  if(!S.uid||!can('okr','view'))return false;
+  const sc=scopeOf('okr');
+  if(sc==='everyone')return true;
+  if(sc==='none')return false;
+  if(sc==='self')return okrOwnerIs(o,S.uid);
+  return okrVisible().some(v=>v.id===o.id);
+}
+/* Children of a node, narrowed to what this user is allowed to see. */
+function okrChildrenVisible(id){const vis=new Set(okrVisible().map(o=>o.id));return okrChildren(id).filter(c=>vis.has(c.id));}
 // Visible roots: a visible node whose parent is missing or not visible renders as top level.
 function okrVisibleRoots(){const vis=okrVisible();const ids=new Set(vis.map(o=>o.id));return vis.filter(o=>!o.parentId||!ids.has(o.parentId)).sort((a,b)=>((a.sort||0)-(b.sort||0))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
 /* ── Per-OKR activity trail + targeted Supabase writers ── */
 function okrLog(okrId,action,details){
   const entry={id:uid('okl'),okrId:okrId,actorId:S.uid,action:action,details:details||{},createdAt:new Date().toISOString()};
   DB.okrLogs=DB.okrLogs||[];DB.okrLogs.unshift(entry);
-  sb.from('okr_logs').insert({id:entry.id,okr_id:okrId,actor_id:entry.actorId,action:action,details:entry.details,created_at:entry.createdAt}).then(()=>{}).catch(()=>{});
+  sbWrite({table:'okr_logs',op:'insert',id:entry.id,values:{id:entry.id,okr_id:okrId,actor_id:entry.actorId,action:action,details:entry.details,created_at:entry.createdAt}},{label:'OKR activity',silent:true});
 }
-function _okrPush(o){sb.from('okrs').upsert(_okrRow(o),{onConflict:'id'}).then(({error})=>{if(error)_syncErr('OKR')(error);}).catch(_syncErr('OKR'));}
-function _okrPushCheckin(c){sb.from('okr_checkins').upsert(_okrCheckinRow(c),{onConflict:'id'}).then(({error})=>{if(error)_syncErr('OKR update')(error);}).catch(_syncErr('OKR update'));}
+function _okrPush(o){return sbWrite({table:'okrs',op:'upsert',id:o.id,values:_okrRow(o),opts:{onConflict:'id'}},{label:'OKR'});}
+function _okrPushCheckin(c){return sbWrite({table:'okr_checkins',op:'upsert',id:c.id,values:_okrCheckinRow(c),opts:{onConflict:'id'}},{label:'OKR update'});}
 /* ── v3.11: OKR notifications — one helper for every OKR event.
    In-app: gated by Settings → In-App → OKRs toggles (inapp_<evKey>).
    Email:  sendEmail() itself applies the Settings → Email toggles (email_<evKey>),
@@ -655,6 +680,8 @@ let _OKRSEL=new Set(),_OKRBULK=null,_OKR_SHOWN=[];
 /* Everything the current view/filters are showing that this user is allowed to change —
    what "Select all" ticks and what the selection counter measures itself against. */
 function _okrSelectable(){return _OKR_SHOWN.map(okrById).filter(Boolean).filter(_okrCanEditNode);}
+/* Anything on screen the user may see — the export needs no edit rights. */
+function _okrSelectableView(){return _OKR_SHOWN.map(okrById).filter(Boolean).filter(okrCanSee);}
 App._okrTogSel=(id)=>{if(_OKRSEL.has(id))_OKRSEL.delete(id);else _OKRSEL.add(id);rr();};
 App._okrSelAll=()=>{const all=_okrSelectable();const every=all.length&&all.every(o=>_OKRSEL.has(o.id));if(every)all.forEach(o=>_OKRSEL.delete(o.id));else all.forEach(o=>_OKRSEL.add(o.id));rr();};
 App._okrSelClear=()=>{_OKRSEL=new Set();rr();};
@@ -676,15 +703,24 @@ function _okrQParent(qn){
   }
   return null;
 }
-const _OKR_LVL_C=['#221B12','#0EA5E9','#8B6B41','#8B5CF6','#F59E0B','#EC4899'];
+const _OKR_LVL_T=['#0F3038','#0C74A2','#BF5100','#7C3AED','#8A5F00','#DB2777'];      /* the same hues as TEXT on white, AA-safe */
 function _okrCanManage(){return can('okr','manage');}
 function _okrCanCreate(){return can('okr','create')||_okrCanManage();}
 function _okrCanEditNode(o){return can('okr','edit')||_okrCanManage()||o.createdBy===S.uid||okrOwnerIs(o,S.uid);} // any owner can edit
-function _okrCanCheckin(o){if(o&&(o.rollup||o.isAnnual||o.closed))return false;return okrOwnerIs(o,S.uid)||_okrCanEditNode(o);}
-function _okrLvlChip(lvl){const c=_OKR_LVL_C[lvl%_OKR_LVL_C.length];return`<span style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:4px 7px;border-radius:6px;background:${c};color:#fff;letter-spacing:.03em">L${lvl}</span>`;}
+function _okrCanCheckin(o){
+  if(o&&(o.rollup||o.isAnnual||o.closed))return false;
+  if(!okrCanSee(o))return false;
+  if(!can('okr','checkin')&&!_okrCanManage())return false;   // the 'checkin' permission was declared but never enforced
+  return okrOwnerIs(o,S.uid)||_okrCanEditNode(o);
+}
+/* Deleting is gated on the declared 'delete' permission, not merely on ownership. */
+function _okrCanDelete(o){return okrCanSee(o)&&_okrCanEditNode(o)&&(can('okr','delete')||_okrCanManage());}
+function _okrLvlChip(lvl){const c=_OKR_LVL_T[lvl%_OKR_LVL_T.length];return`<span style="flex-shrink:0;display:inline-flex;align-items:center;font-size:11.5px;font-weight:800;line-height:1;color:${c};letter-spacing:.02em">L${lvl}</span>`;}
 /* Annual / quarter tags shown next to the level chip — keeps the tree readable at a glance. */
-function _okrAnnualChip(){return`<span title="Annual objective — updates automatically from its quarterly objectives" style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;background:#EEF2FF;color:#4338CA;border:1px solid #C7D2FE;letter-spacing:.04em">ANNUAL</span>`;}
-function _okrQtrChip(label){return`<span title="Quarterly objective — feeds its annual objective" style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;background:#FEF3C7;color:#92400E;border:1px solid #FDE68A;letter-spacing:.04em">${esc(label)}</span>`;}
+function _okrAnnualChip(){return`<span title="Annual objective — updates automatically from its quarterly objectives" style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;background:#F0EDFE;color:#5B45D6;border:1px solid #CFC6FA;letter-spacing:.04em">ANNUAL</span>`;}
+/* Quarter tags removed from the rows — the Quarterly view already groups by quarter,
+   so repeating "Q1" on every line was noise. Kept as a no-op so call sites stay put. */
+function _okrQtrChip(label){return'';}
 I.move='<polyline points="5 9 2 12 5 15"/><polyline points="9 5 12 2 15 5"/><polyline points="15 19 12 22 9 19"/><polyline points="19 9 22 12 19 15"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="12" y1="2" x2="12" y2="22"/>';
 /* TZ-safe date helpers (toISOString shifts a day in +TZ — use local fields like todayISO does) */
 const _okrISO=d=>d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -705,7 +741,7 @@ function _okrMoveOptions(excl){
 }
 App._okrMove=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t move this OKR','err');
+  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t move this OKR','err');
   const root=okrRootOf(o);
   _OKRMV={id:id,targetId:o.parentId||'',deptId:o.departmentId||(root?root.departmentId:null)||'',subDeptId:o.subDepartmentId||''};
   App._renderOKRMove();
@@ -738,8 +774,8 @@ App._renderOKRMove=()=>{
         <div><label style="${L}">Department *</label><select class="ui-select rf" onchange="_OKRMV.deptId=this.value||'';_OKRMV.subDeptId='';App._renderOKRMove()"><option value="">— Select department —</option>${deptOpts.map(x=>`<option value="${esc(x[0])}" ${d.deptId===x[0]?'selected':''}>${esc(x[1])}</option>`).join('')}</select></div>
         <div><label style="${L}">Sub-department</label><select class="ui-select rf" ${subOpts.length?'':'disabled'} onchange="_OKRMV.subDeptId=this.value||''"><option value="">${subOpts.length?'— All / none —':'No sub-departments'}</option>${subOpts.map(s=>`<option value="${esc(s[0])}" ${d.subDeptId===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select></div>
       </div>`:''}
-      <div style="display:flex;gap:8px;align-items:center;background:${same?'var(--c-surface-2)':'var(--c-info-soft)'};border:1px solid ${same?'var(--c-border)':'#BFDBFE'};border-radius:10px;padding:9px 12px;font-size:12px;color:${same?'var(--c-text-3)':'#1E40AF'}">${ic('move','w-3.5 h-3.5')}${same?'No change yet — pick a different parent above.':`Will become <b>&nbsp;L${newLvl}&nbsp;</b>${target?' under “'+esc(target.title||'—')+'”':' at the top level'}${desc.length?' — sub-objectives shift level with it':''}.`}</div>
-      ${o.quarterLabel&&!same?`<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border-radius:9px;padding:8px 11px">This is a quarterly objective — moving it away from its annual objective stops it feeding that annual number.</div>`:''}
+      <div style="display:flex;gap:8px;align-items:center;background:${same?'var(--c-surface-2)':'var(--c-info-soft)'};border:1px solid ${same?'var(--c-border)':'#BCD9FB'};border-radius:10px;padding:9px 12px;font-size:12px;color:${same?'var(--c-text-3)':'#14509E'}">${ic('move','w-3.5 h-3.5')}${same?'No change yet — pick a different parent above.':`Will become <b>&nbsp;L${newLvl}&nbsp;</b>${target?' under “'+esc(target.title||'—')+'”':' at the top level'}${desc.length?' — sub-objectives shift level with it':''}.`}</div>
+      ${o.quarterLabel&&!same?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">This is a quarterly objective — moving it away from its annual objective stops it feeding that annual number.</div>`:''}
     </div>`,
     footer:btnG('Cancel','_OKRMV=null;App.closeModal()')+btnP('Move here','App._okrMoveSave()')});
 };
@@ -784,7 +820,7 @@ App._okrCloseAsk=(id)=>{
   modalShell({title:'Close objective',sub:o.title||'',size:'max-w-md',key:'okr-close',
     body:`<div style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:12.5px;color:var(--c-text-2);line-height:1.55">Closing freezes this objective — no more updates, check-ins or reminders. It stays in the list with its full history so the record is kept, and it can be reopened anytime.</div>
-      ${desc.length?`<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border-radius:9px;padding:8px 11px">Its ${desc.length} sub-objective${desc.length===1?'':'s'} stay open — close them separately if needed.</div>`:''}
+      ${desc.length?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">Its ${desc.length} sub-objective${desc.length===1?'':'s'} stay open — close them separately if needed.</div>`:''}
       <div><label class="ui-label">Reason for closing *</label>
       <textarea id="okr-close-reason" rows="2" class="ui-input rf" placeholder="e.g. Deprioritised after the H2 strategy review" style="resize:vertical"></textarea></div>
     </div>`,
@@ -814,14 +850,14 @@ App._okrReopen=(id)=>{
    Originals are never modified; entering the original value removes that revision. ── */
 App._okrRevise=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t revise this OKR','err');
+  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t revise this OKR','err');
   if(o.closed)return toast('This objective is closed — reopen it first','err');
   const rows=[o,...okrChildren(o.id)].filter(x=>x.metricType!=='yesno');
   if(!rows.length)return toast('Yes/No objectives can\'t be revised','err');
   const inp=(x)=>`<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-top:1px solid var(--c-border)">
       ${_okrLvlChip(okrLevel(x))}
       <div style="flex:1;min-width:0"><div style="font-size:12.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.title||'Untitled')}</div>
-      <div style="font-size:10.5px;color:var(--c-text-3)">Original ${esc(_okrFmtVal(x,x.targetValue))}${okrHasRevision(x)?' · currently revised to '+esc(_okrFmtVal(x,x.revisedTarget)):''}</div></div>
+      <div style="font-size:10.5px;color:var(--c-text-3)">Original ${esc(_okrFmtTarget(x,x.targetValue))}${okrHasRevision(x)?' · currently revised to '+esc(_okrFmtTarget(x,x.revisedTarget)):''}</div></div>
       <input type="number" step="any" data-rev-id="${x.id}" value="${okrHasRevision(x)?x.revisedTarget:(x.targetValue!==null&&x.targetValue!==undefined?x.targetValue:'')}" class="ui-input" style="width:128px;min-height:36px;padding:6px 9px;font-size:12.5px;flex-shrink:0"/>
     </div>`;
   modalShell({title:'Revise targets',sub:'Originals stay untouched — the same updates feed both, so you can compare growth.',size:'max-w-md',key:'okr-rev',
@@ -961,14 +997,15 @@ App._okrCkDelGo=(okrId,ckId)=>{
   const c=(DB.okrCheckins||[]).find(x=>x.id===ckId);if(!c)return;
   DB.okrCheckins=DB.okrCheckins.filter(x=>x.id!==ckId);
   okrLog(okrId,'Deleted check-in',{date:c.date,value:c.value});
-  sb.from('okr_checkins').delete().eq('id',ckId).then(({error})=>{if(error)_syncErr('OKR update delete')(error);}).catch(_syncErr('OKR update delete'));
+  sbWrite({table:'okr_checkins',op:'delete',id:ckId,match:{col:'id',val:ckId}},{label:'OKR update delete'});
   saveDB();toast('Update deleted');rr();_okrPMRefresh(okrId);
 };
 App._okrProgressModal=(id)=>{
   const o=okrById(id);if(!o)return;
+  if(!okrCanSee(o))return toast('You don\u2019t have access to that objective','err');
   // An annual's progress panel lists ONLY what feeds it — its quarters. Regular sub-objectives
   // (L1s etc.) have their own cards and panels. With the roll-up override on, all children feed it.
-  const kids=(o.isAnnual&&!o.rollup)?okrChildren(o.id).filter(k=>k.quarterLabel):okrChildren(o.id);
+  const kids=(o.isAnnual&&!o.rollup)?okrChildrenVisible(o.id).filter(k=>k.quarterLabel):okrChildrenVisible(o.id);
   const pct=okrProgress(o),st=okrStatusOf(o);
   modalShell({title:'Progress & Updates',sub:(o.title||'')+' — '+(pct===null?'no data yet':pct+'%'),size:'max-w-2xl',key:'okr-pm',
     body:`<div id="okr-pm" data-okr="${o.id}" style="margin:-6px -2px 0">${_okrProgressPanel(o,kids,pct,st)}</div>`});
@@ -986,17 +1023,17 @@ function okrPage(){
   const scard=(label,n,bg,fg,icon,key)=>`<div role="button" tabindex="0" onclick="App._okrSummaryList('${key}')" onkeydown="if(event.key==='Enter')App._okrSummaryList('${key}')" title="See which OKRs these are" style="flex:1;min-width:108px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:11px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:border-color .12s" onmouseover="this.style.borderColor='var(--c-text)'" onmouseout="this.style.borderColor='var(--c-border)'"><span style="width:30px;height:30px;border-radius:9px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:17px;font-weight:800;line-height:1;color:var(--c-text)">${n}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2);margin-top:2px;white-space:nowrap">${label}</span></span></div>`;
   const summary=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px">
     ${scard('Total OKRs',vis.length,'var(--c-brand-soft)','var(--c-brand-ink)','chart','all')}
-    ${scard('Achieved',cnt('Achieved'),'#EBDFC9','#065F46','check','Achieved')}
-    ${scard('On track',cnt('On track'),'#F5EEE1','#6F5430','approve','On track')}
-    ${scard('Off track',cnt('Off track'),'#FFF1F2','#BE123C','alert','Off track')}
-    ${scard('Not achieved',cnt('Not achieved'),'#FEF2F2','#991B1B','x','Not achieved')}
-    ${cnt('No data')?scard('No data',cnt('No data'),'#F6F7F8','#6B7280','help','No data'):''}
-    ${cnt('Closed')?scard('Closed',cnt('Closed'),'#E5E7EB','#374151','lock','Closed'):''}
+    ${scard('Achieved',cnt('Achieved'),'#FFE0C7','#0B5F37','check','Achieved')}
+    ${scard('On track',cnt('On track'),'#FFF1E4','#C25A00','approve','On track')}
+    ${scard('Off track',cnt('Off track'),'#FEEEEF','#C41E32','alert','Off track')}
+    ${scard('Not achieved',cnt('Not achieved'),'#FEF0F0','#991B1B','x','Not achieved')}
+    ${cnt('No data')?scard('No data',cnt('No data'),'#F4F9FA','#5E767D','help','No data'):''}
+    ${cnt('Closed')?scard('Closed',cnt('Closed'),'#DFEAEC','#2F4C55','lock','Closed'):''}
   </div>`;
   // ── My check-ins due today (combined task list — GROUP rule: any owner's update counts) ──
   const due=okrDueForUser(S.uid,today);
   const pendDue=due.filter(o=>!okrCheckinForDate(o.id,today));
-  const duePanel=due.length?`<div style="background:${pendDue.length?'var(--c-warn-soft)':'var(--c-success-soft)'};border:1px solid ${pendDue.length?'#FDE68A':'#BBF7D0'};border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  const duePanel=due.length?`<div style="background:${pendDue.length?'var(--c-warn-soft)':'var(--c-success-soft)'};border:1px solid ${pendDue.length?'#FBE6A6':'#B7F0C8'};border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span style="width:38px;height:38px;border-radius:11px;background:var(--c-surface);color:${pendDue.length?'var(--c-warn-ink)':'var(--c-success-ink)'};display:grid;place-items:center;flex-shrink:0">${ic('clock','w-5 h-5')}</span>
       <div style="flex:1;min-width:180px">
         <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">OKR check-ins due today</div>
@@ -1146,8 +1183,10 @@ function okrPage(){
       </button>
       ${_selCount?`<span style="font-size:12.5px;font-weight:800;color:var(--c-text)">${_selCount} selected</span>
         ${btn('Bulk edit '+_selCount+' objective'+(_selCount===1?'':'s'),'App._okrBulk()',{variant:'primary',size:'sm',icon:'edit'})}
+        <button onclick="App._okrExport()" class="ui-btn ui-btn-ghost ui-btn-sm" title="Download these objectives with every update, revision and activity entry as an Excel workbook">Export to Excel</button>
         <button onclick="App._okrSelClear()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear selection</button>`
-      :`<span style="font-size:11.5px;color:var(--c-text-3)">Tick the box on any objective to change several at once — owners, department, dates, targets, schedule, status, close or delete.</span>`}
+      :`<span style="flex:1;min-width:180px;font-size:11.5px;color:var(--c-text-3)">Tick the box on any objective to change several at once — owners, department, dates, targets, schedule, status, close or delete.</span>
+        <button onclick="App._okrExport()" class="ui-btn ui-btn-ghost ui-btn-sm" title="Download every objective you can see — with all updates, revisions and activity — as an Excel workbook">Export to Excel</button>`}
     </div>`:'';
   return `<div class="fade">${head}${_howBar('okr')}${summary}${duePanel}${fBar}${bulkBar}<div>${tree}</div></div>`;
 }
@@ -1157,8 +1196,8 @@ function _okrNodeHTML(o,depth){
   // Annual view: quarterly splits hidden (they live in the Quarterly view).
   // Quarterly view: children = the node's regular children + the matching child-annual quarters.
   const _qv=(S.filters.okrView==='quarter');
-  const kids=_qv?[...okrChildren(o.id).filter(k=>!k.quarterLabel),...((_OKR_QVK&&_OKR_QVK[o.id])||[])]
-              :okrChildren(o.id).filter(k=>!k.quarterLabel);
+  const kids=_qv?[...okrChildrenVisible(o.id).filter(k=>!k.quarterLabel),...((_OKR_QVK&&_OKR_QVK[o.id])||[])]
+              :okrChildrenVisible(o.id).filter(k=>!k.quarterLabel);
   const lvl=okrLevel(o);
   const exp=_qv?(_OKR_EXP[o.id]!==false):!!_OKR_EXP[o.id]; // quarterly hierarchy opens expanded
   const pct=okrProgress(o);
@@ -1180,7 +1219,10 @@ function _okrNodeHTML(o,depth){
      chevron stop propagation. ─────────────────────────────────────────────── */
   const _isLim=okrIsLimit(o);
   const _tgtTxt=okrHasRevision(o)?`<s style="opacity:.5">${_okrFmtVal(o,o.targetValue)}</s> ${_okrFmtVal(o,o.revisedTarget)}`:_okrFmtVal(o,o.targetValue);
-  const curTgt=o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,_okrOwnCur(o))} <span style="opacity:.5">/</span> ${_tgtTxt}`;
+  /* Higher-is-better reads "40 / 50". Lower-is-better reads "40 \u2264 50" \u2014 the
+     separator IS the sign, so the target is not prefixed a second time. */
+  const _sep=okrDirDown(o)?'\u2264':'/';
+  const curTgt=o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,_okrOwnCur(o))} <span style="opacity:.55">${_sep}</span> ${_tgtTxt}`;
   const ownersHTML=owners.length?`<span title="Owner${owners.length===1?'':'s'}: ${esc(owners.map(fullName).join(', '))}${owners.length>1?' — any of them can update':''}" style="flex-shrink:0;display:inline-flex;align-items:center;cursor:default">${owners.slice(0,3).map((u,i)=>`<span style="display:inline-flex;${i?'margin-left:-5px;':''}border-radius:50%;box-shadow:0 0 0 1.5px var(--c-surface)">${avatar(u,'w-5 h-5','text-[8px]')}</span>`).join('')}${owners.length>3?`<span style="font-size:9.5px;font-weight:800;color:var(--c-text-3);margin-left:4px">+${owners.length-3}</span>`:''}<span style="${meta};margin-left:5px">${esc(owners.map(fullName)[0]||'')}${owners.length>1?' +'+(owners.length-1):''}</span></span>`:'';
   const sel=_OKRSEL.has(o.id);
   const selBox=canEdit?`<button onclick="event.stopPropagation();App._okrTogSel('${o.id}')" role="checkbox" aria-checked="${sel}" title="${sel?'Deselect':'Select for bulk edit'}" style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;cursor:pointer;flex-shrink:0"><span style="width:16px;height:16px;border-radius:5px;border:1.5px solid ${sel?'var(--c-brand)':'var(--c-border-2)'};background:${sel?'var(--c-brand)':'var(--c-surface)'};display:grid;place-items:center;color:#fff">${sel?ic('check','w-3 h-3'):''}</span></button>`:`<span style="width:24px;flex-shrink:0"></span>`;
@@ -1193,16 +1235,16 @@ function _okrNodeHTML(o,depth){
         <div style="flex:1;min-width:140px">
           <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;row-gap:4px">
             ${_okrLvlChip(lvl)}${o.quarterLabel?_okrQtrChip(o.quarterLabel):''}${o.isAnnual?_okrAnnualChip():''}
-            <span class="fd" style="font-size:13.5px;font-weight:800;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
-            ${okrHasRevision(o)?`<span style="${meta};color:#B45309;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
-            ${_isLim?`<span style="${meta};color:#92400E;background:#FEF7E6;border:1px solid #FDE68A;border-radius:5px;padding:1px 6px;font-weight:700" title="Lower is better — ${esc(_okrFmtVal(o,_okrTargetEff(o)))} is a limit to stay under, not a goal to reach">${ic('alert','w-3 h-3')}Limit</span>`:(okrDirDown(o)?`<span style="${meta};color:#92400E;font-weight:700" title="Lower is better — bring this number down to the target">↓ Lower is better</span>`:'')}
+            <span class="fd" style="font-size:13.5px;font-weight:600;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
+            ${okrHasRevision(o)?`<span style="${meta};color:#8A5F00;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
+            ${_isLim?`<span style="${meta};color:#7A4E00;background:#FEF5E0;border:1px solid #FBE6A6;border-radius:5px;padding:1px 6px;font-weight:700" title="Lower is better — ${esc(_okrFmtVal(o,_okrTargetEff(o)))} is a limit to stay under, not a goal to reach">${ic('alert','w-3 h-3')}Limit</span>`:(okrDirDown(o)?`<span style="${meta};color:#7A4E00;font-weight:700" title="Lower is better — bring this number down to the target">↓ Lower is better</span>`:'')}
           </div>
           <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:3px;margin-top:5px">
             ${ownersHTML}
             ${dept?`<span style="${meta}"${o.departmentId?'':' title="Inherited from the parent objective"'}>${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
             ${o.periodStart||o.periodEnd?`<span style="${meta}">${ic('calendar','w-3 h-3')}${fmtS(o.periodStart)} → ${fmtS(o.periodEnd)}</span>`:''}
             ${kids.length?`<span style="${meta}">${ic('tree','w-3 h-3')}${kids.length} sub-objective${kids.length===1?'':'s'}</span>`:''}
-            ${(()=>{if(!_qv||!o.quarterLabel)return'';const ann=okrById(o.parentId);const gp=ann?okrById(ann.parentId):null;return(gp&&!gp.isAnnual)?`<span style="${meta};color:#B45309;background:#FEF7E6;border-radius:5px;padding:1px 6px" title="“${esc(gp.title)}” has no quarterly split of its own, so this quarter sits under the nearest split above it">${ic('tree','w-3 h-3')}under ${esc(gp.title)}</span>`:'';})()}
+            ${(()=>{if(!_qv||!o.quarterLabel)return'';const ann=okrById(o.parentId);const gp=ann?okrById(ann.parentId):null;return(gp&&!gp.isAnnual)?`<span style="${meta};color:#8A5F00;background:#FEF5E0;border-radius:5px;padding:1px 6px" title="“${esc(gp.title)}” has no quarterly split of its own, so this quarter sits under the nearest split above it">${ic('tree','w-3 h-3')}under ${esc(gp.title)}</span>`:'';})()}
           </div>
         </div>
         <div style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;padding-left:6px">
@@ -1285,13 +1327,13 @@ function _okrProgressPanel(o,kids,pct,st){
   const big='font-size:20px;font-weight:800;color:var(--c-text)';
   const _ownCur=_okrOwnCur(o);
   const cur=esc(_okrFmtVal(o,_okrOwnCur(o)));
-  const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue));
+  const tgt=o.metricType==='yesno'?'Yes':esc(_okrFmtTarget(o,o.targetValue));
   const strt=o.metricType==='yesno'?'No':esc(_okrFmtVal(o,o.startValue));
   /* ── v3.13: every per-objective ACTION lives here now. The six icon buttons were removed
      from the cards (which are back to being readable) and became labelled buttons in one
      row at the top of this popup. ── */
   const _canEd=_okrCanEditNode(o);
-  const actBtn=(label,call,icon,danger)=>`<button type="button" onclick="${call}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:${danger?'#BE123C':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='${danger?'#BE123C':'var(--c-text)'}'" onmouseout="this.style.borderColor='var(--c-border)'">${ic(icon,'w-3.5 h-3.5')}${esc(label)}</button>`;
+  const actBtn=(label,call,icon,danger)=>`<button type="button" onclick="${call}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:${danger?'#C41E32':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='${danger?'#C41E32':'var(--c-text)'}'" onmouseout="this.style.borderColor='var(--c-border)'">${ic(icon,'w-3.5 h-3.5')}${esc(label)}</button>`;
   const _acts=[
     _okrCanCreate()?actBtn('Add sub-objective',"App.closeModal();App._okrEdit(null,'"+o.id+"')",'plus'):'',
     _canEd?actBtn('Edit',"App.closeModal();App._okrEdit('"+o.id+"')",'edit'):'',
@@ -1303,7 +1345,7 @@ function _okrProgressPanel(o,kids,pct,st){
   const actionsBar=_acts?`<div style="display:flex;gap:6px;flex-wrap:wrap;padding-bottom:12px;margin-bottom:13px;border-bottom:1px solid var(--c-border)">${_acts}</div>`:'';
   /* "Lower is better" explainer — spells out what the two graph lines mean for this objective. */
   const _capV=_okrTargetEff(o);
-  const dirNote=!okrDirDown(o)?'':`<div style="display:flex;gap:8px;align-items:flex-start;background:#FEF7E6;border:1px solid #FDE68A;border-radius:10px;padding:8px 11px;margin-top:10px;font-size:11.5px;color:#92400E;line-height:1.6">${ic('alert','w-3.5 h-3.5')}<span>${okrIsLimit(o)
+  const dirNote=!okrDirDown(o)?'':`<div style="display:flex;gap:8px;align-items:flex-start;background:#FEF5E0;border:1px solid #FBE6A6;border-radius:10px;padding:8px 11px;margin-top:10px;font-size:11.5px;color:#7A4E00;line-height:1.6">${ic('alert','w-3.5 h-3.5')}<span>${okrIsLimit(o)
       ?`<b>Lower is better</b> — ${esc(_okrFmtVal(o,_capV))} is a <b>limit</b>, not a goal. The % is <b>how much of the limit is used</b>. On the graph the straight red line is that limit and the dashed grey line is the pace that keeps you on track: <b>under the pace → On track</b>, above the pace but still under the limit → <b>Off track</b>, over the limit → <b>Not achieved</b>. Finish the period under it and it reads <b>Achieved</b>.`
       :`<b>Lower is better</b> — the job is to bring this number <b>down</b> from ${esc(_okrFmtVal(o,o.startValue))} to ${esc(_okrFmtVal(o,_capV))}. The % is how much of that drop is done; the red line on the graph marks the ceiling.`}</span></div>`;
   // manual status marking (owner / manager) — every mark is logged
@@ -1317,7 +1359,7 @@ function _okrProgressPanel(o,kids,pct,st){
     const bar=(lbl,pct,col)=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:88px;font-size:10.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.03em">${lbl}</span><div style="flex:1;height:6px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${col}"></div></div><span style="width:46px;text-align:right;font-size:11.5px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span></div>`;
     const who=o.revisedBy&&uById(o.revisedBy)?fullName(uById(o.revisedBy)):'';
     return `<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:11px 13px;margin-top:12px">
-      <div style="display:flex;flex-direction:column;gap:6px">${bar('vs revised',pr,'#F59E0B')}${bar('vs original',po,'#8B6B41')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${bar('vs revised',pr,'#E0A106')}${bar('vs original',po,'#FF7F11')}</div>
       <div style="font-size:11px;color:var(--c-text-3);margin-top:8px">Revised${o.revisedAt?' '+fmtS(String(o.revisedAt).slice(0,10)):''}${who?' by '+esc(who):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''} · same updates feed both numbers</div>
     </div>`;})():'';
   const rollupNote=(o.rollup||o.isAnnual)?dismissNote('okr-auto-'+(o.rollup?'rollup':'annual'),
@@ -1341,9 +1383,9 @@ function _okrProgressPanel(o,kids,pct,st){
           <span style="font-size:13px;font-weight:800;color:var(--c-brand-ink)">${esc(_okrFmtVal(o,c.value))}</span>
           ${c.statusMark?okrStatusChip(c.statusMark,true):''}
           <span style="font-size:11px;color:var(--c-text-3)">${u?esc(fullName(u)):'—'}</span>
-          ${(c.editCount||0)>0?`<span style="font-size:9.5px;font-weight:800;background:#FEF3C7;color:#92400E;padding:1px 6px;border-radius:10px">edited ×${c.editCount}</span>`:''}
+          ${(c.editCount||0)>0?`<span style="font-size:9.5px;font-weight:800;background:#FDF3D9;color:#7A4E00;padding:1px 6px;border-radius:10px">edited ×${c.editCount}</span>`:''}
           ${hasBody&&peekTxt?`<span data-ck-peek style="max-width:220px;min-width:0;font-size:11px;color:var(--c-text-3);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(peekTxt)}</span>`:''}
-          ${canEditCk?`<button onclick="event.stopPropagation();App._okrCheckin('${o.id}','${c.date}')" title="Edit this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0">${ic('edit','w-3 h-3')}</button>`:''}${canEditCk?`<button onclick="event.stopPropagation();App._okrCkDel('${o.id}','${c.id}')" title="Delete this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#BE123C'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3 h-3')}</button>`:''}
+          ${canEditCk?`<button onclick="event.stopPropagation();App._okrCheckin('${o.id}','${c.date}')" title="Edit this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0">${ic('edit','w-3 h-3')}</button>`:''}${canEditCk?`<button onclick="event.stopPropagation();App._okrCkDel('${o.id}','${c.id}')" title="Delete this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#C41E32'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3 h-3')}</button>`:''}
         </div>
         ${hasBody?`<div data-ck-body style="display:none">${commentHtml}${photosHtml}</div>`:''}
       </div>
@@ -1356,7 +1398,7 @@ function _okrProgressPanel(o,kids,pct,st){
         ${_okrLvlChip(okrLevel(k))}${k.quarterLabel?_okrQtrChip(k.quarterLabel):''}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
         <div style="width:90px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${kp===null?0:Math.max(0,Math.min(100,kp))}%;background:${_okrBarColor(ks)}"></div></div>
-        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+' / '+esc(_okrFmtVal(k,k.targetValue))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
+        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+(okrDirDown(k)?' \u2264 ':' / ')+esc(_okrFmtVal(k,_okrTargetEff(k)))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
         ${okrStatusChip(ks,true)}
       </div>`;}).join('')}
     </div>`:'';
@@ -1368,7 +1410,7 @@ function _okrProgressPanel(o,kids,pct,st){
         <div><div style="${lab}">Start</div><div style="${big}">${strt}</div></div>
         <div><div style="${lab}">Current${(o.rollup||o.isAnnual)?' · auto':''}</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">${okrHasRevision(o)?('Original '+(okrDirDown(o)?'limit':'target')):(okrDirDown(o)?'Limit':'Target')}</div><div style="${big}${okrHasRevision(o)?';text-decoration:line-through;opacity:.6':''}">${tgt}</div></div>
-        ${okrHasRevision(o)?`<div><div style="${lab};color:#B45309">Revised ${okrDirDown(o)?'limit':'target'}</div><div style="${big};color:#B45309">${esc(_okrFmtVal(o,o.revisedTarget))}</div></div>`:''}
+        ${okrHasRevision(o)?`<div><div style="${lab};color:#8A5F00">Revised ${okrDirDown(o)?'limit':'target'}</div><div style="${big};color:#8A5F00">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
         <div><div style="${lab}">${okrIsLimit(o)?'Limit used':'Progress'}</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>
         <div><div style="${lab}">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
       </div>
@@ -1377,7 +1419,7 @@ function _okrProgressPanel(o,kids,pct,st){
     ${dirNote}
     ${markRow}
     ${cmpBars}
-    ${o.closed?`<div style="display:flex;gap:8px;align-items:center;background:#E5E7EB;border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;color:#374151">${ic('lock','w-3.5 h-3.5')}<b>Closed</b>&nbsp;${o.closedAt?esc(fmtS(String(o.closedAt).slice(0,10))):''}${o.closedBy&&uById(o.closedBy)?' by '+esc(fullName(uById(o.closedBy))):''}${o.closedReason?' — “'+esc(o.closedReason)+'”':''} · kept for record, updates are frozen</div>`:''}
+    ${o.closed?`<div style="display:flex;gap:8px;align-items:center;background:#DFEAEC;border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;color:#2F4C55">${ic('lock','w-3.5 h-3.5')}<b>Closed</b>&nbsp;${o.closedAt?esc(fmtS(String(o.closedAt).slice(0,10))):''}${o.closedBy&&uById(o.closedBy)?' by '+esc(fullName(uById(o.closedBy))):''}${o.closedReason?' — “'+esc(o.closedReason)+'”':''} · kept for record, updates are frozen</div>`:''}
     ${rollupNote}
     <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px;position:relative">
       <div style="position:absolute;top:10px;right:12px;z-index:2;display:flex;align-items:baseline;gap:4px;background:var(--c-surface);padding:1px 8px;border-radius:8px;border:1px solid var(--c-border)"><span style="font-size:15px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--c-text-3)">progress</span></div>
@@ -1395,7 +1437,7 @@ function _okrProgressPanel(o,kids,pct,st){
 /* ── Node editor (create / edit any level) ── */
 App._okrEdit=(id,parentId)=>{
   const existing=id?okrById(id):null;
-  if(existing&&!_okrCanEditNode(existing))return toast('You can\'t edit this OKR','err');
+  if(existing&&(!okrCanSee(existing)||!_okrCanEditNode(existing)))return toast('You can\u2019t edit this OKR','err');
   if(!existing&&!_okrCanCreate())return toast('You can\'t create OKRs','err');
   _OKRED=existing?JSON.parse(JSON.stringify(existing)):{id:uid('okr'),parentId:parentId||null,title:'',description:'',departmentId:null,subDepartmentId:null,ownerId:S.uid,owners:[S.uid],metricType:'number',startValue:0,targetValue:null,unit:'',direction:'up',frequency:{type:'weekly',day:'Mon'},periodStart:null,periodEnd:null,statusMode:'auto',statusManual:null,isAnnual:false,quarterLabel:null,sort:okrChildren(parentId||null).length,createdBy:S.uid,createdAt:new Date().toISOString()};
   delete _OKRED._qRows;delete _OKRED._qEdit;delete _OKRED._ownQ;
@@ -1494,7 +1536,7 @@ function _okrEdAnnualSection(o,L){
       <input type="date" value="${r.end||''}" onchange="App._okrEdQESet(${i},'end',this.value)" ${inp}/>
       <input type="number" step="any" value="${r.startVal!==null&&r.startVal!==undefined?r.startVal:''}" oninput="App._okrEdQESet(${i},'startVal',this.value)" ${inp}/>
       <input type="number" step="any" value="${r.target!==null&&r.target!==undefined?r.target:''}" oninput="App._okrEdQESet(${i},'target',this.value)" ${inp}/>
-      <span title="Existing quarterly objective — your edits save with this form" style="display:grid;place-items:center;color:#6F5430">${ic('check','w-3.5 h-3.5')}</span>
+      <span title="Existing quarterly objective — your edits save with this form" style="display:grid;place-items:center;color:#C25A00">${ic('check','w-3.5 h-3.5')}</span>
     </div>`;
   return `<div style="border-top:1px dashed var(--c-border);padding-top:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
@@ -1504,7 +1546,7 @@ function _okrEdAnnualSection(o,L){
     </div>
     ${o.isAnnual?`
       ${o.rollup
-        ?`<div style="margin-top:10px;font-size:11px;color:#1E40AF;background:var(--c-info-soft);border:1px solid #BFDBFE;border-radius:9px;padding:8px 11px;line-height:1.5"><b>Note:</b> the “Auto-update from the level below” toggle (below) is also on and takes over the number. Turn it off for the quarters rule: this annual's progress = the <b>combined progress of its quarters</b>, each counting equally.</div>`
+        ?`<div style="margin-top:10px;font-size:11px;color:#14509E;background:var(--c-info-soft);border:1px solid #BCD9FB;border-radius:9px;padding:8px 11px;line-height:1.5"><b>Note:</b> the “Auto-update from the level below” toggle (below) is also on and takes over the number. Turn it off for the quarters rule: this annual's progress = the <b>combined progress of its quarters</b>, each counting equally.</div>`
         :dismissNote('okr-ed-annual',`This annual's progress = the <b>combined progress of its quarters</b>, each counting equally — e.g. Q1 done 10% and the rest untouched → annual shows 2.5%. Regular sub-objectives never feed it.`,{style:'margin-top:10px;font-size:11px',onDismiss:'App._renderOKREdit()'})}
       ${qEdit.length?`<div style="margin-top:12px"><label style="${L}">Quarterly objectives (${qEdit.length}) — edit them right here</label>
         ${gridHead}
@@ -1570,7 +1612,7 @@ App._renderOKREdit=()=>{
       const list=users.slice().sort((a,b)=>{const sa=selOwn.includes(a.id)?0:1,sb2=selOwn.includes(b.id)?0:1;if(sa!==sb2)return sa-sb2;return fullName(a).localeCompare(fullName(b));});
       return `<div><label style="${L}">Owners — any of them can update & edit *</label>
         ${selOwn.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${selOwn.map(id=>{const u=uById(id);if(!u)return'';return`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--c-brand-soft);border:1px solid var(--c-border);border-radius:20px;padding:3px 5px;font-size:11.5px;font-weight:700;color:var(--c-text)">${avatar(u,'w-4 h-4','text-[8px]')}${esc(fullName(u))}<button type="button" onclick="App._okrEdTogOwner('${id}')" title="Remove ${esc(fullName(u))}" style="width:16px;height:16px;border-radius:50%;border:none;background:var(--c-border);color:var(--c-text-2);cursor:pointer;font-size:10px;line-height:1;display:grid;place-items:center;flex-shrink:0">×</button></span>`;}).join('')}</div>`
-        :`<div style="font-size:11.5px;color:#B45309;background:#FEF7E6;border-radius:8px;padding:6px 10px;margin-bottom:8px">No owner yet — search and tick at least one below.</div>`}
+        :`<div style="font-size:11.5px;color:#8A5F00;background:#FEF5E0;border-radius:8px;padding:6px 10px;margin-bottom:8px">No owner yet — search and tick at least one below.</div>`}
         <div style="border:1.5px solid var(--c-border);border-radius:12px;background:var(--c-surface);overflow:hidden">
           <div style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-text-3)">${ic('search','w-3.5 h-3.5')}<input id="okr-own-q" value="${esc(o._ownQ||'')}" oninput="App._okrEdOwnQ(this.value)" placeholder="Search by name, email or department…" style="flex:1;border:none;outline:none;background:transparent;font-size:12.5px;color:var(--c-text);min-width:0"/></div>
           <div id="okr-own-list" style="max-height:148px;overflow-y:auto;padding:4px">
@@ -1606,15 +1648,15 @@ App._renderOKREdit=()=>{
             : (_t===null||!isFinite(_t))
               ? 'Set a target above — it becomes the ceiling this objective has to stay under.'
               : 'The target sits <b>below</b> the start, so this is a <b>reduction</b>: the % counts how much of the drop from '+esc(_okrFmtVal(o,_s))+' to '+esc(_okrFmtVal(o,_t))+' is done, and the ceiling is drawn on the graph for reference. Put the target <i>above</i> the start instead (e.g. start 0, target 30k) to track it as an allowance that must not be exceeded.';
-          return '<div style="font-size:11px;line-height:1.6;color:#92400E;background:#FEF7E6;border:1px solid #FDE68A;border-radius:9px;padding:8px 10px;margin-top:7px">'+_body+'</div>';
+          return '<div style="font-size:11px;line-height:1.6;color:#7A4E00;background:#FEF5E0;border:1px solid #FBE6A6;border-radius:9px;padding:8px 10px;margin-top:7px">'+_body+'</div>';
         })()}
       </div>
-      ${okrHasRevision(o)?`<div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:11px;padding:10px 12px">
+      ${okrHasRevision(o)?`<div style="background:#FEFAEC;border:1px solid #FBE6A6;border-radius:11px;padding:10px 12px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">
-          <div><label style="${L};color:#92400E">Revised target (drives progress)</label><input type="number" step="any" value="${o.revisedTarget!==null&&o.revisedTarget!==undefined?o.revisedTarget:''}" oninput="_OKRED.revisedTarget=this.value===''?null:parseFloat(this.value)" class="ui-input rf" style="border-color:#FDE68A"/></div>
-          <div style="font-size:11px;color:#92400E;line-height:1.5;padding-bottom:4px">Revised ${o.revisedAt?esc(fmtS(String(o.revisedAt).slice(0,10))):''}${o.revisedBy&&uById(o.revisedBy)?' by '+esc(fullName(uById(o.revisedBy))):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''}</div>
+          <div><label style="${L};color:#7A4E00">Revised target (drives progress)</label><input type="number" step="any" value="${o.revisedTarget!==null&&o.revisedTarget!==undefined?o.revisedTarget:''}" oninput="_OKRED.revisedTarget=this.value===''?null:parseFloat(this.value)" class="ui-input rf" style="border-color:#FBE6A6"/></div>
+          <div style="font-size:11px;color:#7A4E00;line-height:1.5;padding-bottom:4px">Revised ${o.revisedAt?esc(fmtS(String(o.revisedAt).slice(0,10))):''}${o.revisedBy&&uById(o.revisedBy)?' by '+esc(fullName(uById(o.revisedBy))):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''}</div>
         </div>
-        <div style="font-size:11px;color:#B45309;margin-top:6px">This number is what progress is measured against; the original stays for comparison. Clear it (or set it back to the original) to remove the revision.</div>
+        <div style="font-size:11px;color:#8A5F00;margin-top:6px">This number is what progress is measured against; the original stays for comparison. Clear it (or set it back to the original) to remove the revision.</div>
       </div>`:''}
       <div><label style="${L}">${o.metricType==='currency'?'Currency':'Unit'} ${o.metricType==='percent'?'(auto: %)':''}</label><input type="text" value="${esc(o.unit||'')}" oninput="_OKRED.unit=this.value" placeholder="${o.metricType==='currency'?'e.g. AED / $':'e.g. orders, hrs'}" class="ui-input rf" ${o.metricType==='percent'?'disabled':''}/></div>`:`<div style="font-size:12px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:9px 12px">Yes / No objective — a check-in of "Yes" counts as 100%, "No" as 0%.</div>`}
       ${o.metricType!=='yesno'?_okrEdAnnualSection(o,L):''}
@@ -1624,7 +1666,7 @@ App._renderOKREdit=()=>{
           <div style="font-size:11px;color:var(--c-text-3);margin-top:2px;line-height:1.5">L${lvl} takes its current value from its <b>direct L${lvl+1} sub-objectives only</b> — the owner never enters it by hand. Progress is still measured against this objective's own start → target.</div></div>
           <button type="button" role="switch" aria-checked="${o.rollup?'true':'false'}" class="tog ${o.rollup?'on':'off'}" style="margin-top:2px" onclick="_OKRED.rollup=!_OKRED.rollup;App._renderOKREdit()"><span></span></button>
         </div>
-        ${o.isAnnual&&o.rollup?`<div style="margin-top:8px;font-size:11px;color:#92400E;background:#FEF3C7;border:1px solid #FDE68A;border-radius:9px;padding:7px 10px;line-height:1.5"><b>Both toggles are on</b> — this level-below roll-up drives the number and overrides the quarters-progress rule. Turn it off to go back to quarters-only.</div>`:''}
+        ${o.isAnnual&&o.rollup?`<div style="margin-top:8px;font-size:11px;color:#7A4E00;background:#FDF3D9;border:1px solid #FBE6A6;border-radius:9px;padding:7px 10px;line-height:1.5"><b>Both toggles are on</b> — this level-below roll-up drives the number and overrides the quarters-progress rule. Turn it off to go back to quarters-only.</div>`:''}
         ${o.isAnnual&&!o.rollup?`<div style="margin-top:8px;font-size:11px;color:var(--c-text-3);line-height:1.5">Off — this annual currently updates from its <b>quarterly objectives</b>. Turning this on makes the level below drive it instead.</div>`:''}
         ${o.rollup?`<div style="margin-top:10px"><label style="${L}">How to combine the L${lvl+1} values</label>
           <select class="ui-select rf" onchange="_OKRED.rollupMode=this.value">
@@ -1792,14 +1834,14 @@ App._okrSave=()=>{
 };
 App._okrDelete=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t delete this OKR','err');
+  if(!_okrCanDelete(o))return toast('You can\u2019t delete this OKR','err');
   const desc=okrDescendants(id);
   if(!confirm('Delete "'+(o.title||'this objective')+'"'+(desc.length?(' and its '+desc.length+' sub-objective'+(desc.length===1?'':'s')):'')+'? Check-in history and logs go with it.'))return;
   const ids=new Set([id,...desc.map(d=>d.id)]);
   DB.okrs=(DB.okrs||[]).filter(x=>!ids.has(x.id));
   DB.okrCheckins=(DB.okrCheckins||[]).filter(c=>!ids.has(c.okrId));
   DB.okrLogs=(DB.okrLogs||[]).filter(l=>!ids.has(l.okrId));
-  sb.from('okrs').delete().eq('id',id).then(({error})=>{if(error)_syncErr('OKR delete')(error);}).catch(_syncErr('OKR delete'));
+  sbWrite({table:'okrs',op:'delete',id:id,match:{col:'id',val:id}},{label:'OKR delete'});
   _OKRSEL.delete(id);
   saveDB();toast('OKR deleted','warn');rr();
 };
@@ -1900,7 +1942,7 @@ App._renderOKRBulk=()=>{
     <div style="font-size:11px;color:var(--c-text-3);margin-top:6px">${d.owners.length} picked${d.ownerMode==='replace'?' — these become the <b>only</b> owners on every selected objective':d.ownerMode==='add'?' — added alongside whoever already owns each objective':' — removed where present (an objective is never left with no owner)'}</div>`;
   const body=`<div style="display:flex;flex-direction:column;gap:10px">
     <div style="background:var(--c-brand-soft);border:1px solid var(--c-border);border-radius:12px;padding:10px 13px;font-size:12px;color:var(--c-text);line-height:1.6">
-      Writing to <b>${targets.length} objective${targets.length===1?'':'s'}</b>${skipped?` · <span style="color:#B45309">${skipped} skipped — you don't have edit rights on ${skipped===1?'it':'them'}</span>`:''}.
+      Writing to <b>${targets.length} objective${targets.length===1?'':'s'}</b>${skipped?` · <span style="color:#8A5F00">${skipped} skipped — you don't have edit rights on ${skipped===1?'it':'them'}</span>`:''}.
       <div style="font-size:11px;color:var(--c-text-3);margin-top:3px">Only the fields you tick below are written. Everything else on each objective — including its check-in history — is left untouched.</div>
       ${targets.length<=6?`<div style="font-size:11px;color:var(--c-text-2);margin-top:6px">${targets.map(o=>esc(o.title||'Untitled')).join(' · ')}</div>`:''}
     </div>
@@ -1960,7 +2002,7 @@ App._renderOKRBulk=()=>{
     ${row('lifecycle','Close or reopen','Closing freezes updates, check-ins and reminders but keeps everything on record. Owners are notified either way.',
       `<div style="display:flex;gap:6px;flex-wrap:wrap">${pill(d.lifecycle==='close','Close them',"App._okrBulkSetR('lifecycle','close')")}${pill(d.lifecycle==='reopen','Reopen them',"App._okrBulkSetR('lifecycle','reopen')")}</div>
       ${d.lifecycle==='close'?`<div style="margin-top:10px"><label style="${L}">Reason — required, kept on the record</label><textarea rows="2" oninput="App._okrBulkSet('closeReason',this.value)" placeholder="e.g. Superseded by the FY27 plan" class="ui-input" style="resize:vertical">${esc(d.closeReason||'')}</textarea></div>`:''}`)}
-    <div style="border:1.5px solid #FECACA;background:#FEF2F2;border-radius:12px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+    <div style="border:1.5px solid #FBCDCD;background:#FEF0F0;border-radius:12px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
       <div style="min-width:0"><div class="fd" style="font-size:12.5px;font-weight:800;color:#991B1B">Delete these objectives</div><div style="font-size:11px;color:#B91C1C;margin-top:2px;line-height:1.5">Sub-objectives, check-in history and logs go with them. This cannot be undone.</div></div>
       <button type="button" onclick="App._okrBulkDelete()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;border:1.5px solid #B91C1C;background:var(--c-surface);color:#B91C1C;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0">${ic('trash','w-3.5 h-3.5')}Delete ${targets.length}</button>
     </div>
@@ -2066,7 +2108,7 @@ App._okrBulkApply=()=>{
 };
 App._okrBulkDelete=()=>{
   const sel=[..._OKRSEL].map(okrById).filter(Boolean);
-  const targets=sel.filter(_okrCanEditNode);
+  const targets=sel.filter(_okrCanDelete);
   if(!targets.length)return toast('Nothing you can delete is selected','err');
   const ids=new Set();
   targets.forEach(o=>{ids.add(o.id);okrDescendants(o.id).forEach(x=>ids.add(x.id));});
@@ -2075,7 +2117,7 @@ App._okrBulkDelete=()=>{
   DB.okrs=(DB.okrs||[]).filter(x=>!ids.has(x.id));
   DB.okrCheckins=(DB.okrCheckins||[]).filter(c=>!ids.has(c.okrId));
   DB.okrLogs=(DB.okrLogs||[]).filter(l=>!ids.has(l.okrId));
-  targets.forEach(o=>{sb.from('okrs').delete().eq('id',o.id).then(({error})=>{if(error)_syncErr('OKR delete')(error);}).catch(_syncErr('OKR delete'));});
+  targets.forEach(o=>{sbWrite({table:'okrs',op:'delete',id:o.id,match:{col:'id',val:o.id}},{label:'OKR delete'});});
   _OKRSEL=new Set();
   saveDB();closeModal();toast(ids.size+' objective'+(ids.size===1?'':'s')+' deleted','warn');rr();
 };
@@ -2114,8 +2156,8 @@ App._renderOKRCheckin=()=>{
   const d=_OKRCI;if(!d)return;
   const o=okrById(d.okrId);if(!o)return;
   const L='display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
-  const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCISetVal(${v})" style="flex:1;padding:12px;border-radius:11px;border:2px solid ${Number(d.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(d.value)===v?(v===1?'#F5EEE1':'#FFF1F2'):'var(--c-surface)'};color:${Number(d.value)===v?(v===1?'#047857':'#BE123C'):'var(--c-text-2)'};font-size:14px;font-weight:800;cursor:pointer">${label}</button>`;
-  modalShell({title:(d.existingId?'Edit update':'Add update'),sub:(o.title||'')+' · target '+(o.metricType==='yesno'?'Yes':_okrFmtVal(o,o.targetValue)),size:'max-w-md',key:'okr-ci',
+  const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCISetVal(${v})" style="flex:1;padding:12px;border-radius:11px;border:2px solid ${Number(d.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(d.value)===v?(v===1?'#FFF1E4':'#FEEEEF'):'var(--c-surface)'};color:${Number(d.value)===v?(v===1?'#0F7A45':'#C41E32'):'var(--c-text-2)'};font-size:14px;font-weight:800;cursor:pointer">${label}</button>`;
+  modalShell({title:(d.existingId?'Edit update':'Add update'),sub:(o.title||'')+' · '+_okrTargetWord(o)+' '+(o.metricType==='yesno'?'Yes':_okrFmtTarget(o,_okrTargetEff(o))),size:'max-w-md',key:'okr-ci',
     body:`<div style="display:flex;flex-direction:column;gap:14px">
       <div><label style="${L}">Date</label><input type="date" value="${d.date}" onchange="App._okrCISetDate(this.value)" class="ui-input rf"/></div>
       ${o.metricType==='yesno'
@@ -2130,14 +2172,14 @@ App._renderOKRCheckin=()=>{
       </div>
       <div><label style="${L}">Photos</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          ${d.photos.map((p,i)=>`<span style="position:relative;display:inline-block"><img src="${esc(p)}" alt="Attached photo" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1px solid var(--c-border)"/><button type="button" onclick="App._okrCIPhotoRm(${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:#221B12;color:#fff;font-size:10px;cursor:pointer;line-height:1">×</button></span>`).join('')}
+          ${d.photos.map((p,i)=>`<span style="position:relative;display:inline-block"><img src="${esc(p)}" alt="Attached photo" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1px solid var(--c-border)"/><button type="button" onclick="App._okrCIPhotoRm(${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:#0F3038;color:#fff;font-size:10px;cursor:pointer;line-height:1">×</button></span>`).join('')}
           <label style="width:52px;height:52px;border:1.5px dashed var(--c-border);border-radius:9px;display:grid;place-items:center;color:var(--c-text-3);cursor:pointer">${ic('cam','w-4 h-4')}<input type="file" accept="image/*" multiple hidden onchange="App._okrCIPhotoAdd(this)"/></label>
         </div>
       </div>
       <div><label style="${L}">Mark status (optional)</label><div style="display:flex;gap:6px;flex-wrap:wrap">
         ${OKR_STATUSES.map(s=>{const on=d.statusMark===s;const m=OKR_ST_META[s];return`<button type="button" onclick="_OKRCI.statusMark=_OKRCI.statusMark==='${s}'?null:'${s}';App._renderOKRCheckin()" style="padding:5px 11px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11.5px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
       </div><div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Marking a status here also sets it on the objective (logged). Leave empty to keep the automatic status.</div></div>
-      ${d.existingId?`<div style="font-size:11.5px;color:#92400E;background:#FEF3C7;border-radius:9px;padding:8px 11px">You're editing an existing update — the change is recorded in the activity log.</div>`:''}
+      ${d.existingId?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">You're editing an existing update — the change is recorded in the activity log.</div>`:''}
     </div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP(d.existingId?'Save changes':'Save update','App._okrCheckinSave()')});
 };
@@ -2150,7 +2192,7 @@ function _okrApplyCheckin(okrId,date,d){
     const changes=[];
     if(String(ex.value)!==String(d.value))changes.push({field:'value',from:ex.value,to:d.value});
     if((ex.comment||'')!==(d.comment||''))changes.push({field:'comment',from:(ex.comment||'').slice(0,80),to:(d.comment||'').slice(0,80)});
-    ex.value=d.value;ex.comment=d.comment||'';
+    ex.value=d.value;ex.comment=String(d.comment||'').slice(0,2000);
     if(d.photos)ex.photos=d.photos;
     ex.statusMark=d.statusMark||null;
     if(changes.length){ex.editCount=(ex.editCount||0)+1;okrLog(okrId,'Edited check-in',{date:date,changes:changes});}
@@ -2175,10 +2217,122 @@ App._okrCheckinSave=()=>{
   const o=okrById(d.okrId);if(!o)return;
   if(d.value===null||d.value===undefined||!isFinite(d.value))return toast(o.metricType==='yesno'?'Pick Yes or No':'Enter the value','err');
   _okrApplyCheckin(d.okrId,d.date,d);
-  _OKRCI=null;saveDB();closeModal();toast('Update saved');rr();
+  const _oid=d.okrId;_OKRCI=null;saveDB();closeModal();toast('Update saved');rr();if(typeof _okrPMRefresh==='function')_okrPMRefresh(_oid);
 };
 
 /* ── Combined "all OKR tasks due that day" modal — the scheduled checklist ── */
+/* ══════════════════════════════════════════════════════════════════════════════
+   OKR EXTRACT — a full Excel workbook for the selected (or all visible) objectives.
+   Four sheets: Objectives · Updates · Target revisions · Activity.
+   Everything is drawn from what the user is allowed to see (okrVisible/okrCanSee).
+   ══════════════════════════════════════════════════════════════════════════════ */
+function _okrDeptNames(o){
+  const eff=okrDeptOf(o);
+  const d=(DB.departments||[]).find(x=>x.id===eff.deptId);
+  const sd=(DB.departments||[]).find(x=>x.id===eff.subDeptId);
+  return{dept:d?d.name:'',sub:sd?sd.name:''};
+}
+function _okrPlain(v){return v===null||v===undefined?'':v;}
+function _okrDT(v){if(!v)return'';try{const d=new Date(v);return isNaN(d)?String(v):d.toISOString().slice(0,16).replace('T',' ');}catch(e){return String(v);}}
+function _okrNameOf(id){const u=id?uById(id):null;return u?fullName(u):'';}
+/* Rich text -> plain, so comments written with the bold/bullet helpers export readably. */
+function _okrCommentText(t){
+  return String(t||'').replace(/<br\s*\/?>/gi,'\n').replace(/<\/(p|div|li)>/gi,'\n')
+    .replace(/<li[^>]*>/gi,'• ').replace(/<[^>]+>/g,'')
+    .replace(/&nbsp;/g,' ').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'")
+    .replace(/\n{3,}/g,'\n\n').trim();
+}
+
+/* Which objectives the extract covers: the ticked ones, else everything on screen. */
+function _okrExportSet(){
+  const sel=[..._OKRSEL].map(okrById).filter(Boolean).filter(okrCanSee);
+  if(sel.length)return sel;
+  return okrVisible();
+}
+
+App._okrExport=async()=>{
+  if(!can('okr','view'))return toast('You don’t have permission to view objectives','err');
+  const list=_okrExportSet();
+  if(!list.length)return toast('Nothing to export','err');
+  let X;
+  try{X=await _loadXLSX();}
+  catch(e){return toast(e.message||'Couldn’t load the spreadsheet library','err');}
+  try{
+    /* ── Sheet 1: Objectives ─────────────────────────────────────────────── */
+    const oHead=['Level','Objective','Description','Parent objective','Owner(s)','Department','Sub-department',
+      'Metric','Unit','Direction','Target is a limit','Start','Current','Target','Revised target','Effective target',
+      'Progress %','Status','Status set','Period start','Period end','Quarter','Annual','Rolls up','Roll-up mode',
+      'Check-in schedule','Updates','Last update','Last value','Last comment',
+      'Closed','Close reason','Closed on','Closed by','Created by','Created on','Last changed','ID'];
+    const oRows=[oHead];
+    list.forEach(o=>{
+      const cks=okrCheckinsOf(o.id), last=cks.length?cks[cks.length-1]:null;
+      const dn=_okrDeptNames(o), par=o.parentId?okrById(o.parentId):null;
+      const pct=okrProgress(o);
+      oRows.push([
+        'L'+okrLevel(o), o.title||'', o.description||'', par?(par.title||''):'',
+        okrOwners(o).map(_okrNameOf).filter(Boolean).join(', '), dn.dept, dn.sub,
+        (OKR_METRICS.find(m=>m[0]===o.metricType)||[,o.metricType])[1], o.unit||'',
+        okrDirLabel(o), okrIsLimit(o)?'Yes':'No',
+        _okrPlain(o.startValue), _okrPlain(_okrOwnCur(o)), _okrPlain(o.targetValue),
+        _okrPlain(o.revisedTarget), _okrPlain(_okrTargetEff(o)),
+        pct===null?'':pct, okrStatusOf(o), o.statusMode==='manual'?'Manual':'Automatic',
+        o.periodStart||'', o.periodEnd||'', o.quarterLabel||'',
+        o.isAnnual?'Yes':'No', o.rollup?'Yes':'No', o.rollup?_okrModeLabel(o.rollupMode):'',
+        _okrFreqLabel(o), cks.length,
+        last?last.date:'', last?_okrPlain(last.value):'', last?_okrCommentText(last.comment):'',
+        o.closed?'Yes':'No', o.closedReason||'', _okrDT(o.closedAt), _okrNameOf(o.closedBy),
+        _okrNameOf(o.createdBy), _okrDT(o.createdAt), _okrDT(o.updatedAt), o.id
+      ]);
+    });
+
+    /* ── Sheet 2: every update, with its comment ─────────────────────────── */
+    const uHead=['Objective','Level','Date','Value','Comment','Status marked','Recorded by','Times edited','Recorded at','Objective ID','Update ID'];
+    const uRows=[uHead];
+    list.forEach(o=>okrCheckinsOf(o.id).forEach(c=>{
+      uRows.push([o.title||'','L'+okrLevel(o),c.date||'',_okrPlain(c.value),_okrCommentText(c.comment),
+        c.statusMark||'',_okrNameOf(c.userId),c.editCount||0,_okrDT(c.createdAt),o.id,c.id]);
+    }));
+    if(uRows.length===1)uRows.push(['No updates recorded for the selected objectives','','','','','','','','','','']);
+
+    /* ── Sheet 3: target revisions ──────────────────────────────────────── */
+    const rHead=['Objective','Original target','Revised target','Reason','Revised on','Revised by','Objective ID'];
+    const rRows=[rHead];
+    list.filter(okrHasRevision).forEach(o=>{
+      rRows.push([o.title||'',_okrPlain(o.targetValue),_okrPlain(o.revisedTarget),
+        o.revisedNote||'',_okrDT(o.revisedAt),_okrNameOf(o.revisedBy),o.id]);
+    });
+    if(rRows.length===1)rRows.push(['No target revisions','','','','','','']);
+
+    /* ── Sheet 4: activity trail ────────────────────────────────────────── */
+    const ids=new Set(list.map(o=>o.id));
+    const aHead=['Objective','Action','Detail','By','When','Objective ID'];
+    const aRows=[aHead];
+    (DB.okrLogs||[]).filter(l=>ids.has(l.okrId)).forEach(l=>{
+      const o=okrById(l.okrId);
+      let det='';
+      try{det=Object.entries(l.details||{}).map(([k,v])=>k+': '+(typeof v==='object'?JSON.stringify(v):v)).join(' · ');}catch(e){}
+      aRows.push([o?(o.title||''):'',l.action||'',det,_okrNameOf(l.actorId),_okrDT(l.createdAt),l.okrId]);
+    });
+    if(aRows.length===1)aRows.push(['No activity recorded','','','','','']);
+
+    const wb=X.utils.book_new();
+    [['Objectives',oRows,[6,34,44,28,26,18,18,12,10,15,15,10,10,10,13,15,11,13,11,13,13,10,8,9,15,26,9,13,11,50,8,26,17,18,18,17,17,14]],
+     ['Updates',uRows,[34,6,12,10,60,14,20,12,17,14,14]],
+     ['Target revisions',rRows,[34,15,15,44,17,20,14]],
+     ['Activity',aRows,[34,20,52,20,17,14]]]
+    .forEach(([name,rows,cols])=>{
+      const ws=X.utils.aoa_to_sheet(rows);
+      ws['!cols']=cols.map(w=>({wch:w}));
+      ws['!freeze']={xSplit:0,ySplit:1};
+      X.utils.book_append_sheet(wb,ws,name);
+    });
+    X.writeFile(wb,'bridge_okrs_'+todayISO()+'.xlsx');
+    toast('Exported '+list.length+' objective'+(list.length===1?'':'s')+' · '+(uRows.length-1)+' update'+(uRows.length===2?'':'s'));
+    try{log(fullName(me()),'Exported OKRs',list.length+' objectives');}catch(e){}
+  }catch(e){toast(e.message||'Export failed','err');}
+};
+
 App._okrCheckinAll=(date)=>{
   const d=date||todayISO();
   const due=okrDueForUser(S.uid,d);
@@ -2192,16 +2346,16 @@ App._renderOKRCheckinAll=()=>{
   const rows=A.items.map((it,i)=>{
     const o=okrById(it.okrId);if(!o)return'';
     const exCk=it.existingId?(DB.okrCheckins||[]).find(c=>c.id===it.existingId):null;
-    const done=exCk?('<span style="font-size:10px;font-weight:800;background:#F5EEE1;color:#6F5430;padding:2px 8px;border-radius:10px">'+(exCk.userId&&exCk.userId!==S.uid?('updated by '+esc(fullName(uById(exCk.userId))||'a co-owner')+' — editing'):'already updated — editing')+'</span>'):'';
-    const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCIAllVal(${i},${v})" style="flex:1;padding:8px;border-radius:9px;border:2px solid ${Number(it.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(it.value)===v?(v===1?'#F5EEE1':'#FFF1F2'):'var(--c-surface)'};color:${Number(it.value)===v?(v===1?'#047857':'#BE123C'):'var(--c-text-2)'};font-size:12.5px;font-weight:800;cursor:pointer">${label}</button>`;
+    const done=exCk?('<span style="font-size:10px;font-weight:800;background:#FFF1E4;color:#C25A00;padding:2px 8px;border-radius:10px">'+(exCk.userId&&exCk.userId!==S.uid?('updated by '+esc(fullName(uById(exCk.userId))||'a co-owner')+' — editing'):'already updated — editing')+'</span>'):'';
+    const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCIAllVal(${i},${v})" style="flex:1;padding:8px;border-radius:9px;border:2px solid ${Number(it.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(it.value)===v?(v===1?'#FFF1E4':'#FEEEEF'):'var(--c-surface)'};color:${Number(it.value)===v?(v===1?'#0F7A45':'#C41E32'):'var(--c-text-2)'};font-size:12.5px;font-weight:800;cursor:pointer">${label}</button>`;
     return `<div style="border:1px solid var(--c-border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--c-surface)">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         ${_okrLvlChip(okrLevel(o))}
-        <span style="flex:1;min-width:0;font-size:13.5px;font-weight:800;color:var(--c-text)">${esc(o.title)}</span>
+        <span style="flex:1;min-width:0;font-size:13.5px;font-weight:600;color:var(--c-text)">${esc(o.title)}</span>
         ${done}
         <button type="button" title="Open full form (photos)" onclick="App.closeModal();App._okrCheckin('${o.id}','${A.date}')" style="width:26px;height:26px;display:grid;place-items:center;border-radius:7px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-3);cursor:pointer">${ic('cam','w-3.5 h-3.5')}</button>
       </div>
-      <div style="font-size:11px;color:var(--c-text-3);margin-bottom:7px">Target: ${o.metricType==='yesno'?'Yes':esc(_okrFmtVal(o,o.targetValue))}${o.metricType!=='yesno'?' · currently '+esc(_okrFmtVal(o,(okrLatestCheckin(o.id)||{}).value)):''}</div>
+      <div style="font-size:11px;color:var(--c-text-3);margin-bottom:7px">${_okrTargetWord(o)==='limit'?'Limit':'Target'}: ${o.metricType==='yesno'?'Yes':esc(_okrFmtTarget(o,_okrTargetEff(o)))}${o.metricType!=='yesno'?' · currently '+esc(_okrFmtVal(o,(okrLatestCheckin(o.id)||{}).value)):''}</div>
       ${o.metricType==='yesno'
         ?`<div style="display:flex;gap:8px;margin-bottom:8px">${ynBtn(1,'Yes ✓')}${ynBtn(0,'No ✗')}</div>`
         :`<input type="number" step="any" value="${it.value!==null&&it.value!==undefined?it.value:''}" oninput="_OKRCIALL.items[${i}].value=this.value===''?null:parseFloat(this.value)" placeholder="Value ${o.unit?('('+esc(o.unit)+')'):''}" class="ui-input rf" style="margin-bottom:8px"/>`}
@@ -2214,8 +2368,16 @@ App._renderOKRCheckinAll=()=>{
 };
 App._okrCheckinAllSave=()=>{
   const A=_OKRCIALL;if(!A)return;
+  const hasVal=it=>it.value!==null&&it.value!==undefined&&isFinite(it.value);
+  /* A comment with no value used to be dropped silently on save. Block instead and
+     name the objectives that still need a number, so nothing typed is ever lost. */
+  const orphan=A.items.filter(it=>!hasVal(it)&&String(it.comment||'').trim());
+  if(orphan.length){
+    const names=orphan.map(it=>'\u201c'+((okrById(it.okrId)||{}).title||'')+'\u201d').join(', ');
+    return toast('Add a value for '+names+' \u2014 a comment on its own can\u2019t be saved','err');
+  }
   let n=0;
-  A.items.forEach(it=>{if(it.value!==null&&it.value!==undefined&&isFinite(it.value)){if(_okrApplyCheckin(it.okrId,A.date,it))n++;}});
+  A.items.forEach(it=>{if(hasVal(it)){if(_okrApplyCheckin(it.okrId,A.date,it))n++;}});
   if(!n)return toast('Enter at least one value','err');
   _OKRCIALL=null;saveDB();closeModal();toast(n+' update'+(n===1?'':'s')+' saved');rr();
 };
@@ -2232,13 +2394,13 @@ function _okrClCard(due,date){
     const ck=okrCheckinForDate(o.id,date);
     const by=ck&&ck.userId&&ck.userId!==S.uid?uById(ck.userId):null;
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--c-text-2);padding:3px 0">
-      ${ck?`<span style="color:#6F5430;flex-shrink:0">${ic('check','w-3.5 h-3.5')}</span>`:`<span style="width:6px;height:6px;border-radius:50%;background:#F59E0B;flex-shrink:0;margin:0 5px"></span>`}
+      ${ck?`<span style="color:#C25A00;flex-shrink:0">${ic('check','w-3.5 h-3.5')}</span>`:`<span style="width:6px;height:6px;border-radius:50%;background:#E0A106;flex-shrink:0;margin:0 5px"></span>`}
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.title)}</span>
       ${by?`<span title="Submitted by ${esc(fullName(by))} — counts for the whole group" style="font-size:10px;color:var(--c-text-3);flex-shrink:0">by ${esc(fullName(by))}</span>`:''}
       ${ck?`<span style="font-weight:800;color:var(--c-success-ink);font-size:12px">${esc(_okrFmtVal(o,ck.value))}</span>`:''}
     </div>`;
   }).join('');
-  return `<div class="ui-card" style="padding:14px;border-left:3px solid ${allDone?'#22C55E':'#F59E0B'}">
+  return `<div class="ui-card" style="padding:14px;border-left:3px solid ${allDone?'#22C55E':'#E0A106'}">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="width:36px;height:36px;border-radius:10px;background:var(--c-brand-soft);color:var(--c-brand-ink);display:grid;place-items:center;flex-shrink:0">${ic('chart','w-4.5 h-4.5')}</span>
       <div style="flex:1;min-width:0">
@@ -2249,7 +2411,7 @@ function _okrClCard(due,date){
     </div>
     ${rows}${due.length>6?`<div style="font-size:11px;color:var(--c-text-3);padding:3px 0">+${due.length-6} more…</div>`:''}
     <div style="display:flex;justify-content:flex-end;margin-top:9px">
-      ${isFuture?'<span style="font-size:12px;color:#9CA3AF;font-weight:600">Scheduled for this date</span>':btn(allDone?'Review / edit':'Update now',`App._okrCheckinAll('${date}')`,{variant:allDone?'ghost':'primary',size:'sm',icon:'edit'})}
+      ${isFuture?'<span style="font-size:12px;color:#90A5AB;font-weight:600">Scheduled for this date</span>':btn(allDone?'Review / edit':'Update now',`App._okrCheckinAll('${date}')`,{variant:allDone?'ghost':'primary',size:'sm',icon:'edit'})}
     </div>
   </div>`;
 }
@@ -2432,12 +2594,12 @@ function _drawOKRCharts(){
         const capV=_okrTargetEff(o);
         if(capV!==null&&isFinite(capV))ds.push({label:okrIsLimit(o)?('Limit — stay under '+_okrFmtVal(o,capV)):('Ceiling — '+_okrFmtVal(o,capV)),data:dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
       }
-      if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#94A3B8',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
+      if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#8CA3AA',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
       if(okrHasRevision(o)&&o.metricType!=='yesno'){
         const idealRev=dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false,Number(o.revisedTarget)));
-        if(idealRev.some(v=>v!==null))ds.push({label:'Revised pace',data:idealRev,borderColor:'#F59E0B',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+        if(idealRev.some(v=>v!==null))ds.push({label:'Revised pace',data:idealRev,borderColor:'#E0A106',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
       }
-      ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#8B6B41',backgroundColor:'rgba(139,107,65,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#8B6B41',borderWidth:2});
+      ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#FF7F11',backgroundColor:'rgba(255,127,17,.12)',fill:true,tension:.3,pointRadius:3,pointBackgroundColor:'#FF7F11',borderWidth:2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
       if(o.metricType!=='yesno'){
         // Y-axis baseline = the Start value; only drop lower if an actual input dips below it.
@@ -2486,7 +2648,7 @@ function _acPeopleTab(){
     _ensureHrm(u);
     const rid=u.hrm.roleProfileId||'';
     const nOv=Object.keys(u.hrm.perms||{}).length;
-    const hrTag=u.hrm.isHR?'<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:#FCE7F3;color:#9D174D" title="HR approver stage">HR</span>':'';
+    const hrTag=u.hrm.isHR?'<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:#FCE7F3;color:#A0182A" title="HR approver stage">HR</span>':'';
     return `<tr id="acu-${u.id}" style="${hi===u.id?'background:var(--c-brand-soft);':''}border-bottom:1px solid var(--c-border)">
       <td style="padding:11px 16px"><div style="display:flex;align-items:center;gap:11px;min-width:0">${avatar(u,'w-8 h-8','text-[11px]')}<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:var(--c-text);display:flex;align-items:center;gap:6px">${esc(fullName(u))} ${hrTag}</div><div style="font-size:11px;color:var(--c-text-3)">${esc(u.department||'—')}${u.position?' · '+esc(u.position):''}</div></div></div></td>
       <td style="padding:11px 8px">${canMng
@@ -2544,8 +2706,8 @@ function _acDraft(u){
   return _ACD;
 }
 function _acTogBtn(on,label,onclick,disabled){
-  return `<button ${disabled?'disabled':''} onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#8B6B41':'var(--c-border)'};background:${on?'#F5EEE1':'var(--c-surface)'};color:${on?'#6F5430':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled?'.45':'1'}">
-    <span style="width:6px;height:6px;border-radius:50%;background:${on?'#9C7A4D':'#D1D5DB'};flex-shrink:0"></span>${esc(label)}</button>`;
+  return `<button ${disabled?'disabled':''} onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#FF7F11':'var(--c-border)'};background:${on?'#FFF1E4':'var(--c-surface)'};color:${on?'#C25A00':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled?'.45':'1'}">
+    <span style="width:6px;height:6px;border-radius:50%;background:${on?'#FF8F33':'#C9D9DD'};flex-shrink:0"></span>${esc(label)}</button>`;
 }
 App._acCustomize=(uid2)=>{
   if(_ACD&&_ACD.uid!==uid2&&_ACD.dirty&&!confirm('Discard unsaved changes for the previous person?'))return;
@@ -2612,15 +2774,15 @@ App._renderACUser=()=>{
             <span style="font-size:11px;color:var(--c-text-3)">Follows role: <b style="color:var(--c-text-2)">${esc(roleActs)}</b>${a.scoped&&roleArea?` · sees ${SCOPE_LABEL[roleArea.scope||'none']}`:''}</span>
             ${canMng?`<button onclick="App._acOvAdd('${a.key}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">Override</button>`:''}
           </div>`;
-      return `<div style="display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center;${ov?'background:linear-gradient(90deg,rgba(245,158,11,.06),transparent);':''}">
-        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)}${ov?' <span style="font-size:9px;font-weight:800;color:#92400E;background:#FEF3C7;padding:1px 6px;border-radius:8px;vertical-align:middle">OVERRIDE</span>':''}</div></div>
+      return `<div style="display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center;${ov?'background:linear-gradient(90deg,rgba(255,127,17,.06),transparent);':''}">
+        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)}${ov?' <span style="font-size:9px;font-weight:800;color:#7A4E00;background:#FDF3D9;padding:1px 6px;border-radius:8px;vertical-align:middle">OVERRIDE</span>':''}</div></div>
         ${body}
       </div>`;
     }).join('');
     return `<div style="margin-bottom:10px"><div style="${lab};margin-bottom:2px">${esc(g)}</div>${rowsH}</div>`;
   }).join('');
   modalShell({title:'Personal settings — '+fullName(u),sub:(role?('Role: '+role.name):'No role assigned')+' · changes apply on Save',size:'max-w-3xl',key:'ac-user',
-    body:`<div>${d.dirty?'<div style="font-size:11.5px;font-weight:800;color:#92400E;background:#FEF3C7;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
+    body:`<div>${d.dirty?'<div style="font-size:11.5px;font-weight:800;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
       ${personal}${docs}
       ${(()=>{const SYS=['departments','locations','documentsOrg'];const legacy=Object.keys(d.perms).filter(k=>!SYS.includes(k));return legacy.length?`<div style="font-size:11px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:8px 11px">This person has ${legacy.length} legacy exception(s) from migration, so some areas ignore their role. <button onclick="['${'${'}legacy.join(\"','\")}'].forEach(k=>delete _ACD.perms[k]);_acMark()" style="border:none;background:none;color:var(--c-danger-ink);font-weight:800;cursor:pointer;font-size:11px;padding:0">Clear them</button> so the role decides everything. (Document-folder access is managed above and not affected.)</div>`:'';})()}
     </div>`,
@@ -2736,7 +2898,7 @@ App._renderRPEdit=()=>{
       const nOn=a.actions.filter(x=>(cur.actions||{})[x]).length;
       const hay=(a.label+' '+a.desc+' '+a.actions.map(x=>PERM_ACTION_LABEL[x]||x).join(' ')).toLowerCase();
       return `<div data-rp-row="${esc(hay)}" style="display:${(p.q&&!hay.includes(String(p.q).toLowerCase()))?'none':'grid'};grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center">
-        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)} ${nOn?`<span style="font-size:9px;font-weight:800;color:#6F5430">${nOn} on</span>`:''}</div><div style="font-size:10px;color:var(--c-text-3);line-height:1.3">${esc(a.desc)}</div></div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)} ${nOn?`<span style="font-size:9px;font-weight:800;color:#C25A00">${nOn} on</span>`:''}</div><div style="font-size:10px;color:var(--c-text-3);line-height:1.3">${esc(a.desc)}</div></div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
           ${a.actions.map(act=>_acTogBtn(!!(cur.actions||{})[act],PERM_ACTION_LABEL[act]||act,`App._rpT('${a.key}','${act}')`,dis)).join('')}
           ${a.scoped?`<span style="font-size:9.5px;color:var(--c-text-3)">sees:</span><select ${dis?'disabled':''} onchange="App._rpScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${SCOPE_ORDER.map(s=>`<option value="${s}" ${((cur.scope||'none')===s)?'selected':''}>${SCOPE_LABEL[s]}</option>`).join('')}</select>`:''}
@@ -2747,7 +2909,7 @@ App._renderRPEdit=()=>{
   }).join('');
   modalShell({title:p.isNew?'New role':('Role — '+(p.name||'Untitled')),sub:(nUsers?nUsers+' people have this role · ':'')+'toggles apply on Save',size:'max-w-3xl',key:'ac-role',
     body:`<div>
-      ${p.dirty?'<div style="font-size:11.5px;font-weight:800;color:#92400E;background:#FEF3C7;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
+      ${p.dirty?'<div style="font-size:11.5px;font-weight:800;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:14px">
         <div><label style="${lab}">Role name *</label><input ${dis?'disabled':''} type="text" value="${esc(p.name||'')}" oninput="_RPD.name=this.value;_RPD.dirty=true" placeholder="e.g. Branch Supervisor" class="ui-input rf" style="margin-top:5px"/></div>
         <div><label style="${lab}">Description</label><input ${dis?'disabled':''} type="text" value="${esc(p.description||'')}" oninput="_RPD.description=this.value;_RPD.dirty=true" placeholder="What is this role for?" class="ui-input rf" style="margin-top:5px"/></div>

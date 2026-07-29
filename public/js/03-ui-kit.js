@@ -10,7 +10,7 @@ const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-
 /* ═══════════ SHARED UI — token-driven design system (Evarca-aligned) ═══════════
    ONE button helper btn() with variants; btnP/btnG kept as thin aliases so every
    existing call site keeps working. New code can call btn() directly. */
-const hdr=(t,s,a='')=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap"><div style="min-width:0"><h1 class="fd" style="font-size:var(--fs-h1);font-weight:800;letter-spacing:-.6px;line-height:1.15;color:var(--c-text)">${esc(t)}</h1>${s?`<p style="font-size:14px;color:var(--c-text-2);margin-top:4px">${esc(s)}</p>`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${a}</div></div>`;
+const hdr=(t,s,a='')=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap"><div style="min-width:0"><h1 class="fd" style="font-size:var(--fs-h1);font-weight:600;letter-spacing:-.4px;line-height:1.15;color:var(--c-text)">${esc(t)}</h1>${s?`<p style="font-size:14px;color:var(--c-text-2);margin-top:4px">${esc(s)}</p>`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${a}</div></div>`;
 const pageHeader=hdr;
 function btn(label,onclick,opts={}){
   const v=opts.variant||'primary',sz=opts.size||'md',i=opts.icon||'';
@@ -43,9 +43,9 @@ function chipBar(items,activeKey,fnName,opts={}){
   return pill?`<div style="display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch">${inner}</div>`:`<div class="ui-tabs">${inner}</div>`;
 }
 const togV=id=>{const el=$(`#${id}`);if(!el)return false;return el.classList?.contains('on')||false;};
-const STAT_C={sky:'#0284C7',brand:'#8B6B41',rose:'#E11D48',amber:'#D97706',orange:'#EA580C',emerald:'#6F5430'};
+const STAT_C={sky:'#0A80C4',brand:'#FF7F11',rose:'#DE2440',amber:'#C08400',orange:'#E86D00',emerald:'#C25A00'};
 const statCard=(t,v,c='sky',oc='')=>{
-  const col=STAT_C[c]||c||'#0284C7';
+  const col=STAT_C[c]||c||'#0A80C4';
   const base='background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:18px';
   const lbl='<div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">'+t+'</div>';
   const val='<div class="fd" style="font-size:30px;font-weight:800;line-height:1;color:'+col+'">'+v+'</div>';
@@ -73,7 +73,7 @@ function openModal(html,size='max-w-lg',opts={}){
   const _prevPop=m?m.querySelector('.pop'):null;
   const _prevScroll=_prevPop?_prevPop.scrollTop:0;
   if(!m){m=document.createElement('div');m.id='modal';document.body.appendChild(m);}
-  m.className='fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6';m.style.cssText='background:rgba(14,15,19,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
+  m.className='fixed inset-0 z-[100] flex items-end md:items-center justify-center p-0 md:p-6';m.style.cssText='background:rgba(10,27,33,0.65);backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)';
   m.dataset.mkey=(opts&&opts.key)||'';
   m.innerHTML=`<div role="dialog" aria-modal="true" aria-label="Dialog" class="pop w-full ${size} md:rounded-3xl rounded-t-3xl max-h-[92vh] overflow-y-auto" style="background:#fff;border:1px solid rgba(0,0,0,.1);box-shadow:0 32px 80px rgba(0,0,0,.28),0 8px 32px rgba(0,0,0,.16),0 0 0 1px rgba(255,255,255,.08)">${html}</div>`;
   m.onclick=e=>{if(e.target===m)closeModal();};
