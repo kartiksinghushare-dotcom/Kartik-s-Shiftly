@@ -1544,16 +1544,43 @@ App._okrEdQESet=(i,field,val)=>{
 /* ── Annual objective → quarterly split (editor-side helpers) ──
    _OKRED._qRows holds the NEW quarterly periods being defined: [{label,start,end,startVal,target}].
    Fully flexible: keep 2, add 6, change any date — the defaults are only a starting point. */
+/* ══ Split a period into REAL calendar quarters ═════════════════════════════════════════════
+   Every calendar quarter the period overlaps, clipped to the period's own edges:
+     Jan 1 – Dec 31  → Q1 · Q2 · Q3 · Q4                         (four full quarters)
+     Jan 1 – Jul 31  → Q1 · Q2 · Q3 (Jul 1 – Jul 31)             (three, the last one short)
+     Jun 1 – Feb 28  → Q2 (Jun 1–Jun 30) · Q3 · Q4 · Q1 '27      (year in the label once it wraps)
+   A period that sits inside ONE calendar quarter is split into its MONTHS instead — asking to
+   split "Q1" into four sub-quarters called Q1–Q4 is never what anyone means, and it used to
+   produce ranges like "Q2 = Jan 24 – Feb 14" that no reporting period lines up with.
+   This replaces the old behaviour of cutting the span into four equal day-slices, which only
+   gave true quarters when the period was exactly Jan 1 – Dec 31.                            */
+const _OKR_MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function _okrMonthLen(y,m){return m===2?(((y%4===0&&y%100!==0)||y%400===0)?29:28):[31,28,31,30,31,30,31,31,30,31,30,31][m-1];}
+function _okrMkISO(y,m,d){return y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');}
 function _okrCalQuarters(ps,pe){
-  const y=ps.slice(0,4);
-  if(ps===y+'-01-01'&&pe===y+'-12-31'){const R=_okrQuarterRanges(Number(y));return['Q1','Q2','Q3','Q4'].map(q=>({label:q,start:R[q][0],end:R[q][1]}));}
-  const t0=new Date(ps+'T00:00:00'),t1=new Date(pe+'T00:00:00');
-  if(isNaN(t0)||isNaN(t1)||t1<=t0)return[];
-  const days=Math.round((t1-t0)/86400000)+1,slice=days/4,out=[];
-  for(let i=0;i<4;i++){
-    const s=i===0?ps:_okrDateAddD(ps,Math.round(slice*i));
-    const e=i===3?pe:_okrDateAddD(ps,Math.round(slice*(i+1))-1);
-    out.push({label:'Q'+(i+1),start:s,end:e});
+  if(!ps||!pe||pe<ps)return[];
+  const y0=+ps.slice(0,4),m0=+ps.slice(5,7),y1=+pe.slice(0,4),m1=+pe.slice(5,7);
+  if(!isFinite(y0)||!isFinite(m0)||!isFinite(y1)||!isFinite(m1))return[];
+  const q0=Math.floor((m0-1)/3),q1=Math.floor((m1-1)/3);
+  const out=[];
+  // Inside a single calendar quarter → months, so a quarter can still be broken down usefully.
+  if(y0===y1&&q0===q1){
+    for(let m=m0;m<=m1;m++){
+      out.push({label:_OKR_MONTHS[m-1],
+        start:m===m0?ps:_okrMkISO(y0,m,1),
+        end:m===m1?pe:_okrMkISO(y0,m,_okrMonthLen(y0,m))});
+    }
+    return out;
+  }
+  const multiYear=y0!==y1;
+  let y=y0,q=q0;
+  while(y*4+q<=y1*4+q1){
+    const a=q*3+1,b=q*3+3;
+    let s=_okrMkISO(y,a,1),e=_okrMkISO(y,b,_okrMonthLen(y,b));
+    if(s<ps)s=ps;          // clip the first quarter to the period's start
+    if(e>pe)e=pe;          // clip the last quarter to the period's end
+    out.push({label:'Q'+(q+1)+(multiYear?(" '"+String(y).slice(2)):''),start:s,end:e});
+    if(++q>3){q=0;y++;}
   }
   return out;
 }
@@ -1652,9 +1679,9 @@ function _okrEdAnnualSection(o,L){
         ${rows.map(rowHTML).join('')||(qKids.length?'':'<div style="font-size:11.5px;color:var(--c-text-3);margin-top:4px">No periods yet — add one below.</div>')}
         <div style="display:flex;gap:8px;margin-top:9px;flex-wrap:wrap">
           <button type="button" onclick="App._okrEdQAdd()" class="ui-btn ui-btn-ghost ui-btn-sm">${ic('plus','w-3.5 h-3.5')}Add period</button>
-          ${!qKids.length?`<button type="button" onclick="App._okrEdReQ()" class="ui-btn ui-btn-ghost ui-btn-sm" title="Re-split the annual period into 4 suggested quarters">${ic('refresh','w-3.5 h-3.5')}Reset to 4 quarters</button>`:''}
+          ${!qKids.length?`<button type="button" onclick="App._okrEdReQ()" class="ui-btn ui-btn-ghost ui-btn-sm" title="Re-split the annual period into calendar quarters">${ic('refresh','w-3.5 h-3.5')}Reset to calendar quarters</button>`:''}
         </div>
-        <div style="font-size:11px;color:var(--c-text-3);margin-top:8px;line-height:1.5">Fully flexible — keep 2 periods, add 6, rename them, shift any date. Defaults split the annual period into 4 quarters with suggested values.</div>
+        <div style="font-size:11px;color:var(--c-text-3);margin-top:8px;line-height:1.5">Fully flexible — keep 2 periods, add 6, rename them, shift any date. Defaults follow real calendar quarters, clipped to the period — a Jan–Jul objective gets Q1, Q2 and a short Q3. A period inside one quarter is split into its months instead.</div>
       </div>`:''}
   </div>`;
 }
