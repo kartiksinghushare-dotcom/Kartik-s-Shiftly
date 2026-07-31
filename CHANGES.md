@@ -1,65 +1,50 @@
-# Bridge v75 — Workspace access: channel-level vs board-level
+# Bridge v77 — three fixes
 
-## ⚠️ Read this first
-
-Right now **34 of your 40 active users can see every board** — not because they were assigned, but because of the bug below. Once v75 is deployed those 34 see **nothing** until you assign them. That's the fix working, but it will feel abrupt if you're not expecting it.
-
-Who genuinely has access today:
-
-| Channel | Channel members | Boards |
-|---|---|---|
-| CS - OPs | Kartik Hushare | Chat, Complaints, Picture Request, Updates |
-| Pro x Inventory | Kartik Hushare | Chat, Receiving Inventory (+ Anam Noor, Kartiksingh Hushare on that board) |
-
-**Plan:** deploy → open each channel → **People** button in the header → add everyone who should see the whole channel. Anyone who should see just one board goes on that board's member list instead (the existing 👥 button).
+Cumulative. **7 files**, same repo paths. Cache-buster `?v=77`.
+`index.html` · `public/js/01-supabase-sync.js` · `06-crm.js` · `15-questions-escalation.js` · `19-okr-roles-acl.js` · `04-nav-shell.js` · `src/styles/main.css`
 
 ---
 
-## What was actually broken
+## 1. "No button to add users on a channel" — there was one, but it was invisible in plain sight
 
-Two separate leaks, both in the visibility rules:
+The button existed and rendered fine at 360/390px. The real problem: it was a white `👥 1` chip, and the **board members** button sitting right below the tabs is *also* a white `👥 1` chip. Two identical controls meaning different things — so you tapped one, got board members, and concluded the channel one didn't exist.
 
-1. **`created it` was a permanent grant.** Board visibility ended with `return b.createdBy === S.uid` — so removing somebody from a board they had created never took their access away. That's the "removed but can still see it" symptom.
-2. **Permission to *create* revealed every channel.** Hub visibility began with `if (_crmSeeAll() || can('crm','create')) return true`, and your Basic Employee role grants `create`. So every ordinary employee saw every channel. Worse, the "heal a missing Chat board" routine then ran across *all* channels and quietly created a board with that person as a member — inside channels they'd never been given.
+Now:
 
-Both are gone.
+- The **channel** control is a solid dark pill — `👥 Channel 1` — clearly the odd one out in a row of white buttons.
+- The **board** control reads `👥 Board 1`.
+- (The word is hidden on very narrow screens; the dark/white contrast still separates them.)
+- A **channel-people icon now also sits on every hub row in the drawer**, which is where you naturally look on a phone to manage a channel.
 
-## The new model
+Both are permission-gated and have 44px tap targets.
 
-- **Channel (hub) member → sees every board in that channel.**
-- **Board member → sees only that board** (the channel still appears so they can reach it).
-- Neither → sees nothing.
-- Creating something no longer grants access on its own; whoever creates a channel is added as a channel member, so nobody locks themselves out.
+> Side note: while tracing this I found your design layer rewrites *any* button with inline `background:#10262E` into a gradient — and a later rule turns that gradient orange. My first attempt at a dark button silently came out orange because of it. The channel pill now uses a hex that isn't intercepted. Worth knowing if a "dark" button ever turns orange on you elsewhere.
 
-## It's driven by permissions, not hardcoded
+## 2. Workspace notifications now open the actual chat/ticket
 
-Three new Workspace toggles appear in **Access Control → Workspace**:
+Added a nullable `link` column to `notifications` (migration `notifications_deep_link`, applied — additive, nothing else touched). New Workspace alerts carry `crm:<conversationId>`, and clicking one opens **that conversation**, on the right board and hub, marked read and scrolled to the latest message.
 
-| Permission | What it does |
-|---|---|
-| **Assign people (channel)** | May add/remove people at channel level |
-| **Assign people (board)** | May add/remove people on a single board |
-| **See every channel & board** | Bypasses membership entirely |
+Your **existing** notifications predate that column, so they'd have no link — those fall back to matching the quoted title in the message (*"… tagged you in "Return""* → opens Return). Both paths are tested. If the conversation was deleted or isn't yours to see, you land on the Workspace with a quiet note rather than a dead end.
 
-Defaults: Super Admin & Administrator get all three; Team Lead / Manager gets board-level assignment; Basic Employee gets none. Existing admin role profiles keep full visibility even before you re-save them (`isAdmin()` remains a fallback), so nothing breaks on upgrade. Any custom role can be given exactly the mix you want.
+## 3. Add/remove no longer applies before you press Save
 
-## New UI
+Both dialogs — channel **and** board — are now staged edits:
 
-A **People** button next to the channel name in the Workspace header opens a panel with three clear sections: who has channel-wide access, who is board-only (with the board names listed), and everyone you can add. Removing your own channel access asks for confirmation first.
+- Adding or removing only changes the list *in the dialog*.
+- **Save changes** applies everything in one go: local state, database and everyone else's live screen.
+- **Cancel**, the X, or tapping the backdrop discards the lot.
+- The confirm prompt for removing *your own* channel access now fires at Save, not mid-edit.
+- One toast summarising what happened ("2 added, 1 removed") instead of silent per-click writes.
 
-Access changes apply **live** — revoke someone mid-session and the board disappears from their screen without a reload.
+Adding a whole people-group to a board is staged the same way.
 
-## Database (applied)
-
-Migration `crm_hub_members_channel_level_access`: a new `crm_hub_members` table, indexed, RLS enabled, added to the realtime publication, plus a backfill making each hub's creator a channel member so no existing owner is locked out. Additive only — no existing table, column, policy or row was modified.
-
-## Still app-enforced, not database-enforced
-
-Your `crm_messages` / `crm_conversations` policies are still `using (true)` for any signed-in user. v75 fixes what the **UI** shows; a signed-in person who knows the API URL could in principle still query another channel's messages directly. `optional-rls-hardening.sql` (included, **not applied**) moves the same channel/board rule into the database. I left it for you to review because a mistake there locks out all 40 users — say the word and I'll apply and verify it.
+---
 
 ## Verification
-- 17 new access-control tests (channel member, board-only member, removed creator, unassigned employee, admin, search scope, auto-board spraying, each permission toggle, live revocation) — **17/17 pass**
-- Previous suites all still green: 19 live/sticky, 19 mobile tap, 12 progress, 0 missing handlers, 0 horizontal overflow
+22 new tests covering all three (button visible/distinct/tappable at 390 **and** 360, drawer entry point, deep link with and without `link`, deleted-conversation fallback, permission check, and staged add/remove/cancel/save for both dialogs) — **22/22 pass**.
 
-## Deploy
-All 5 files, same repo paths. Cache-buster is now `?v=75` — confirm the page source shows it.
+Everything prior still green: 13 notification, 17 access-control, 19 live/sticky, 19 mobile tap, 12 progress, 0 missing handlers, 0 horizontal overflow.
+
+## Still open (your call)
+- **`optional-rls-hardening.sql`** — included, not applied. Access is still app-enforced only.
+- **Assign your people** — only 6 of 40 users have real Workspace assignments.

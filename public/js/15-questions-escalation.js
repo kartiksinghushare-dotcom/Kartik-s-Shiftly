@@ -908,6 +908,24 @@ function _feedbackTabContent(uid){
 }
 
 
+/* Shared notification list renderer — used by every tab so the rows always look the same. */
+function _notifTimeline(list,unreadIds,typeOf,CLR,BG,ICO){
+  return '<div style="background:#fff;border-radius:16px;border:1px solid #DFEAEC;overflow:hidden">'
+    +'<div style="display:flex;flex-direction:column">'
+    +list.map(function(n){
+      var type=typeOf(n.text);var clr=CLR[type];var bg=BG[type];var ico=ICO[type];
+      var isNew=unreadIds.has(n.id);
+      return '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid #F2F8F9;cursor:pointer;'+(isNew?'background:#F8FCFC':'background:#fff')+'" onclick="App._notifClick(this.dataset.id)" data-id="'+n.id+'">'
+        +'<div style="width:36px;height:36px;border-radius:10px;background:'+bg+';display:grid;place-items:center;flex-shrink:0;margin-top:1px;color:'+clr+'">'+ic(ico,'w-4 h-4')+'</div>'
+        +'<div style="flex:1;min-width:0">'
+        +'<p style="font-size:13px;color:#10262E;margin:0;line-height:1.5;font-weight:'+(isNew?'600':'400')+'">'+esc(n.text)+'</p>'
+        +'<p style="font-size:11px;color:#93A6AC;margin-top:3px">'+(n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+' \u00B7 '+type.charAt(0).toUpperCase()+type.slice(1)+'</p>'
+        +'</div>'
+        +(isNew?'<div style="width:7px;height:7px;border-radius:50%;background:#FF7F11;flex-shrink:0;margin-top:6px"></div>':'')
+      +'</div>';
+    }).join('')
+    +'</div></div>';
+}
 function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
@@ -927,11 +945,19 @@ function notificationsPage(){
   const unackFb=myFb.filter(fb=>!fb.acknowledged);
 
   const tab=S.filters.ntab||'All';
-  const TABS=['All','Approvals','Escalations','Feedback'];
+  const TABS=['All','Approvals','Escalations','Feedback','Workspace'];
 
   function notifType(text){
     if(!text)return'general';
-    if(text.includes('💬')||text.includes('replied')||text.includes('reply'))return'feedback';
+    /* v3.20 — WORKSPACE first. These carry their own markers (💬 mention, 🎫 ticket,
+       ↪ moved, ⚡ automation, ⏰ reminder, 🔔 update). 💬 used to be read as "feedback",
+       so every Workspace @-mention was filed under Feedback — a tab that only lists
+       manager feedback records, which is why it counted 3 and then showed nothing. */
+    if(/tagged you in/i.test(text))return'workspace';
+    if(text.indexOf('\u{1F4AC}')>=0||text.indexOf('\u{1F3AB}')>=0||text.indexOf('\u{1F514}')>=0)return'workspace';
+    if(text.indexOf('\u21AA')>=0||text.indexOf('\u26A1')>=0||text.indexOf('\u23F0')>=0)return'workspace';
+    if(/^\u2705 Approval needed:/.test(text))return'workspace';
+    if(text.includes('replied')||text.includes('reply'))return'feedback';
     if(text.includes('Feedback')||text.includes('feedback'))return'feedback';
     
     if(text.includes('Escalation')||text.includes('escalation'))return'escalation';
@@ -943,22 +969,28 @@ function notificationsPage(){
     if(text.includes('overdue')||text.includes('Late')||text.includes('late'))return'late';
     return'general';
   }
-  const TYPE_CLR={approval:'#8B5CF6',edit:'#12A3E0',escalation:'#FF7F11',feedback:'#2680EB',late:'#EF4444',general:'#5E767D'};
-  const TYPE_BG={approval:'#EDE7FE',edit:'#E2F2FC',escalation:'#FFF4EA',feedback:'#EAF2FE',late:'#FEF0F0',general:'#F4F9FA'};
-  const TYPE_ICON={approval:'approve',edit:'edit',escalation:'alert',feedback:'msg',late:'clock',general:'bell'};
+  const TYPE_CLR={approval:'#8B5CF6',edit:'#12A3E0',escalation:'#FF7F11',feedback:'#2680EB',workspace:'#00A8AD',late:'#EF4444',general:'#5E767D'};
+  const TYPE_BG={approval:'#EDE7FE',edit:'#E2F2FC',escalation:'#FFF4EA',feedback:'#EAF2FE',workspace:'#E3FAFB',late:'#FEF0F0',general:'#F4F9FA'};
+  const TYPE_ICON={approval:'approve',edit:'edit',escalation:'alert',feedback:'msg',workspace:'msg',late:'clock',general:'bell'};
 
-  const filteredNotifs=tab==='All'?notifs
-    :tab==='Approvals'?notifs.filter(n=>['approval','edit'].includes(notifType(n.text)))
-    :tab==='Feedback'?notifs.filter(n=>notifType(n.text)==='feedback')
-    :tab==='Escalations'?notifs.filter(n=>notifType(n.text)==='escalation')
+  /* v3.20 — one source of truth per tab: the badge is counted from the very list the
+     tab renders, so a tab can never again advertise 3 and then show an empty page. */
+  const apprNotifs=notifs.filter(n=>['approval','edit'].includes(notifType(n.text)));
+  const escNotifs =notifs.filter(n=>notifType(n.text)==='escalation');
+  const fbNotifs  =notifs.filter(n=>notifType(n.text)==='feedback');
+  const wsNotifs  =notifs.filter(n=>notifType(n.text)==='workspace');
+
+  const filteredNotifs=tab==='Approvals'?apprNotifs
+    :tab==='Escalations'?escNotifs
+    :tab==='Workspace'?wsNotifs
     :notifs;
 
   const counts={
     All:notifs.length,
-    Approvals:notifs.filter(n=>['approval','edit'].includes(notifType(n.text))).length,
-    Escalations:notifs.filter(n=>notifType(n.text)==='escalation').length,
-    Feedback:notifs.filter(n=>notifType(n.text)==='feedback').length+myFb.filter(fb=>!fb.acknowledged).length,
-
+    Approvals:apprNotifs.length,
+    Escalations:escNotifs.length,
+    Feedback:myFb.length+fbNotifs.length,   // records + genuine feedback alerts = what renders
+    Workspace:wsNotifs.length,
   };
 
   return '<div class="fade">'+hdr('Alerts','Everything that needs your attention lands here')
@@ -970,29 +1002,14 @@ function notificationsPage(){
       return '<button onclick="App._setNTab(this.dataset.t)" data-t="'+t+'" style="padding:8px 16px;border-radius:10px;font-size:14px;font-weight:600;border:none;cursor:pointer;background:'+(active?'#10262E':'transparent')+';color:'+(active?'#fff':'#5E767D')+'">'+t+badge+'</button>';
     }).join('')
     +'</div>'
-    // Feedback section (when tab=Feedback)
+    // Feedback tab = manager feedback records AND genuine feedback alerts (never one without the other)
     +(tab==='Feedback'
-      ? _feedbackTabContent(uid)
-      // Notification timeline for other tabs
+      ? ((myFb.length||fbNotifs.length)
+          ? (myFb.length?_feedbackTabContent(uid):'')+(fbNotifs.length?_notifTimeline(fbNotifs,unreadIds,notifType,TYPE_CLR,TYPE_BG,TYPE_ICON):'')
+          : empty('msg','No feedback yet','Feedback from your manager appears here.'))
       : (filteredNotifs.length
-        ? '<div style="background:#fff;border-radius:16px;border:1px solid #DFEAEC;overflow:hidden">'
-          +'<div style="display:flex;flex-direction:column">'
-          +filteredNotifs.map((n,idx)=>{
-              const type=notifType(n.text);
-              const clr=TYPE_CLR[type];const bg=TYPE_BG[type];const ico=TYPE_ICON[type];
-              const isNew=unreadIds.has(n.id);
-              // Parse deep-link target from notification text
-              return '<div style="display:flex;align-items:flex-start;gap:12px;padding:13px 16px;border-bottom:1px solid #F2F8F9;cursor:pointer;'+(isNew?'background:#F8FCFC':'background:#fff')+'" onclick="App._notifClick(this.dataset.id)" data-id="'+n.id+'">'
-                +'<div style="width:36px;height:36px;border-radius:10px;background:'+bg+';display:grid;place-items:center;flex-shrink:0;margin-top:1px">'+ic(ico,'w-4 h-4 text-['+clr+']')+'</div>'
-                +'<div style="flex:1;min-width:0">'
-                +'<p style="font-size:13px;color:#10262E;margin:0;line-height:1.5;font-weight:'+(isNew?'600':'400')+'">'+esc(n.text)+'</p>'
-                +'<p style="font-size:11px;color:#93A6AC;margin-top:3px">'+(n.time?new Date(n.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'')+' · '+type.charAt(0).toUpperCase()+type.slice(1)+'</p>'
-                +'</div>'
-                +(isNew?'<div style="width:7px;height:7px;border-radius:50%;background:#FF7F11;flex-shrink:0;margin-top:6px"></div>':'')
-                +'</div>';
-            }).join('')
-          +'</div></div>'
-        : empty('bell','All clear','No notifications yet.')
+        ? _notifTimeline(filteredNotifs,unreadIds,notifType,TYPE_CLR,TYPE_BG,TYPE_ICON)
+        : empty('bell','All clear',tab==='Workspace'?'No Workspace mentions or ticket alerts yet.':'No notifications yet.')
       )
     )
     +'</div>';
@@ -1003,7 +1020,18 @@ App._notifClick=(id)=>{
   n.read=true;_invalidateNotifCache();saveDB();
   const t=n.text||'';
   // Navigate first with clean filters, then set the tab
-  if(t.includes('💬')||t.includes('replied')||t.includes('Feedback')){
+  /* v3.20 — a Workspace mention/ticket alert belongs in the Workspace. It used to match
+     on 💬 and dump you on the Feedback tab, which lists manager feedback only — so the
+     tab looked empty even though the badge had counted your mentions. */
+  if((n.link&&String(n.link).indexOf('crm:')===0)
+     ||/tagged you in/i.test(t)||t.indexOf('\u{1F4AC}')>=0||t.indexOf('\u{1F3AB}')>=0||t.indexOf('\u{1F514}')>=0
+     ||t.indexOf('\u21AA')>=0||t.indexOf('\u26A1')>=0||t.indexOf('\u23F0')>=0||/^\u2705 Approval needed:/.test(t)){
+    if(typeof can==='function'&&!can('crm','view'))return;
+    /* v3.21 — open the actual chat/ticket, not just the Workspace page. */
+    if(typeof App._crmOpenFromNotification==='function'&&App._crmOpenFromNotification(n.link,t))return;
+    App.go('crm');return;
+  }
+  if(t.includes('replied')||t.includes('Feedback')){
     App._goNotifFeedback();return;
   }
 
