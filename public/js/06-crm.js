@@ -12,9 +12,21 @@
    A conversation starts as a chat and can be "converted to a ticket" of a type.
    ============================================================================ */
 let CRM=null;
-function _crmInit(){if(CRM)return;CRM={_loaded:false,_loading:false,_err:null,hubs:[],boards:[],views:[],categories:[],convos:[],reminders:[],sel:{hubId:null,boardId:null,viewId:null,category:'Chats',convoId:null,threadId:null},sidebarCollapsed:false,collapsedHubs:{},channels:[],boardMembersOpen:false,activity:[],settings:{},activityOpen:false,boardSettingsOpen:false,globalSettingsOpen:false,_bsBoardId:null,_rowAdd:null,search:'',compose:{images:[]},editMsgId:null,fwdMsgId:null,listFilter:'all',reads:{},boardFilter:{}};try{_crmRestoreSel();}catch(e){}
+function _crmInit(){if(CRM)return;CRM={hubMembers:{},_loaded:false,_loading:false,_err:null,hubs:[],boards:[],views:[],categories:[],convos:[],reminders:[],sel:{hubId:null,boardId:null,viewId:null,category:'Chats',convoId:null,threadId:null},sidebarCollapsed:false,collapsedHubs:{},channels:[],boardMembersOpen:false,activity:[],settings:{},activityOpen:false,boardSettingsOpen:false,globalSettingsOpen:false,_bsBoardId:null,_rowAdd:null,search:'',compose:{images:[]},editMsgId:null,fwdMsgId:null,listFilter:'all',reads:{},boardFilter:{}};try{_crmRestoreSel();}catch(e){}
   if(!CRM._remInt)CRM._remInt=setInterval(function(){try{if(CRM&&CRM._loaded)_crmCheckReminders();}catch(e){}},60000);}
-const _crmSeeAll=()=>isAdmin()||can('crm','manage');
+/* ══ v3.19 — WORKSPACE ACCESS ═══════════════════════════════════════════════════
+   Two levels, both dynamic (toggled per role in Access Control):
+     · CHANNEL (hub) member → sees EVERY board in that channel
+     · BOARD member        → sees ONLY that board
+   'seeAll' bypasses both. isAdmin() stays as a fallback so existing admin role
+   profiles keep working before anyone re-saves them in Access Control.        ══ */
+const _crmSeeAll=()=>can('crm','seeAll')||can('crm','manage')||isAdmin();
+/* Who may hand out access. Falls back to the old gate so nothing locks up on upgrade. */
+const _crmCanHubMembers=()=>can('crm','hubMembers')||can('crm','manage')||_crmSeeAll();
+const _crmCanBoardMembers=()=>can('crm','members')||can('crm','manage')||can('crm','edit')||_crmCanHubMembers();
+function _crmHubMemberIds(hubId){var m=(CRM&&CRM.hubMembers)||{};return Array.isArray(m[hubId])?m[hubId]:[];}
+function _crmIsHubMember(hubId,uid2){return _crmHubMemberIds(hubId).indexOf(uid2||S.uid)>=0;}
+function _crmHubPeopleList(hubId){return _crmHubMemberIds(hubId).map(function(id){return uById(id);}).filter(function(u){return u&&u.status!=='Disabled';}).sort(function(a,b){return fullName(a).localeCompare(fullName(b));});}
 /* ── People scoping (v3.12: channels removed) — a board's people = its members ── */
 function _crmBoardPeople(board){var ids={};((board&&board.members)||[]).forEach(function(x){ids[x]=1;});return Object.keys(ids).map(function(x){return uById(x);}).filter(function(u){return u&&u.status!=='Disabled';}).sort(function(a,b){return fullName(a).localeCompare(fullName(b));});}
 /* ── People groups (workspace-wide, stored in CRM.settings.groups) ── */
@@ -37,7 +49,14 @@ function _crmConfirmP(title,body,btnLabel){return new Promise(function(res){CRM.
     footer:btnG('Cancel','App._crmConfirmEnd(0)')+'<button onclick="App._crmConfirmEnd(1)" class="ui-btn ui-btn-danger ui-btn-md">'+esc(btnLabel||'Delete')+'</button>'});});}
 App._crmConfirmEnd=(yes)=>{var r=CRM._confirmRes;CRM._confirmRes=null;closeModal();if(r)r(!!yes);};
 function _crmInappOn(ev){try{return typeof _ns==='undefined'||!_ns||_ns['inapp_'+ev]!==false;}catch(e){return true;}}
-function _crmBoardVisible(b){if(!b)return false;if(_crmSeeAll())return true;if((b.members||[]).indexOf(S.uid)>=0)return true;return b.createdBy===S.uid;}
+/* NOTE: "created it" is deliberately NOT a grant any more — that was the bug where
+   removing somebody from a board never actually took their access away. */
+function _crmBoardVisible(b){
+  if(!b)return false;
+  if(_crmSeeAll())return true;
+  if(_crmIsHubMember(b.hubId))return true;              // channel-level access
+  return (b.members||[]).indexOf(S.uid)>=0;             // board-level access
+}
 function _crmVisibleBoards(){return (CRM.boards||[]).filter(_crmBoardVisible);}
 /* ── v3.12.1: FILTERED VIEWS — a saved, member-scoped MIRROR OF THE WHOLE HUB: same board
    tabs as the hub itself, each ticket board narrowed by the view's saved per-board conditions.
@@ -47,7 +66,16 @@ function _crmView(id){return (CRM.views||[]).find(function(v){return v.id===id;}
 function _crmViewVisible(v){if(!v)return false;if(_crmSeeAll())return true;if(v.createdBy===S.uid)return true;return (v.members||[]).indexOf(S.uid)>=0;}
 function _crmVisibleViews(hubId){return (CRM.views||[]).filter(function(v){return v.hubId===hubId&&_crmViewVisible(v);});}
 function _crmViewCanEdit(v){return !!v&&(_crmSeeAll()||v.createdBy===S.uid)&&can('crm','views');}
-function _crmHubVisible(h){if(!h)return false;if(_crmSeeAll()||can('crm','create'))return true;return (CRM.boards||[]).some(function(b){return b.hubId===h.id&&_crmBoardVisible(b);})||(CRM.views||[]).some(function(v){return v.hubId===h.id&&_crmViewVisible(v);});}
+/* A channel shows up when you are a member of it, when one of its boards is yours,
+   or when a filtered view hands it to you. Being allowed to CREATE no longer reveals
+   every existing channel — that leaked the whole workspace to ordinary staff. */
+function _crmHubVisible(h){
+  if(!h)return false;
+  if(_crmSeeAll())return true;
+  if(_crmIsHubMember(h.id))return true;
+  return (CRM.boards||[]).some(function(b){return b.hubId===h.id&&_crmBoardVisible(b);})
+      ||(CRM.views||[]).some(function(v){return v.hubId===h.id&&_crmViewVisible(v);});
+}
 /* Board ids whose content the user may read: visible boards ∪ every board of hubs with a visible view
    (v3.12.1: a filtered view mirrors the WHOLE hub — all of its boards, narrowed by the view's filters) */
 function _crmVisibleBoardIds(){var s={};_crmVisibleBoards().forEach(b=>s[b.id]=1);(CRM.views||[]).forEach(function(v){if(!_crmViewVisible(v))return;(CRM.boards||[]).forEach(function(b){if(b.hubId===v.hubId&&!_crmViewHides(v,b.id))s[b.id]=1;});});return s;}
@@ -94,13 +122,17 @@ const _CRM_EMO=['\u{1F44D}','❤️','\u{1F602}','\u{1F389}','\u{1F62E}'];
 function _crmCustAv(name,sz){sz=sz||34;var n=(name||'?').trim();var ini=(n[0]||'?').toUpperCase();var h=0;for(var i=0;i<n.length;i++)h+=n.charCodeAt(i);var bg=['#FF7F11','#1F6FE0','#C08400','#7C3AED','#DB2777','#0A96B8'][h%6];return'<div style="width:'+sz+'px;height:'+sz+'px;border-radius:50%;background:'+bg+';color:#fff;display:grid;place-items:center;font-size:'+Math.round(sz*0.4)+'px;font-weight:700;flex-shrink:0">'+esc(ini)+'</div>';}
 function _crmAt(t){return esc(t||'').replace(/@(\w+)/g,'<span style="background:#EDF5F7;color:#8F4A05;font-weight:700;border-radius:4px;padding:0 3px">@$1</span>');}
 function _crmImgs(imgs){if(!imgs||!imgs.length)return'';return'<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">'+imgs.map(function(s){return'<img src="'+s+'" onclick="App._bigImg&&App._bigImg(this.src)" style="width:130px;height:96px;object-fit:cover;border-radius:10px;border:1px solid rgba(0,0,0,.08);cursor:pointer"/>';}).join('')+'</div>';}
-async function _crmProvisionDefault(){var hid=uid('hub'),bid=uid('brd');CRM.hubs.push({id:hid,name:'General',icon:'msg'});CRM.boards.push({id:bid,hubId:hid,name:'Chat',members:S.uid?[S.uid]:[],settings:{type:'chat'},createdBy:S.uid||null});CRM.sel.hubId=hid;CRM.sel.boardId=bid;try{await sb.from('crm_hubs').insert({id:hid,name:'General',icon:'msg',created_by:S.uid||null,sort:0});await sb.from('crm_boards').insert({id:bid,hub_id:hid,name:'Chat',created_by:S.uid||null,sort:0,settings:{type:'chat'}});if(S.uid)await sb.from('crm_board_members').insert({board_id:bid,user_id:S.uid});}catch(e){console.warn('[CRM default]',e&&e.message);}}
+async function _crmProvisionDefault(){var hid=uid('hub'),bid=uid('brd');CRM.hubs.push({id:hid,name:'General',icon:'msg'});if(S.uid)CRM.hubMembers[hid]=[S.uid];CRM.boards.push({id:bid,hubId:hid,name:'Chat',members:S.uid?[S.uid]:[],settings:{type:'chat'},createdBy:S.uid||null});CRM.sel.hubId=hid;CRM.sel.boardId=bid;try{await sb.from('crm_hubs').insert({id:hid,name:'General',icon:'msg',created_by:S.uid||null,sort:0});if(S.uid)await sb.from('crm_hub_members').insert({hub_id:hid,user_id:S.uid});await sb.from('crm_boards').insert({id:bid,hub_id:hid,name:'Chat',created_by:S.uid||null,sort:0,settings:{type:'chat'}});if(S.uid)await sb.from('crm_board_members').insert({board_id:bid,user_id:S.uid});}catch(e){console.warn('[CRM default]',e&&e.message);}}
 /* ── v3.12: every hub ALWAYS has a Chat board by default — created with the hub and healed
    here if ever missing (deleted, or a hub left empty). Deterministic id ('brd_chat_<hubId>')
    makes this idempotent: two clients loading at once can never double-create it. ── */
 function _crmEnsureChatBoards(){
   if(!S.uid||!can('crm','create'))return;
   (CRM.hubs||[]).forEach(function(h){
+    // v3.19: only inside channels this person actually belongs to. Previously this ran for
+    // every hub in the workspace and quietly created a board (with the runner as a member)
+    // in channels they had never been given.
+    if(!(_crmSeeAll()||_crmIsHubMember(h.id)))return;
     if((CRM.boards||[]).some(function(b){return b.hubId===h.id&&_crmBS(b).type==='chat';}))return;
     var bid='brd_chat_'+h.id;
     if((CRM.boards||[]).some(function(b){return b.id===bid;}))return;
@@ -124,7 +156,8 @@ async function _crmLoad(){
       sb.from('workspace_settings').select('*').eq('key','crm_settings'),
       sb.from('crm_reads').select('*').eq('user_id',S.uid||''),
       sb.from('crm_reminders').select('*').eq('user_id',S.uid||'').eq('fired',false),
-      sb.from('crm_views').select('*').order('sort',{ascending:true})
+      sb.from('crm_views').select('*').order('sort',{ascending:true}),
+      sb.from('crm_hub_members').select('*')
     ]);
     if(R[0].error)throw R[0].error;
     CRM.hubs=(R[0].data||[]).map(r=>({id:r.id,name:r.name,icon:r.icon||'folder'}));
@@ -133,6 +166,7 @@ async function _crmLoad(){
     CRM.categories=(R[3].data||[]).map(r=>r.name);
     const mc={};(R[5].data||[]).forEach(r=>{(mc[r.conversation_id]=mc[r.conversation_id]||[]).push({id:r.id,senderId:r.sender_id,fromCustomer:r.from_customer,name:r.name,text:r.body||'',images:r.images||[],at:r.created_at,reactions:r.reactions||{},parentId:r.parent_id||null,edited:!!r.edited_at});});
     CRM.convos=(R[4].data||[]).map(r=>({id:r.id,boardId:r.board_id,title:r.title,customer:r.customer,channel:r.channel,isTicket:r.is_ticket,ticketType:r.ticket_type,priority:r.priority||'Medium',status:r.status||'Open',assignedTo:r.assigned_to||null,createdBy:r.created_by||null,decision:r.decision||null,decidedBy:r.decided_by||null,decidedAt:r.decided_at||null,fields:r.fields||{},dueDate:r.due_date||null,createdAt:r.created_at,lastAt:r.last_at,messages:mc[r.id]||[]}));CRM.reminders=((R[9]&&R[9].data)||[]).map(function(r){return{id:r.id,userId:r.user_id,conversationId:r.conversation_id,messageId:r.message_id||null,remindAt:r.remind_at,note:r.note||'',fired:!!r.fired};});CRM.activity=(R[6].data||[]).map(function(r){return{id:r.id,conversationId:r.conversation_id,boardId:r.board_id,actor:r.actor,action:r.action,detail:r.detail||'',at:r.created_at};});try{var _gs=R[7].data&&R[7].data[0]&&R[7].data[0].value;if(_gs&&typeof _gs==='object')CRM.settings=_gs;}catch(e){}CRM.channels=[];CRM.views=((R[10]&&R[10].data)||[]).map(function(r){var fl=r.filters;if(fl&&typeof fl==='object'&&!Array.isArray(fl)){}else if(Array.isArray(fl)&&fl.length&&r.board_id){var _m={};_m[r.board_id]=fl;fl=_m;}else{fl={};}return{id:r.id,hubId:r.hub_id,name:r.name||'',filters:fl,members:Array.isArray(r.members)?r.members:[],createdBy:r.created_by||null,sort:r.sort||0};});CRM.reads={};((R[8]&&R[8].data)||[]).forEach(function(r){CRM.reads[r.conversation_id]=r.last_seen_at;});
+    CRM.hubMembers={};((R[11]&&R[11].data)||[]).forEach(function(r){(CRM.hubMembers[r.hub_id]=CRM.hubMembers[r.hub_id]||[]).push(r.user_id);});
     if(!CRM.hubs.length&&can('crm','create')&&S.uid)await _crmProvisionDefault();
     _crmEnsureChatBoards();
     if(CRM.sel.viewId&&!_crmViewVisible(_crmView(CRM.sel.viewId)))CRM.sel.viewId=null;
@@ -385,9 +419,9 @@ function crmPage(){
   if(!CRM.hubs.length){mainInner=_crmEmpty('msg','Welcome to your Workspace','Create your first Hub — it holds your boards (chats & ticket tables) and filtered views.',canCreate?'<button onclick="App._crmNewHub()" style="margin-top:16px;padding:10px 20px;border:none;border-radius:11px;background:#FF7F11;color:#fff;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:7px">'+ic('plus','w-4 h-4')+'Create your first hub</button>':'<div style="margin-top:12px;font-size:12px;color:#93A6AC">Ask an admin for Workspace access.</div>');}
   else if(!hub){mainInner=_crmEmpty('folder','Nothing to show','You haven’t been added to any board or filtered view yet — ask an admin for access.','');}
   else{
-    var row1='<div class="crm-boardbar" style="padding:10px 16px;border-bottom:1px solid #E7F0F2;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0"><button class="crm-only-mob crm-tap" aria-label="Open hubs" onclick="App._crmMobNav()" style="width:34px;height:34px;border:1px solid #DFEAEC;background:#fff;border-radius:9px;cursor:pointer;align-items:center;justify-content:center;color:#2F4C55;flex-shrink:0">'+ic('menu','w-5 h-5')+'</button><div class="crm-hubname" style="font-size:16px;font-weight:800;color:#10262E;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(hub.name)+(view?' <span style="font-weight:800;color:#FF7F11;font-size:13px">· '+esc(view.name)+'</span>':'')+'</div><div style="flex:1"></div>'+_search+_dash+'</div>';
+    var row1='<div class="crm-boardbar" style="padding:10px 16px;border-bottom:1px solid #E7F0F2;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0"><button class="crm-only-mob crm-tap" aria-label="Open hubs" onclick="App._crmMobNav()" style="width:34px;height:34px;border:1px solid #DFEAEC;background:#fff;border-radius:9px;cursor:pointer;align-items:center;justify-content:center;color:#2F4C55;flex-shrink:0">'+ic('menu','w-5 h-5')+'</button><div class="crm-hubname" style="font-size:16px;font-weight:800;color:#10262E;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(hub.name)+(view?' <span style="font-weight:800;color:#FF7F11;font-size:13px">· '+esc(view.name)+'</span>':'')+'</div>'+_crmHubPeopleBtn(hub)+'<div style="flex:1"></div>'+_search+_dash+'</div>';
     var tabs=tabBoards.map(function(b){var on=b.id===CRM.sel.boardId;var _un=_crmUnreadCount(b.id);var _isC=_crmBS(b).type==='chat';var _brows=CRM.convos.filter(function(x){return x.boardId===b.id;});if(inView&&!_isC)_brows=_crmApplyFilters(_brows,_crmViewFilters(view,b.id));return'<button onclick="'+(inView?'App._crmSelVBoard':'App._crmSelBoard')+'(\''+b.id+'\')" class="crm-btab" style="display:inline-flex;align-items:center;gap:6px;padding:9px 14px;border:none;background:transparent;border-bottom:2px solid '+(on?'#FF7F11':'transparent')+';color:'+(on?'#10262E':'#90A5AB')+';font-size:13px;font-weight:'+(on?'800':'600')+';cursor:pointer;white-space:nowrap">'+ic(_isC?'msg':'ticket','w-3.5 h-3.5')+esc(b.name)+' '+(_isC?'<span style="font-size:11px;color:'+(on?'#FF7F11':'#BFD1D5')+'">'+_brows.length+'</span>':_crmNotDoneBadge(b,_brows,on))+(_un?'<span style="min-width:17px;height:17px;padding:0 5px;border-radius:9px;background:#FF7F11;color:#fff;font-size:9.5px;font-weight:800;display:inline-grid;place-items:center">'+_un+'</span>':'')+'</button>';}).join('');
-    var boardCtl=board?(((can('crm','manage')||can('crm','edit'))?'<button title="Board members — who can access this board" onclick="App._crmTogMembers()" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:8px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;cursor:pointer;font-size:12px;font-weight:700">'+ic('users','w-3.5 h-3.5')+members.length+'</button>':'')+(can('crm','rename')?'<button title="Rename board" onclick="App._crmRenameBoard(\''+board.id+'\')" style="width:30px;height:30px;border-radius:8px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;cursor:pointer;display:grid;place-items:center">'+ic('edit','w-4 h-4')+'</button>':'')+(inView
+    var boardCtl=board?((_crmCanBoardMembers()?'<button title="Board members — who can access this board" onclick="App._crmTogMembers()" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:8px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;cursor:pointer;font-size:12px;font-weight:700">'+ic('users','w-3.5 h-3.5')+members.length+'</button>':'')+(can('crm','rename')?'<button title="Rename board" onclick="App._crmRenameBoard(\''+board.id+'\')" style="width:30px;height:30px;border-radius:8px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;cursor:pointer;display:grid;place-items:center">'+ic('edit','w-4 h-4')+'</button>':'')+(inView
       ? (_crmViewCanEdit(view)?'<button title="Remove this board from the view — the board itself is not deleted" onclick="App._crmViewHideBoard(\''+board.id+'\')" style="display:inline-flex;align-items:center;gap:5px;height:30px;padding:0 10px;border-radius:8px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;cursor:pointer;font-size:12px;font-weight:700">'+ic('x','w-3.5 h-3.5')+'Remove from view</button>':'')
       : (can('crm','delete')?'<button title="Delete board" onclick="App._crmDelBoard(\''+board.id+'\')" style="width:30px;height:30px;border-radius:8px;border:1px solid #F9A9A9;background:#fff;color:#DC2626;cursor:pointer;display:grid;place-items:center">'+ic('trash','w-4 h-4')+'</button>':''))):'';
     var row2='<div class="crm-tabsrow" style="display:flex;align-items:center;gap:2px;padding:0 10px;border-bottom:1px solid #E7F0F2;overflow-x:auto;flex-shrink:0">'+tabs+(canCreate?'<button onclick="App._crmNewBoard(\''+hub.id+'\')" title="New board" style="padding:8px 11px;border:none;background:transparent;color:#FF7F11;font-weight:700;cursor:pointer;display:inline-flex;align-items:center;gap:4px;white-space:nowrap">'+ic('plus','w-3.5 h-3.5')+'Board</button>':'')+'<div style="flex:1;min-width:8px"></div><div style="display:flex;align-items:center;gap:6px;padding:6px 2px">'+boardCtl+'</div></div>';
@@ -533,9 +567,9 @@ App._crmConvert=async(id,type)=>{if(!can('crm','convert'))return toast('No permi
 App._crmSetDue=async(id,v)=>{if(!can('crm','edit'))return;var c=_crmConvo(id);if(!c)return;c.dueDate=v||null;rr();_crmLog('due date',c,v?('set to '+v):'cleared');sbWrite({table:'crm_conversations',op:'update',id:id,match:{col:'id',val:id},values:{due_date:v||null,updated_at:new Date().toISOString()}},{label:'Due date'});};
 App._crmSetPriority=async(id,v)=>{if(!can('crm','edit'))return;var c=_crmConvo(id);if(!c)return;c.priority=v;rr();sbWrite({table:'crm_conversations',op:'update',id:id,match:{col:'id',val:id},values:{priority:v,updated_at:new Date().toISOString()}},{label:'Priority'});try{_crmRunAutos(_crmBoard(c.boardId),'priority',c,{to:v});}catch(e){}};
 App._crmSetStatus=async(id,v)=>{if(!can('crm','edit'))return;var c=_crmConvo(id);if(!c)return;var prev=c.status;c.status=v;rr();if(prev!==v)_crmLog('status',c,prev+' → '+v);sbWrite({table:'crm_conversations',op:'update',id:id,match:{col:'id',val:id},values:{status:v,updated_at:new Date().toISOString()}},{label:'Status'});try{_crmRunAutos(_crmBoard(c.boardId),'status',c,{to:v});}catch(e){}};
-App._crmAddMember=async(uid2)=>{if(!(can('crm','manage')||can('crm','edit')))return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);if(!b)return;if(b.members.indexOf(uid2)<0)b.members.push(uid2);rr();try{await sb.from('crm_board_members').insert({board_id:b.id,user_id:uid2});}catch(e){console.warn('[CRM addMem]',e&&e.message);}};
-App._crmRemoveMember=async(uid2)=>{if(!(can('crm','manage')||can('crm','edit')))return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);if(!b)return;b.members=b.members.filter(x=>x!==uid2);rr();try{await sb.from('crm_board_members').delete().eq('board_id',b.id).eq('user_id',uid2);}catch(e){}};
-App._crmNewHub=async()=>{if(!can('crm','create'))return toast('No permission to create','err');var n=await _crmPromptP('New hub','A hub is a city or team — it holds boards (chats & ticket tables) and filtered views.','e.g. Dubai','Create hub');if(!n)return;var id=uid('hub'),bid=uid('brd');CRM.hubs.push({id:id,name:n.trim(),icon:'folder'});CRM.boards.push({id:bid,hubId:id,name:'Chat',members:S.uid?[S.uid]:[],settings:{type:'chat'},createdBy:S.uid||null});CRM.sel.hubId=id;CRM.sel.viewId=null;CRM.sel.boardId=bid;CRM.sel.convoId=null;CRM.sel.threadId=null;rr();try{await sb.from('crm_hubs').insert({id:id,name:n.trim(),icon:'folder',created_by:S.uid||null,sort:CRM.hubs.length});await sb.from('crm_boards').insert({id:bid,hub_id:id,name:'Chat',created_by:S.uid||null,sort:0,settings:{type:'chat'}});if(S.uid)await sb.from('crm_board_members').insert({board_id:bid,user_id:S.uid});}catch(e){toast('Saved locally, sync failed','warn');}};
+App._crmAddMember=async(uid2)=>{if(!_crmCanBoardMembers())return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);if(!b)return;if(b.members.indexOf(uid2)<0)b.members.push(uid2);rr();try{await sb.from('crm_board_members').insert({board_id:b.id,user_id:uid2});}catch(e){console.warn('[CRM addMem]',e&&e.message);}};
+App._crmRemoveMember=async(uid2)=>{if(!_crmCanBoardMembers())return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);if(!b)return;b.members=b.members.filter(x=>x!==uid2);rr();try{await sb.from('crm_board_members').delete().eq('board_id',b.id).eq('user_id',uid2);}catch(e){}};
+App._crmNewHub=async()=>{if(!can('crm','create'))return toast('No permission to create','err');var n=await _crmPromptP('New hub','A hub is a city or team — it holds boards (chats & ticket tables) and filtered views.','e.g. Dubai','Create hub');if(!n)return;var id=uid('hub'),bid=uid('brd');CRM.hubs.push({id:id,name:n.trim(),icon:'folder'});if(S.uid)CRM.hubMembers[id]=[S.uid];CRM.boards.push({id:bid,hubId:id,name:'Chat',members:S.uid?[S.uid]:[],settings:{type:'chat'},createdBy:S.uid||null});CRM.sel.hubId=id;CRM.sel.viewId=null;CRM.sel.boardId=bid;CRM.sel.convoId=null;CRM.sel.threadId=null;rr();try{await sb.from('crm_hubs').insert({id:id,name:n.trim(),icon:'folder',created_by:S.uid||null,sort:CRM.hubs.length});if(S.uid)await sb.from('crm_hub_members').insert({hub_id:id,user_id:S.uid});await sb.from('crm_boards').insert({id:bid,hub_id:id,name:'Chat',created_by:S.uid||null,sort:0,settings:{type:'chat'}});if(S.uid)await sb.from('crm_board_members').insert({board_id:bid,user_id:S.uid});}catch(e){toast('Saved locally, sync failed','warn');}};
 App._crmDelHub=async(id)=>{if(!can('crm','delete'))return toast('No permission to delete','err');var h=CRM.hubs.find(x=>x.id===id);if(!h)return;if(!(await _crmConfirmP('Delete hub','“'+esc(h.name)+'” and <b>all</b> its boards, filtered views and conversations will be permanently deleted.','Delete hub')))return;var bids=CRM.boards.filter(b=>b.hubId===id).map(b=>b.id);var vids=(CRM.views||[]).filter(v=>v.hubId===id).map(v=>v.id);CRM.hubs=CRM.hubs.filter(x=>x.id!==id);CRM.boards=CRM.boards.filter(b=>b.hubId!==id);CRM.views=(CRM.views||[]).filter(v=>v.hubId!==id);CRM.convos=CRM.convos.filter(c=>bids.indexOf(c.boardId)<0);if(bids.indexOf(CRM.sel.boardId)>=0||vids.indexOf(CRM.sel.viewId)>=0){CRM.sel.boardId=null;CRM.sel.viewId=null;CRM.sel.convoId=null;CRM.sel.threadId=null;}rr();sbWrite({table:'crm_hubs',op:'delete',id:id,match:{col:'id',val:id}},{label:'Delete hub'});vids.forEach(function(vid){sbWrite({table:'crm_views',op:'delete',id:vid,match:{col:'id',val:vid}},{label:'Delete view',silent:true});});};
 /* ── Renaming (crm → rename permission): sidebar label + hubs / boards ── */
 App._crmRenameHubsLabel=async()=>{if(!can('crm','rename'))return toast('No permission to rename','err');var cur=(CRM.settings&&CRM.settings.hubsLabel)||'Hubs';var n=await _crmPromptP('Rename sidebar title','This is the label above your hubs list — e.g. “Workspaces”, “Cities”, “Teams”.','e.g. Workspaces','Rename',cur);if(!n||n.trim()===cur)return;CRM.settings=Object.assign({},CRM.settings,{hubsLabel:n.trim()});rr();_crmSaveSettings('Sidebar title');toast('Renamed to “'+n.trim()+'” ✓');};
@@ -626,7 +660,7 @@ function _crmModals(){var out='';var convo=_crmConvo(CRM.sel.convoId);
 /* ── Add a whole people-group to a board in one tap ── */
 function _crmGroupAddRows(existing,handler){var ex={};(existing||[]).forEach(function(id){ex[id]=1;});var gs=_crmGroups().map(function(g){var add=(g.members||[]).filter(function(id){var u=uById(id);return u&&u.status!=='Disabled'&&!ex[id];}).length;return{g:g,add:add};}).filter(function(x){return x.add>0;});if(!gs.length)return'';
   return'<div style="font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#5F777E;padding:2px 4px 4px">Add a whole group</div>'+gs.map(function(x){return'<button onclick="'+handler+'(\''+x.g.id+'\')" title="Adds every member of this group" style="width:100%;text-align:left;display:flex;align-items:center;gap:8px;padding:6px 4px;border:none;background:transparent;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'#F6FAFB\'" onmouseout="this.style.background=\'transparent\'"><span style="width:28px;height:28px;border-radius:9px;background:#FFF1E4;color:#FF7F11;display:grid;place-items:center;flex-shrink:0">'+ic('users','w-3.5 h-3.5')+'</span><span style="font-size:13px;font-weight:700;color:#10262E;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(x.g.name)+'</span><span style="font-size:11px;font-weight:800;color:#FF7F11;background:#FFF1E4;border-radius:8px;padding:2px 8px;flex-shrink:0">+ '+x.add+'</span></button>';}).join('')+'<div style="height:1px;background:#F0F7F8;margin:8px 0"></div>';}
-App._crmAddGroupToBoard=async(gid)=>{if(!(can('crm','manage')||can('crm','edit')))return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);var g=_crmGroup(gid);if(!b||!g)return;var add=(g.members||[]).filter(function(id){var u=uById(id);return u&&u.status!=='Disabled'&&b.members.indexOf(id)<0;});if(!add.length)return toast('Everyone in \u201C'+g.name+'\u201D is already on this board');add.forEach(function(id){b.members.push(id);});rr();toast('Added '+add.length+' from \u201C'+g.name+'\u201D \u2713');try{await sb.from('crm_board_members').insert(add.map(function(id){return{board_id:b.id,user_id:id};}));}catch(e){console.warn('[CRM addGrp]',e&&e.message);}};
+App._crmAddGroupToBoard=async(gid)=>{if(!_crmCanBoardMembers())return toast('No permission','err');var b=_crmBoard(CRM.sel.boardId);var g=_crmGroup(gid);if(!b||!g)return;var add=(g.members||[]).filter(function(id){var u=uById(id);return u&&u.status!=='Disabled'&&b.members.indexOf(id)<0;});if(!add.length)return toast('Everyone in \u201C'+g.name+'\u201D is already on this board');add.forEach(function(id){b.members.push(id);});rr();toast('Added '+add.length+' from \u201C'+g.name+'\u201D \u2713');try{await sb.from('crm_board_members').insert(add.map(function(id){return{board_id:b.id,user_id:id};}));}catch(e){console.warn('[CRM addGrp]',e&&e.message);}};
 
 App._crmMobNav=(open)=>{
   var n=document.querySelector('.crm-nav'),sc=document.querySelector('.crm-scrim');
@@ -1543,6 +1577,7 @@ function _crmLiveStart(){
     _crmRT.ch=sb.channel('bridge-crm-'+(S.uid||'anon'))
       .on('postgres_changes',{event:'*',schema:'public',table:'crm_messages'},_crmOnMsgEvent)
       .on('postgres_changes',{event:'*',schema:'public',table:'crm_conversations'},_crmOnConvoEvent)
+      .on('postgres_changes',{event:'*',schema:'public',table:'crm_hub_members'},_crmOnHubMemberEvent)
       .subscribe(function(st){_crmRT.status=st;});
   }catch(e){_crmRT.status='ERROR';}
   if(!_crmRT.poll)_crmRT.poll=setInterval(function(){try{_crmPoll();}catch(e){}},9000);
@@ -1560,3 +1595,86 @@ function _crmLiveStop(){
 }
 App._crmLiveStatus=function(){return{status:_crmRT.status,bound:_crmRT.bound,lastTs:_crmRT.lastTs};};
 window._crmLiveStart=_crmLiveStart;window._crmLiveStop=_crmLiveStop;window._crmPoll=_crmPoll;
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   v3.19 — CHANNEL (hub) MEMBERSHIP UI
+   Add someone to a channel and they get every board inside it. Add them to a
+   single board instead and that board is all they see.
+   ══════════════════════════════════════════════════════════════════════════════ */
+function _crmHubPeopleBtn(hub){
+  if(!hub)return '';
+  var n=_crmHubPeopleList(hub.id).length;
+  if(!_crmCanHubMembers())return '';
+  return '<button onclick="App._crmHubPeople(\''+hub.id+'\')" title="Who can see this whole channel" class="crm-tap" style="display:inline-flex;align-items:center;gap:5px;height:32px;padding:0 10px;border-radius:9px;border:1px solid #DFEAEC;background:#fff;color:#5E767D;font-size:12px;font-weight:700;cursor:pointer;flex-shrink:0">'+ic('users','w-3.5 h-3.5')+n+'</button>';
+}
+App._crmHubPeople=(hubId)=>{
+  if(!_crmCanHubMembers())return toast('You don’t have permission to assign people','err');
+  CRM._hubPeopleId=hubId;App._crmHubPeopleRender();
+};
+App._crmHubPeopleRender=()=>{
+  var hubId=CRM._hubPeopleId;var h=_crmHub(hubId);if(!h)return;
+  var mem=_crmHubPeopleList(hubId);
+  var memSet={};mem.forEach(function(u){memSet[u.id]=1;});
+  var boards=(CRM.boards||[]).filter(function(b){return b.hubId===hubId;});
+  /* People who reach a board in here WITHOUT channel access — shown so it is obvious
+     who is board-scoped and who is channel-wide. */
+  var boardOnly={};
+  boards.forEach(function(b){(b.members||[]).forEach(function(id){if(!memSet[id])(boardOnly[id]=boardOnly[id]||[]).push(b.name);});});
+  var others=(DB.users||[]).filter(function(u){return u&&u.status!=='Disabled'&&!memSet[u.id];})
+                           .sort(function(a,b){return fullName(a).localeCompare(fullName(b));});
+  var row=function(u,right){return '<div style="display:flex;align-items:center;gap:9px;padding:7px 4px">'+avatar(u,'w-7 h-7','text-[9px]')+'<span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(fullName(u))+'</span>'+right+'</div>';};
+  var memHTML=mem.length?mem.map(function(u){
+    return row(u,'<button onclick="App._crmRemoveHubMember(\''+u.id+'\')" title="Remove channel access" style="border:none;background:var(--c-danger-soft);color:var(--c-danger);width:28px;height:28px;border-radius:8px;cursor:pointer;display:grid;place-items:center;flex-shrink:0">'+ic('x','w-3.5 h-3.5')+'</button>');
+  }).join(''):'<div style="padding:10px 4px;font-size:12.5px;color:var(--c-text-3);line-height:1.55">Nobody has channel-wide access yet. People added to individual boards below still see those boards.</div>';
+  var boHTML=Object.keys(boardOnly).map(function(id){
+    var u=uById(id);if(!u)return '';
+    return row(u,'<span style="font-size:10.5px;font-weight:700;color:var(--c-text-3);background:var(--c-surface-2);border-radius:20px;padding:3px 9px;flex-shrink:0;max-width:150px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(boardOnly[id].join(', '))+'</span>');
+  }).join('');
+  var addHTML=others.length?others.slice(0,120).map(function(u){
+    return '<button onclick="App._crmAddHubMember(\''+u.id+'\')" style="width:100%;text-align:left;display:flex;align-items:center;gap:9px;padding:7px 4px;border:none;background:transparent;border-radius:8px;cursor:pointer" onmouseover="this.style.background=\'var(--c-surface-2)\'" onmouseout="this.style.background=\'transparent\'">'+avatar(u,'w-7 h-7','text-[9px]')+'<span style="flex:1;min-width:0;font-size:13px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+esc(fullName(u))+'</span><span style="font-size:11px;font-weight:800;color:var(--c-brand-ink);flex-shrink:0">+ Add</span></button>';
+  }).join(''):'<div style="padding:8px 4px;font-size:12px;color:var(--c-text-3)">Everyone already has channel access.</div>';
+  var sec=function(t,sub){return '<div style="font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--c-text-3);margin:14px 2px 4px">'+t+(sub?' <span style="font-weight:600;text-transform:none;letter-spacing:0">'+sub+'</span>':'')+'</div>';};
+  modalShell({title:'People in “'+h.name+'”',sub:'Channel access = every board in here. Board-only access is set on the board itself.',size:'max-w-md',key:'crm-hubpeople',
+    body:sec('Channel access','· sees all '+boards.length+' board'+(boards.length===1?'':'s'))+memHTML
+        +(boHTML?sec('Board-only access','· limited to the boards listed')+boHTML:'')
+        +sec('Add to this channel')+'<div class="crm-scroll" style="max-height:230px;overflow-y:auto">'+addHTML+'</div>',
+    footer:btnP('Done','App.closeModal()')});
+};
+App._crmAddHubMember=async(uid2)=>{
+  if(!_crmCanHubMembers())return toast('No permission','err');
+  var hubId=CRM._hubPeopleId;if(!hubId)return;
+  var list=_crmHubMemberIds(hubId);
+  if(list.indexOf(uid2)<0){CRM.hubMembers[hubId]=list.concat([uid2]);}
+  App._crmHubPeopleRender();rr();
+  try{await sb.from('crm_hub_members').insert({hub_id:hubId,user_id:uid2});}catch(e){console.warn('[CRM hubMember+]',e&&e.message);}
+};
+App._crmRemoveHubMember=async(uid2)=>{
+  if(!_crmCanHubMembers())return toast('No permission','err');
+  var hubId=CRM._hubPeopleId;if(!hubId)return;
+  var h=_crmHub(hubId);
+  if(uid2===S.uid&&!_crmSeeAll()){
+    if(!(await _crmConfirmP('Remove your own access','You will lose access to “'+esc(h?h.name:'')+'” and every board in it.','Remove me'))){App._crmHubPeopleRender();return;}
+  }
+  CRM.hubMembers[hubId]=_crmHubMemberIds(hubId).filter(function(x){return x!==uid2;});
+  App._crmHubPeopleRender();rr();
+  try{await sb.from('crm_hub_members').delete().eq('hub_id',hubId).eq('user_id',uid2);}catch(e){}
+};
+/* Membership changes propagate live, so revoking access takes effect on the other
+   person's screen without them reloading. */
+function _crmOnHubMemberEvent(p){
+  try{
+    var evt=p.eventType||p.event;
+    var row=(evt==='DELETE')?(p.old||{}):(p.new||{});
+    if(!row||!row.hub_id)return;
+    var list=_crmHubMemberIds(row.hub_id);
+    if(evt==='DELETE')CRM.hubMembers[row.hub_id]=list.filter(function(x){return x!==row.user_id;});
+    else if(list.indexOf(row.user_id)<0)CRM.hubMembers[row.hub_id]=list.concat([row.user_id]);
+    else return;
+    if(row.user_id===S.uid){                    // my own access just changed
+      var b=_crmBoard(CRM.sel.boardId);
+      if(b&&!_crmBoardVisible(b)){CRM.sel.boardId=null;CRM.sel.convoId=null;CRM.sel.threadId=null;}
+    }
+    if(S.route==='crm')_crmLiveRR();
+  }catch(e){}
+}
