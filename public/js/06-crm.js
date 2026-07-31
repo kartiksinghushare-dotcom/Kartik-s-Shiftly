@@ -12,7 +12,8 @@
    A conversation starts as a chat and can be "converted to a ticket" of a type.
    ============================================================================ */
 let CRM=null;
-function _crmInit(){if(CRM)return;CRM={_loaded:false,_loading:false,_err:null,hubs:[],boards:[],views:[],categories:[],convos:[],reminders:[],sel:{hubId:null,boardId:null,viewId:null,category:'Chats',convoId:null,threadId:null},sidebarCollapsed:false,collapsedHubs:{},channels:[],boardMembersOpen:false,activity:[],settings:{},activityOpen:false,boardSettingsOpen:false,globalSettingsOpen:false,_bsBoardId:null,_rowAdd:null,search:'',compose:{images:[]},editMsgId:null,fwdMsgId:null,listFilter:'all',reads:{},boardFilter:{}};if(!CRM._remInt)CRM._remInt=setInterval(function(){try{if(CRM&&CRM._loaded)_crmCheckReminders();}catch(e){}},60000);}
+function _crmInit(){if(CRM)return;CRM={_loaded:false,_loading:false,_err:null,hubs:[],boards:[],views:[],categories:[],convos:[],reminders:[],sel:{hubId:null,boardId:null,viewId:null,category:'Chats',convoId:null,threadId:null},sidebarCollapsed:false,collapsedHubs:{},channels:[],boardMembersOpen:false,activity:[],settings:{},activityOpen:false,boardSettingsOpen:false,globalSettingsOpen:false,_bsBoardId:null,_rowAdd:null,search:'',compose:{images:[]},editMsgId:null,fwdMsgId:null,listFilter:'all',reads:{},boardFilter:{}};try{_crmRestoreSel();}catch(e){}
+  if(!CRM._remInt)CRM._remInt=setInterval(function(){try{if(CRM&&CRM._loaded)_crmCheckReminders();}catch(e){}},60000);}
 const _crmSeeAll=()=>isAdmin()||can('crm','manage');
 /* ── People scoping (v3.12: channels removed) — a board's people = its members ── */
 function _crmBoardPeople(board){var ids={};((board&&board.members)||[]).forEach(function(x){ids[x]=1;});return Object.keys(ids).map(function(x){return uById(x);}).filter(function(u){return u&&u.status!=='Disabled';}).sort(function(a,b){return fullName(a).localeCompare(fullName(b));});}
@@ -137,8 +138,11 @@ async function _crmLoad(){
     if(CRM.sel.viewId&&!_crmViewVisible(_crmView(CRM.sel.viewId)))CRM.sel.viewId=null;
     const vb=_crmVisibleBoards();
     if(!CRM.sel.viewId&&(!CRM.sel.boardId||!vb.some(x=>x.id===CRM.sel.boardId))){var fb=vb[0];CRM.sel.boardId=fb?fb.id:null;CRM.sel.hubId=fb?fb.hubId:null;}
+    // v3.18: a board restored from the last session decides the hub, so a refresh lands on the same tab.
+    if(CRM.sel.boardId){var _rb=_crmBoard(CRM.sel.boardId);if(_rb)CRM.sel.hubId=_rb.hubId;}
   }catch(e){CRM._err=(e&&e.message)||'Failed to load';console.warn('[CRM load]',CRM._err);}
   CRM._loaded=true;CRM._loading=false;rr();try{_crmCheckReminders();}catch(e){}
+  try{_crmLiveInitTs();_crmLiveStart();}catch(e){}
 }
 const _crmStyle='<style>'
 +'.crm-only-mob{display:none!important}'
@@ -408,6 +412,7 @@ function crmPage(){
       ?'<button title="People groups" onclick="App._crmGroupsOpen()" style="width:34px;height:34px;border-radius:9px;border:none;background:transparent;color:#5E767D;cursor:pointer;display:grid;place-items:center">'+ic('users','w-4 h-4')+'</button>'
       :'<div style="display:flex;align-items:center;gap:5px;padding:2px 7px"><span style="color:#90A5AB">'+ic('users','w-3.5 h-3.5')+'</span><button onclick="App._crmGroupsOpen()" title="Open people groups — @tag them in any board, notify them in automations" style="border:none;background:transparent;padding:0;font-size:10.5px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:#5E767D;flex:1;text-align:left;cursor:pointer">Groups'+(_gs.length?' <span style="font-weight:800;color:#93A6AC;text-transform:none;letter-spacing:0">('+_gs.length+')</span>':'')+'</button>'+(_canMg?'<button title="New group" onclick="App._crmGroupNewFromNav()" style="border:none;background:transparent;color:#90A5AB;cursor:pointer;padding:0">'+ic('plus','w-3 h-3')+'</button>':'')+'</div>')
     +'</div>';}
+  try{_crmSaveSel();}catch(e){}
   return _crmStyle+'<div class="crm-fs'+(CRM.sel.convoId?' crm-hasconvo':'')+'" style="position:fixed;top:0;left:0;right:0;bottom:0;background:#fff;display:flex;z-index:5">'
     +'<div class="crm-scrim" onclick="App._crmMobNav(false)"></div>'
     +'<div class="crm-nav" style="width:'+(collapsed?'56px':'220px')+';flex-shrink:0;border-right:1px solid #E7F0F2;background:#F6FAFB;display:flex;flex-direction:column;transition:width .15s"><div style="display:flex;align-items:center;gap:6px;padding:13px 10px;border-bottom:1px solid #E7F0F2;flex-shrink:0"><button onclick="App._crmTogSidebar()" title="Collapse" style="width:30px;height:30px;border-radius:8px;border:none;background:transparent;color:#5E767D;cursor:pointer;display:grid;place-items:center">'+ic('menu','w-4 h-4')+'</button>'+(collapsed?'':'<span class="fd" '+(can('crm','rename')?'onclick="App._crmRenameHubsLabel()" title="Click to rename this label" style="cursor:pointer;font-weight:800;font-size:14px;color:#10262E;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"':'style="font-weight:800;font-size:14px;color:#10262E;flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap"')+'>'+esc(hubsLabel)+'</span>'+(canCreate?'<button title="New hub" onclick="App._crmNewHub()" style="width:26px;height:26px;border-radius:7px;border:none;background:#10262E;color:#fff;cursor:pointer;display:grid;place-items:center;flex-shrink:0">'+ic('plus','w-3.5 h-3.5')+'</button>':''))+'</div><div class="crm-scroll" style="flex:1;overflow-y:auto;padding:8px 6px">'+(navHTML||(collapsed?'':'<div style="padding:16px 8px;font-size:12px;color:#90A5AB;text-align:center">No hubs yet</div>'))+'</div>'+grpFoot+'</div>'
@@ -460,6 +465,15 @@ App._crmSend=async()=>{
 async function _crmNotify(tagged,c,at){if(!tagged||!tagged.length)return;var who=me()?fullName(me()):'Someone';var txt='\u{1F4AC} '+who+' tagged you in “'+(c.title||'a conversation')+'”';for(var k=0;k<tagged.length;k++){if(_crmInappOn('crm_mention')){var nid=uid('n');try{DB.notifications.unshift({id:nid,userId:tagged[k],text:txt,time:at,read:false});}catch(e){}try{await sb.from('notifications').insert({id:nid,user_id:tagged[k],text:txt,read:false,created_at:at});}catch(e){}}if(typeof queueEmail==='function'){try{queueEmail('crm_mention',tagged[k],null,null,{title:(c.title||''),actor:who,preview:''});}catch(e){}}}try{_invalidateNotifCache();}catch(e){}}
 function _crmAddFiles(files){files=[].slice.call(files||[]).filter(f=>f.type&&f.type.indexOf('image/')===0);files.forEach(function(f){var rd=new FileReader();rd.onload=function(e){CRM.compose.images.push(e.target.result);var pv=document.getElementById('crm-preview');if(pv){pv.style.display='flex';pv.insertAdjacentHTML('beforeend','<div><img src="'+e.target.result+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #DFEAEC"/></div>');}};rd.readAsDataURL(f);});}
 App._crmPickImg=(input)=>{_crmAddFiles(input.files);input.value='';};
+/* v3.18: the preview strip is built imperatively, so a live redraw would wipe pending
+   attachments from view while they were still queued to send. Rebuild it from state. */
+function _crmRenderPreview(){
+  var pv=document.getElementById('crm-preview');if(!pv)return;
+  var imgs=(CRM.compose&&CRM.compose.images)||[];
+  if(!imgs.length){pv.style.display='none';pv.innerHTML='';return;}
+  pv.style.display='flex';
+  pv.innerHTML=imgs.map(function(src){return'<div><img src="'+src+'" style="width:56px;height:56px;object-fit:cover;border-radius:8px;border:1px solid #DFEAEC"/></div>';}).join('');
+}
 App._crmDragOver=(e)=>{e.preventDefault();var z=document.getElementById('crm-drop');if(z)z.style.display='grid';};
 App._crmDragLeave=(e)=>{if(e&&e.relatedTarget)return;var z=document.getElementById('crm-drop');if(z)z.style.display='none';};
 App._crmDrop=(e)=>{e.preventDefault();var z=document.getElementById('crm-drop');if(z)z.style.display='none';if(!can('crm','create'))return;_crmAddFiles(e.dataTransfer&&e.dataTransfer.files);};
@@ -1330,3 +1344,219 @@ function pageContent(){
   const hub=(typeof _hubOf==='function')?_hubOf(S.route):null;
   return hub?('<div class="fade">'+_hubStrip(hub)+'</div>'+html):html;
 }
+
+
+/* ══════════════════════════════════════════════════════════════════════════════
+   v3.18 — STICKY WORKSPACE POSITION + LIVE CHAT
+   1. Where you were (hub · board · filtered view · conversation) survives a refresh.
+   2. Messages arrive by themselves: Supabase Realtime push, with a polling safety net.
+   ══════════════════════════════════════════════════════════════════════════════ */
+
+/* ─── 1. Sticky position ─────────────────────────────────────────────────────
+   Stamped with the user id for the same reason the filter memory is: people close
+   the browser without signing out, and the next person on that machine must not
+   inherit a board they cannot even see. */
+const CRM_SEL_KEY='bridge_crm_sel_v1';
+let _crmSelLastWritten='';
+function _crmSaveSel(){
+  if(!S.uid||!CRM||!CRM.sel)return;
+  try{
+    var str=JSON.stringify({uid:S.uid,sel:{hubId:CRM.sel.hubId||null,boardId:CRM.sel.boardId||null,viewId:CRM.sel.viewId||null,convoId:CRM.sel.convoId||null}});
+    if(str===_crmSelLastWritten)return;               // no-op unless something actually moved
+    localStorage.setItem(CRM_SEL_KEY,str);_crmSelLastWritten=str;
+  }catch(e){}
+}
+function _crmRestoreSel(){
+  try{
+    var p=JSON.parse(localStorage.getItem(CRM_SEL_KEY)||'{}')||{};
+    if(!p.sel||!p.uid)return;
+    if(S.uid&&p.uid!==S.uid)return;                   // someone else's position — ignore
+    CRM.sel.hubId=p.sel.hubId||null;CRM.sel.boardId=p.sel.boardId||null;
+    CRM.sel.viewId=p.sel.viewId||null;CRM.sel.convoId=p.sel.convoId||null;
+  }catch(e){}
+}
+function _crmClearSel(){try{localStorage.removeItem(CRM_SEL_KEY);}catch(e){}_crmSelLastWritten='';}
+window._crmClearSel=_crmClearSel;
+
+/* ─── 2. Live feed ─────────────────────────────────────────────────────────── */
+var _crmRT={ch:null,status:'',poll:null,bound:false,tick:0,lastTs:null,busy:false};
+
+function _crmLiveInitTs(){
+  var mx='';
+  (CRM.convos||[]).forEach(function(c){(c.messages||[]).forEach(function(m){if(m.at&&String(m.at)>mx)mx=String(m.at);});});
+  _crmRT.lastTs=mx||new Date(Date.now()-864e5).toISOString();
+}
+function _crmRowToMsg(r){
+  return {id:r.id,senderId:r.sender_id,fromCustomer:r.from_customer,name:r.name,text:r.body||'',
+          images:r.images||[],at:r.created_at,reactions:r.reactions||{},parentId:r.parent_id||null,edited:!!r.edited_at};
+}
+function _crmRowToConvo(r){
+  return {id:r.id,boardId:r.board_id,title:r.title,customer:r.customer,channel:r.channel,isTicket:r.is_ticket,
+          ticketType:r.ticket_type,priority:r.priority||'Medium',status:r.status||'Open',assignedTo:r.assigned_to||null,
+          createdBy:r.created_by||null,decision:r.decision||null,decidedBy:r.decided_by||null,decidedAt:r.decided_at||null,
+          fields:r.fields||{},dueDate:r.due_date||null,createdAt:r.created_at,lastAt:r.last_at,messages:[]};
+}
+/* Apply one message row. Returns true when it actually changed something —
+   our own optimistic inserts come back over the wire and must be no-ops. */
+function _crmMergeMsgRow(r,evt){
+  if(!r||!r.id)return false;
+  var c=_crmConvo(r.conversation_id);
+  if(!c){_crmRT.needConvos=true;return false;}
+  if(!c.messages)c.messages=[];
+  var i=c.messages.findIndex(function(x){return x.id===r.id;});
+  if(evt==='DELETE'){
+    if(i<0)return false;
+    c.messages=c.messages.filter(function(x){return x.id!==r.id&&x.parentId!==r.id;});
+    if(CRM.sel.threadId===r.id)CRM.sel.threadId=null;
+    return true;
+  }
+  var m=_crmRowToMsg(r);
+  if(i<0){
+    c.messages.push(m);
+    c.messages.sort(function(a,b){return String(a.at||'').localeCompare(String(b.at||''));});
+    if(!c.lastAt||String(m.at)>String(c.lastAt))c.lastAt=m.at;
+    if(m.at&&(!_crmRT.lastTs||String(m.at)>_crmRT.lastTs))_crmRT.lastTs=String(m.at);
+    return true;
+  }
+  var old=c.messages[i];
+  if(old.text===m.text&&!!old.edited===!!m.edited&&JSON.stringify(old.reactions||{})===JSON.stringify(m.reactions||{})
+     &&JSON.stringify(old.images||[])===JSON.stringify(m.images||[]))return false;
+  c.messages[i]=Object.assign(old,{text:m.text,edited:m.edited,reactions:m.reactions,images:m.images});
+  return true;
+}
+function _crmMergeConvoRow(r,evt){
+  if(!r||!r.id)return false;
+  var i=(CRM.convos||[]).findIndex(function(x){return x.id===r.id;});
+  if(evt==='DELETE'){
+    if(i<0)return false;
+    CRM.convos.splice(i,1);
+    if(CRM.sel.convoId===r.id){CRM.sel.convoId=null;CRM.sel.threadId=null;}
+    return true;
+  }
+  if(i<0){
+    if(!_crmVisibleBoardIds()[r.board_id])return false;   // a board this user can't see
+    CRM.convos.unshift(_crmRowToConvo(r));
+    _crmRT.needMsgsFor=r.id;
+    return true;
+  }
+  var c=CRM.convos[i],n=_crmRowToConvo(r),ch=false;
+  ['boardId','title','customer','channel','isTicket','ticketType','priority','status','assignedTo','decision','decidedBy','decidedAt','dueDate','lastAt'].forEach(function(k){
+    if(JSON.stringify(c[k])!==JSON.stringify(n[k])){c[k]=n[k];ch=true;}
+  });
+  if(JSON.stringify(c.fields||{})!==JSON.stringify(n.fields||{})){c.fields=n.fields;ch=true;}
+  return ch;
+}
+/* Re-render WITHOUT stealing what the user is doing: the composer's text, caret and
+   focus, pending attachments, and both scroll positions are carried across. */
+function _crmLiveRR(){
+  if(S.route!=='crm'){return;}                       // off-tab: state is updated, paint later
+  if(CRM.editMsgId){CRM._liveDirty=true;return;}     // never yank a message being edited
+  var mDD=document.getElementById('crm-mention');
+  if(mDD&&mDD.style.display!=='none'&&mDD.innerHTML){CRM._liveDirty=true;return;} // @-picker open
+  var keep={};
+  ['crm-input','crm-tinput','crm-nc-name','crm-nc-title','crm-search'].forEach(function(id){
+    var e=document.getElementById(id);
+    if(e)keep[id]={v:e.value,ss:e.selectionStart,se:e.selectionEnd,f:(document.activeElement===e)};
+  });
+  var th=document.getElementById('crm-thread');
+  var atBottom=true,thTop=0;
+  if(th){thTop=th.scrollTop;atBottom=(th.scrollHeight-th.scrollTop-th.clientHeight)<70;}
+  var ls=document.getElementById('crm-list');var lsTop=ls?ls.scrollTop:0;
+  rr();
+  Object.keys(keep).forEach(function(id){
+    var e=document.getElementById(id);if(!e)return;
+    e.value=keep[id].v;
+    if(keep[id].f){try{e.focus();e.setSelectionRange(keep[id].ss,keep[id].se);}catch(x){}}
+  });
+  try{_crmRenderPreview();}catch(e){}
+  var th2=document.getElementById('crm-thread');
+  if(th2)th2.scrollTop=atBottom?th2.scrollHeight:thTop;   // pinned to newest unless reading history
+  var ls2=document.getElementById('crm-list');if(ls2&&lsTop)ls2.scrollTop=lsTop;
+}
+/* Anything that lands from the server funnels through here. */
+function _crmLiveApplied(changed,touchedOpenConvo){
+  if(!changed)return;
+  if(touchedOpenConvo&&CRM.sel.convoId&&S.route==='crm'){try{_crmMarkRead(CRM.sel.convoId);}catch(e){}}
+  _crmLiveRR();
+}
+function _crmOnMsgEvent(p){
+  try{
+    var evt=p.eventType||p.event;
+    var row=(evt==='DELETE')?(p.old||{}):(p.new||{});
+    var changed=_crmMergeMsgRow(row,evt);
+    if(_crmRT.needConvos){_crmRT.needConvos=false;_crmPoll(true);}
+    _crmLiveApplied(changed,row.conversation_id===CRM.sel.convoId);
+  }catch(e){}
+}
+function _crmOnConvoEvent(p){
+  try{
+    var evt=p.eventType||p.event;
+    var row=(evt==='DELETE')?(p.old||{}):(p.new||{});
+    var changed=_crmMergeConvoRow(row,evt);
+    if(_crmRT.needMsgsFor){var cid=_crmRT.needMsgsFor;_crmRT.needMsgsFor=null;_crmFetchMsgsFor(cid);}
+    _crmLiveApplied(changed,row.id===CRM.sel.convoId);
+  }catch(e){}
+}
+function _crmFetchMsgsFor(cid){
+  sb.from('crm_messages').select('*').eq('conversation_id',cid).order('created_at',{ascending:true}).then(function(r){
+    if(!r||r.error||!r.data)return;
+    var ch=false;r.data.forEach(function(row){if(_crmMergeMsgRow(row,'INSERT'))ch=true;});
+    _crmLiveApplied(ch,cid===CRM.sel.convoId);
+  }).catch(function(){});
+}
+/* Safety net. Realtime is the fast path; this catches a dropped socket, a sleeping
+   phone waking up, or a project where replication was switched off again.
+   Only asks for rows NEWER than what we hold, so it stays tiny. */
+function _crmPoll(force){
+  if(!CRM||!CRM._loaded||_crmRT.busy)return;
+  if(!force){
+    if(document.visibilityState==='hidden')return;                  // nothing while backgrounded
+    if(S.route!=='crm')return;
+    var healthy=(_crmRT.status==='SUBSCRIBED');
+    _crmRT.tick++;
+    if(healthy&&(_crmRT.tick%6)!==0)return;                          // ~54s when push is working
+  }
+  _crmRT.busy=true;
+  var since=_crmRT.lastTs||new Date(Date.now()-864e5).toISOString();
+  var overlap=new Date(new Date(since).getTime()-30000).toISOString(); // clock-skew cushion
+  sb.from('crm_messages').select('*').gt('created_at',overlap).order('created_at',{ascending:true}).then(function(r){
+    _crmRT.busy=false;
+    if(!r||r.error||!r.data||!r.data.length)return;
+    var ch=false,touched=false;
+    r.data.forEach(function(row){
+      if(_crmMergeMsgRow(row,'INSERT')){ch=true;if(row.conversation_id===CRM.sel.convoId)touched=true;}
+    });
+    if(_crmRT.needConvos){
+      _crmRT.needConvos=false;
+      sb.from('crm_conversations').select('*').order('last_at',{ascending:false}).then(function(r2){
+        if(!r2||r2.error||!r2.data)return;
+        var ch2=false;r2.data.forEach(function(row){if(_crmMergeConvoRow(row,'INSERT'))ch2=true;});
+        if(ch2)_crmLiveApplied(true,false);
+      }).catch(function(){});
+    }
+    _crmLiveApplied(ch,touched);
+  }).catch(function(){_crmRT.busy=false;});
+}
+function _crmLiveStart(){
+  if(_crmRT.bound)return;_crmRT.bound=true;
+  try{
+    _crmRT.ch=sb.channel('bridge-crm-'+(S.uid||'anon'))
+      .on('postgres_changes',{event:'*',schema:'public',table:'crm_messages'},_crmOnMsgEvent)
+      .on('postgres_changes',{event:'*',schema:'public',table:'crm_conversations'},_crmOnConvoEvent)
+      .subscribe(function(st){_crmRT.status=st;});
+  }catch(e){_crmRT.status='ERROR';}
+  if(!_crmRT.poll)_crmRT.poll=setInterval(function(){try{_crmPoll();}catch(e){}},9000);
+  if(!_crmRT.visBound){
+    _crmRT.visBound=true;
+    document.addEventListener('visibilitychange',function(){
+      if(document.visibilityState==='visible'&&S.route==='crm'){try{_crmPoll(true);}catch(e){}}
+    });
+  }
+}
+function _crmLiveStop(){
+  try{if(_crmRT.ch&&sb.removeChannel)sb.removeChannel(_crmRT.ch);}catch(e){}
+  if(_crmRT.poll){clearInterval(_crmRT.poll);_crmRT.poll=null;}
+  _crmRT.ch=null;_crmRT.bound=false;_crmRT.status='';
+}
+App._crmLiveStatus=function(){return{status:_crmRT.status,bound:_crmRT.bound,lastTs:_crmRT.lastTs};};
+window._crmLiveStart=_crmLiveStart;window._crmLiveStop=_crmLiveStop;window._crmPoll=_crmPoll;

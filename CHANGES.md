@@ -1,22 +1,55 @@
-# v73 — progress accuracy + dismissible note (on top of v71/v72 mobile fixes)
+# Bridge v74 — sticky Workspace position + live chat
 
-## Progress % is now the real number
-- The engine clamped every percentage to 100 ("beating the target is Achieved, not 140%").
-  Removed: your fleet case (25 → 28, now 28.66) now reads **122%**, not 100%. Floor stays 0;
-  sanity ceiling 999%. Bars still fill at 100%.
-- Annual = average of quarters now uses each quarter's REAL progress (an overachieved Q1 counts fully).
-- Verified with a 12-case unit-test matrix run against the app's own functions — including both of
-  your screenshot cases — 12/12 pass.
+**Deploy all 5 files.** They are cumulative: everything from v71–v73 (mobile UI, OKR accuracy) is included, because none of it is live on your Vercel site yet.
 
-## The % explains itself
-The un-dismissable yellow essay in Progress & Updates is gone. In its place: one neutral line showing
-the actual arithmetic — e.g. "122% = (current − start) ÷ (target − start) = (28.66 − 25) ÷ (28 − 25)
-— target beaten." It has an × and stays hidden once dismissed (per browser). Every mode is covered
-(journey, allowance, compliance, hold-the-line, roll-up, annual), so a wrong-looking % immediately
-shows WHY — e.g. Flower Wastage displays "…÷ (0 − 30k) — moving away from the target", exposing the
-stored target of 0.
+| File | Why |
+|---|---|
+| `index.html` | cache-buster `?v=74` |
+| `public/js/06-crm.js` | sticky position + live chat + all mobile fixes |
+| `public/js/19-okr-roles-acl.js` | OKR filters/banners + progress accuracy |
+| `public/js/04-nav-shell.js` | logout clears the remembered board + closes the live socket |
+| `src/styles/main.css` | mobile layout rules |
 
-## Also in this build (from v71/v72, not yet live on your Vercel)
-Chat bubbles left/right by sender · conversation list reachable on mobile · collapsible OKR filters ·
-blue banners removed · floating New-chat button · full-width search · single-line ticket toolbar ·
-off-screen filter popovers auto-clamp · 19/19 behavioral tap tests pass, 0 horizontal overflow.
+---
+
+## 1. Refresh keeps you where you were
+
+The Workspace now remembers your **hub, board, filtered view and open conversation**, so a refresh (or closing and reopening the tab) puts you back on the same board instead of bouncing to the first one.
+
+- Stored per browser and **stamped with your user id** — on a shared device the next person to sign in never inherits your position.
+- If the remembered board was deleted or your access was removed, it falls back to the first board you can see rather than showing an error.
+- Cleared on sign-out.
+
+## 2. Messages arrive by themselves
+
+No more reloading to see new messages.
+
+- **Supabase Realtime push** — I enabled it on your project (see below). New messages, edits, deletions and brand-new conversations all appear instantly.
+- **Polling safety net** — a small "anything newer than what I have?" query runs as backup, so a dropped socket or a phone waking from sleep still catches up. It only asks for rows newer than what's already loaded, so it stays tiny (it does *not* re-download the workspace).
+- **It never interrupts you.** A message landing mid-typing preserves your draft text, cursor position and focus; pending image attachments stay attached; if you've scrolled up to read history you stay there, and if you were at the bottom you stay pinned to the newest message. A message you're editing is never yanked out from under you.
+- Your own messages don't duplicate when the server echoes them back.
+
+### Database change I made (approved)
+Migration `enable_realtime_for_workspace_chat` on project `bxuhmyxfzoqvmukausjd`:
+
+```sql
+alter publication supabase_realtime add table public.crm_messages;
+alter publication supabase_realtime add table public.crm_conversations;
+alter table public.crm_messages replica identity full;
+alter table public.crm_conversations replica identity full;
+```
+
+Additive and reversible. No schema, no data, no RLS policy changed — verified afterwards (5 messages / 1 conversation intact). `REPLICA IDENTITY FULL` only affects what the write-ahead log carries, which is what lets live edits and deletes work.
+
+To undo: `alter publication supabase_realtime drop table public.crm_messages, public.crm_conversations;` (the app falls back to polling automatically).
+
+**Note on visibility:** your `crm_messages` / `crm_conversations` policies are `ALL … using (true)` for authenticated users, so realtime delivers to any signed-in user and board-level scoping stays client-side — exactly as it already worked before this change. Nothing new is exposed, but if you ever want board membership enforced in the database, that's a separate (worthwhile) piece of work.
+
+---
+
+## Verification
+- 19 live/sticky tests (reload persistence, another user's position ignored, deleted board fallback, incoming message, duplicate echo, draft preserved, focus kept, scroll pinned, live edit, live delete, new conversation, polling fallback, edit-in-progress protection) — **19/19 pass**
+- 19 mobile tap tests — **19/19 pass**
+- 12 progress-accuracy cases — **12/12 pass**
+- Every `onclick` checked against real functions — **0 missing**
+- 0 horizontal overflow at iPhone 390px and Android 360px

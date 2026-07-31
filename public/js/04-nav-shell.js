@@ -269,6 +269,7 @@ App.logout=()=>{
   // v3.14: filters are remembered per tab across refreshes — wipe the whole stored map on
   // logout so a shared browser never shows the next person the previous one's filtered view.
   clearAllFilters();try{if(typeof App._okrResetExpanded==='function')App._okrResetExpanded();}catch(e){}
+  try{if(typeof _crmClearSel==='function')_crmClearSel();if(typeof _crmLiveStop==='function')_crmLiveStop();}catch(e){}
   S.uid=null;S.route='dashboard';S.filters={};S.expandedCl=null;S.tvUser=null;RUN={};CLD=null;_QED=null;
   closeModal();render();
   // Sign out Supabase in background
