@@ -1376,7 +1376,7 @@ function okrPage(){
   const _selectable=_okrSelectable();
   const _selCount=[..._OKRSEL].map(okrById).filter(Boolean).length;
   const _allOn=_selectable.length>0&&_selectable.every(x=>_OKRSEL.has(x.id));
-  const bulkBar=vis.length?`<div class="ui-card" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:${_selCount?'10px 13px':'7px 13px'};margin-bottom:12px;${_selCount?'border-color:var(--c-brand);background:var(--c-brand-soft)':''}">
+  const bulkBar=vis.length?`<div class="ui-card okr-bulkbar" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;padding:${_selCount?'10px 13px':'7px 13px'};margin-bottom:12px;${_selCount?'border-color:var(--c-brand);background:var(--c-brand-soft)':''}">
       <button onclick="App._okrSelAll()" style="display:inline-flex;align-items:center;gap:8px;background:transparent;border:none;cursor:pointer;padding:0;color:var(--c-text)">
         <span style="width:17px;height:17px;border-radius:5px;border:1.5px solid ${_allOn?'var(--c-brand)':'var(--c-border-2)'};background:${_allOn?'var(--c-brand)':'var(--c-surface)'};display:grid;place-items:center;color:#fff;flex-shrink:0">${_allOn?ic('check','w-3 h-3'):''}</span>
         <span style="font-size:12px;font-weight:700">${_allOn?'Deselect all':'Select all'} <span style="color:var(--c-text-3);font-weight:600">(${_selectable.length} on screen)</span></span>
@@ -1433,7 +1433,7 @@ function _okrNodeHTML(o,depth){
     :_isLim?('Stay under '+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
     :pct===null?'No data yet':(pct+'% of target');
   // Indentation follows the tree ON SCREEN, not the absolute level — see okrLevelVisible().
-  const _ind=_qv?okrLevelVisible(o):depth;const card=`<div class="okr-card" onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*16+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
+  const _ind=_qv?okrLevelVisible(o):depth;const _indPx=(window.matchMedia&&window.matchMedia('(max-width:767px)').matches)?10:16;const card=`<div class="okr-card" onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*_indPx+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
     <div class="okr-cardpad" style="padding:10px 13px">
       <div class="okr-row" style="display:flex;align-items:flex-start;gap:9px">
         ${selBox}
@@ -1448,7 +1448,7 @@ function _okrNodeHTML(o,depth){
             ${ownersHTML}
             ${dept?`<span style="${meta}"${o.departmentId?'':' title="Inherited from the parent objective"'}>${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
             ${o.periodStart||o.periodEnd?`<span style="${meta}">${ic('calendar','w-3 h-3')}${fmtS(o.periodStart)} → ${fmtS(o.periodEnd)}</span>`:''}
-            ${kids.length?`<span style="${meta}">${ic('tree','w-3 h-3')}${kids.length} sub-objective${kids.length===1?'':'s'}</span>`:''}
+            ${kids.length?`<button class="okr-subtog" onclick="event.stopPropagation();App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${meta};border:none;background:transparent;cursor:pointer;padding:0;font-weight:700">${ic('tree','w-3 h-3')}${kids.length} sub-objective${kids.length===1?'':'s'}<span style="display:inline-flex;transform:${exp?'rotate(180deg)':'none'};transition:transform .12s">${ic('chevD','w-3 h-3')}</span></button>`:''}
           </div>
         </div>
         <div class="okr-nums" style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;padding-left:6px">

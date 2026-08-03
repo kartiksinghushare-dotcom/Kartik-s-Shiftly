@@ -96,3 +96,32 @@ down the same edge. The leaf bullet is hidden and the checkbox/chevron gutter is
 instead of 24px+24px, giving the title ~30px more room. `curTgt` is now two spans
 (`.okr-curv` / `.okr-tgt`) so the desktop row still reads "39% ≤ 36%" inline and only the
 phone stacks them. Cards dropped from ~110px to ~65-85px.
+
+## v3.20 — @-mention UX + OKR alignment round 2
+
+**Why "still the same" on your phone:** the fixes live in the local Bridge folder; the phone
+loads shiftlly.vercel.app, which only updates after `git push` → Vercel build. Verify with
+View Source: script tags must say `?v=85`.
+
+**a. @-mention picker.** Was a 240px desktop popover with 30px rows, anchored 58px above the
+composer's bottom (wrong once the composer grew). Now anchored `bottom:calc(100% + 6px)` (always
+just above the composer at any height), and on phones it becomes a full-width sheet with 46px
+thumb-sized rows and 14px names.
+
+**b. Mention chips in bubbles.** The chip style was inline (`#EDF5F7` bg, dark-orange text) —
+unreadable inside the sender's own orange bubble. Now a `.crm-tag` class: pale chip in received
+bubbles, translucent-white chip with white text in `.crm-mine`.
+
+**c. Composer-density rule leak (self-inflicted in v3.19, caught in testing).**
+`.crm-composer>div>button{width:36px}` also matched the mention rows (the sheet lives inside the
+composer), collapsing every row to 36px wide. The rule is now scoped to a `.crm-sendrow` class on
+the attach/textarea/send row only.
+
+**d. OKR titles finally share ONE left edge.** Parent cards had a chevron gutter, leaf cards
+didn't — so titles started at different x-positions card by card. On phones the chevron column is
+gone entirely; expanding moved to the "N sub-objectives" chip in the meta line (now a real button,
+orange, with a rotating ▾ — it also works on desktop as a second affordance). Child indent capped
+at 10px/level on phones (was 16px, up to 80px of a 390px screen).
+
+**e. OKR bars slimmed.** Search/filter toolbar and the Select-all/Export bar: tighter padding,
+smaller type, 8px gaps to the list. Search input is 16px so iOS doesn't zoom on focus.
