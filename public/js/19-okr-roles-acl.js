@@ -1430,8 +1430,8 @@ function _okrNodeHTML(o,depth){
     :_isLim?('Stay under '+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
     :pct===null?'No data yet':(pct+'% of target');
   // Indentation follows the tree ON SCREEN, not the absolute level — see okrLevelVisible().
-  const _ind=_qv?okrLevelVisible(o):depth;const card=`<div onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*16+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
-    <div style="padding:10px 13px">
+  const _ind=_qv?okrLevelVisible(o):depth;const card=`<div class="okr-card" onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*16+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
+    <div class="okr-cardpad" style="padding:10px 13px">
       <div style="display:flex;align-items:flex-start;gap:9px">
         ${selBox}
         ${kids.length?`<button onclick="event.stopPropagation();App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${icBtn};transform:${exp?'rotate(90deg)':'none'}">${ic('chevR','w-4 h-4')}</button>`:`<span style="width:24px;flex-shrink:0;display:grid;place-items:center;height:24px"><span style="width:4px;height:4px;border-radius:50%;background:var(--c-border-2)"></span></span>`}
@@ -1441,7 +1441,7 @@ function _okrNodeHTML(o,depth){
             <span class="fd" style="font-size:13.5px;font-weight:600;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
             ${okrHasRevision(o)?`<span style="${meta};color:#8A5F00;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
           </div>
-          <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:3px;margin-top:5px">
+          <div class="okr-meta" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:3px;margin-top:5px">
             ${ownersHTML}
             ${dept?`<span style="${meta}"${o.departmentId?'':' title="Inherited from the parent objective"'}>${ic('dept','w-3 h-3')}${esc(dept.name)}${subDept?' › '+esc(subDept.name):''}</span>`:''}
             ${o.periodStart||o.periodEnd?`<span style="${meta}">${ic('calendar','w-3 h-3')}${fmtS(o.periodStart)} → ${fmtS(o.periodEnd)}</span>`:''}
@@ -1450,8 +1450,8 @@ function _okrNodeHTML(o,depth){
         </div>
         <div class="okr-nums" style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;padding-left:6px">
           <span style="font-size:11px;font-weight:700;color:var(--c-text-2);white-space:nowrap">${curTgt}</span>
-          ${okrNoPct(o)?'':`<div title="${barTitle}" style="width:70px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
-          <span class="fd" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct===null?'—':pct+'%'}</span>`}
+          ${(okrNoPct(o)||pct===null)?'':`<div class="okr-bar" title="${barTitle}" style="width:70px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
+          <span class="fd" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct}%</span>`}
           ${o.closed?`<span title="Closed${o.closedReason?': '+esc(o.closedReason):''}" style="display:inline-flex;cursor:default">${okrStatusChip(st)}</span>`:okrStatusChip(st)}
         </div>
       </div>

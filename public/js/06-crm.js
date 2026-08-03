@@ -231,6 +231,16 @@ const _crmStyle='<style>'
   +'.crm-dscrim{position:fixed;inset:0;z-index:59;background:rgba(10,27,33,.42)}'
   /* the thread panel had no mobile rule at all - it left ~40px for the message list */
   +'.crm-thread-panel{position:fixed!important;left:0;right:0;top:0;bottom:calc(60px + env(safe-area-inset-bottom));width:auto!important;z-index:58;border-left:none!important}'
+  /* v3.18 THE COMPOSER FIX. iOS Safari does not reliably constrain a flex column nested this
+     deep, so #crm-thread grew to its full content height: the messages painted straight through
+     the bottom nav and the composer was pushed off-screen entirely. On mobile the chat pane is
+     therefore lifted OUT of the flex chain and pinned to .crm-fs (its nearest positioned
+     ancestor), which gives every row below it a definite height to divide up. */
+  +'.crm-hasconvo .crm-chatpane{position:absolute!important;top:0;left:0;right:0;bottom:0;flex-direction:column!important;overflow:hidden}'
+  +'.crm-chatbody{flex:1 1 auto!important;min-height:0!important;overflow:hidden}'
+  +'.crm-threadcol{flex:1 1 auto!important;min-height:0!important;overflow:hidden}'
+  +'#crm-thread{flex:1 1 auto!important;min-height:0!important;overflow-y:auto!important}'
+  +'.crm-composer{flex:0 0 auto!important;background:#fff;z-index:2}'
   +'@supports(height:100dvh){.crm-thread-panel{bottom:auto!important;height:calc(100dvh - 60px - env(safe-area-inset-bottom))!important}}'
   /* every CRM control reaches a 44px tap target */
   +'.crm-fs button{min-height:38px}'
@@ -362,11 +372,11 @@ function _crmChatPane(convo,board){
   return'<div class="crm-chatpane" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative">'+fwd
     +'<div style="padding:9px 14px;border-bottom:1px solid #E7F0F2;display:flex;align-items:center;gap:10px;flex-wrap:wrap;flex-shrink:0">'+'<button class="crm-only-mob crm-tap" aria-label="Back" onclick="App._crmMobBack()" style="width:34px;height:34px;border:1px solid #DFEAEC;background:#fff;border-radius:9px;cursor:pointer;align-items:center;justify-content:center;color:#2F4C55;flex-shrink:0;margin-right:2px">'+ic('back','w-5 h-5')+'</button>'+_crmCustAv(convo.customer,34)
     +'<div style="flex:1;min-width:0"><div class="fd" style="font-size:15px;font-weight:800;color:#10262E;letter-spacing:-.2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(convo.title||'—')+'</div><div style="font-size:12px;color:#90A5AB;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'+esc(convo.customer||'')+(convo.channel?' · '+esc(convo.channel):'')+(convo.createdAt?' · started '+_crmRel(convo.createdAt)+' ago':'')+'</div></div>'+meta+_crmHdrBtns(convo,board)+'</div>'
-    +'<div style="flex:1;display:flex;min-height:0">'
-      +'<div style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative" ondragover="App._crmDragOver(event)" ondragleave="App._crmDragLeave(event)" ondrop="App._crmDrop(event)">'
+    +'<div class="crm-chatbody" style="flex:1;display:flex;min-height:0">'
+      +'<div class="crm-threadcol" style="flex:1;display:flex;flex-direction:column;min-width:0;min-height:0;position:relative" ondragover="App._crmDragOver(event)" ondragleave="App._crmDragLeave(event)" ondrop="App._crmDrop(event)">'
         +'<div id="crm-drop" style="display:none;position:absolute;inset:10px;z-index:40;background:rgba(255,127,17,.08);border:2px dashed #FF7F11;border-radius:12px;place-items:center;pointer-events:none"><div style="text-align:center;color:#8F4A05;font-weight:700">'+ic('upload','w-7 h-7')+'<div style="margin-top:6px">Drop images to attach</div></div></div>'
         +'<div id="crm-thread" class="crm-scroll" style="flex:1;overflow-y:auto;padding:10px 14px;background:#F8FBFC;display:flex;flex-direction:column;min-height:0">'+thread+'</div>'
-        +'<div style="border-top:1px solid #E7F0F2;padding:8px 12px;position:relative;flex-shrink:0"><div id="crm-preview" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div><div id="crm-mention" style="display:none;position:absolute;bottom:58px;left:14px;z-index:60;background:#fff;border:1px solid #DFEAEC;border-radius:12px;box-shadow:0 12px 32px rgba(13,38,46,.18);padding:6px;width:240px;max-height:230px;overflow:auto"></div>'
+        +'<div class="crm-composer" style="border-top:1px solid #E7F0F2;padding:8px 12px;position:relative;flex-shrink:0"><div id="crm-preview" style="display:none;gap:6px;flex-wrap:wrap;margin-bottom:8px"></div><div id="crm-mention" style="display:none;position:absolute;bottom:58px;left:14px;z-index:60;background:#fff;border:1px solid #DFEAEC;border-radius:12px;box-shadow:0 12px 32px rgba(13,38,46,.18);padding:6px;width:240px;max-height:230px;overflow:auto"></div>'
         +(canSend?'<div style="display:flex;align-items:flex-end;gap:8px"><label title="Attach image" style="width:36px;height:36px;border-radius:10px;border:1px solid #DFEAEC;background:#fff;cursor:pointer;color:#5E767D;display:grid;place-items:center;flex-shrink:0">'+ic('cam','w-4 h-4')+'<input type="file" accept="image/*" multiple onchange="App._crmPickImg(this)" style="display:none"/></label><textarea id="crm-input" rows="1" placeholder="Message… @ to tag · Enter to send" oninput="App._crmOnInput(this)" onkeydown="if(event.key===\'Enter\'&&!event.shiftKey){event.preventDefault();App._crmSend();}" style="flex:1;resize:none;border:1px solid #DFEAEC;border-radius:11px;padding:9px 12px;font-size:13px;font-family:inherit;outline:none;max-height:120px"></textarea><button onclick="App._crmSend()" style="width:38px;height:38px;border-radius:11px;border:none;background:#FF7F11;color:#fff;cursor:pointer;display:grid;place-items:center;flex-shrink:0">'+ic('send','w-4 h-4')+'</button></div>':'<div style="text-align:center;color:#93A6AC;font-size:12px;padding:8px">Read-only access.</div>')
         +'</div></div>'+tpanel+_crmDetailsPanel(convo,board)+'</div></div>';
 }

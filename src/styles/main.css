@@ -1055,6 +1055,17 @@ main#content .grid>.stat-card-click:nth-child(3n+3)::before{background:var(--c-w
   .okr-nums{flex:1 1 100%!important;width:100%;margin-left:0!important;padding-left:0!important;margin-top:8px;justify-content:flex-start;gap:12px}
   /* the bulk-edit hint is desktop guidance — on a phone it cost a third of the screen */
   .okr-bulkhint{display:none!important}
+
+  /* v3.18 — objective cards were ~200px tall, so barely three fitted on a phone screen.
+     Same information, less air: tighter padding, tighter rows, a smaller title, and the
+     numbers strip sits on one compact line under the meta rather than floating wide. */
+  #content .okr-card{margin-bottom:6px!important;border-radius:11px!important}
+  #content .okr-cardpad{padding:9px 11px!important}
+  #content .okr-card .fd{font-size:13.5px!important;line-height:1.32!important}
+  #content .okr-meta{gap:3px 10px!important;margin-top:3px!important;font-size:10.5px}
+  #content .okr-meta>span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  #content .okr-nums{margin-top:7px!important;gap:9px!important;align-items:center!important}
+  #content .okr-bar{flex:1 1 auto!important;min-width:52px;width:auto!important}
 }
 
 /* CRM ticket table — mobile readable columns (v3.15): keep column widths and scroll instead of cramming names to "Or" */
