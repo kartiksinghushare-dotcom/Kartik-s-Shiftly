@@ -492,8 +492,9 @@ function _okrTargetEff(o){return okrHasRevision(o)?Number(o.revisedTarget):((o.t
      'gte'  Greater than      → one value. At or ABOVE it = good (Achieved / On track).
      'lte'  Less than         → one value. At or BELOW it = good (Achieved / On track).
             There is no start, so "how far along" is meaningless. The % instead reports
-            COMPLIANCE: what share of the updates in the period landed on the good side.
-            8 of 10 weekly readings at or above 98% → 80%. Status follows the LATEST reading.
+            NO PROGRESS % (v3.18): pass/fail against a line, so no percentage is reported at
+            all — status follows the LATEST reading, and the panel shows how many updates held
+            the line as a plain count (e.g. 1 / 3).
    v3.17: the % is uncapped above 100 (real overachievement shows); bars still fill at 100; floor stays 0. */
 const OKR_DIRS=[['up','Higher is better'],['down','Lower is better'],['gte','Greater than'],['lte','Less than']];
 const OKR_DIR_LONG={
@@ -513,6 +514,17 @@ function okrIsLimit(o){
   if(!okrDirDown(o))return false;
   const t=_okrTargetEff(o);
   return t!==null&&t!==undefined&&isFinite(t)&&t>Number(o.startValue||0);
+}
+/* v3.18: the modes that report NO progress % at all. Thresholds are pass/fail against a line;
+   legacy allowance objectives used to report "% of the limit used", a number that CLIMBS as
+   performance gets worse (19,535 against a 3,000 limit read 651%) - not a progress figure, so
+   both now show status only. */
+function okrNoPct(o){return okrIsThresh(o)||okrIsLimit(o);}
+/* Allowance consumption, 0-999. Used ONLY to pace the automatic status - never displayed. */
+function _okrLimitUsedPct(o){
+  const t=_okrTargetEff(o),s=Number(o.startValue||0),v=okrCurrentOf(o);
+  if(t===null||t===undefined||!isFinite(t)||v===null||v===undefined||!isFinite(Number(v))||t===s)return null;
+  return _okrClampPct((Number(v)/(t-s))*100);
 }
 /* Is `v` on the good side of a threshold objective's line? null when it can't be judged. */
 function okrThreshOK(o,v){
@@ -558,7 +570,9 @@ function _okrFmtTarget(o,v){const t=_okrFmtVal(o,v);return t==='\u2014'?t:(_okrT
 function _okrTargetWord(o){return okrIsThresh(o)?'threshold':okrDirDown(o)?'limit':'target';}
 /* The % against target `t`. v3.17: beating the target shows the REAL number (122%); bars still fill at 100. */
 function _okrPctVs(o,t){
-  if(okrIsThresh(o))return _okrCompliancePct(o);
+  /* v3.18: THRESHOLD modes (Greater than / Less than) are pass/fail against a line — there is no
+     meaningful % to report, so they carry none. Status alone answers "is it ok". */
+  if(okrIsThresh(o))return null;
   const v0=okrCurrentOf(o);if(v0===null||v0===undefined)return null;
   if(o.metricType==='yesno')return Number(v0)>=1?100:0;
   const s=Number(o.startValue||0),v=Number(v0);
@@ -567,8 +581,11 @@ function _okrPctVs(o,t){
      allowance is used". The allowance is the SPAN the start\u2192target pair describes (t \u2212 s), and
      the reported figure is this period's own number \u2014 so it is v \u00f7 (t \u2212 s), never
      (v \u2212 s) \u00f7 (t \u2212 s). Subtracting the start from a per-period figure is what used to make
-     5,257 of a 16,000 quarterly allowance read 0%. With a start of 0 this is exactly v \u00f7 t. */
-  if(okrIsLimit(o))return _okrClampPct((v/(t-s))*100);
+     5,257 of a 16,000 quarterly allowance read 0%. With a start of 0 this is exactly v \u00f7 t.
+     v3.18: that figure is no longer REPORTED - it reads worse the higher it goes and blows past
+     100% once the limit breaks, which is not progress. Status carries the verdict; the
+     consumption number survives in _okrLimitUsedPct(), used only to pace that status. */
+  if(okrIsLimit(o))return null;
   /* Hold-the-line ("maintain 98%": start === target). Dividing by the gap would be a divide by
      zero, so meeting the line is 100% and missing it reads how close the number got. */
   if(t===s){
@@ -589,7 +606,8 @@ function okrProgressOrig(o){return _okrPctVs(o,(o.targetValue===null||o.targetVa
    Only quarter-tagged children feed an annual — regular L1 sub-objectives never do. */
 function _okrQKids(o){return okrChildren(o.id).filter(k=>k.quarterLabel);}
 function _okrQProgressAvg(o){
-  const qs=_okrQKids(o);
+  // Threshold and allowance quarters report no % - they must not be averaged in as 0.
+  const qs=_okrQKids(o).filter(k=>!okrNoPct(k));
   if(!qs.length)return null;
   let any=false;
   // v3.17: quarters contribute their REAL progress (an overachieved Q1 counts fully); floor 0 each.
@@ -599,11 +617,11 @@ function _okrQProgressAvg(o){
 }
 function okrProgress(o,_seen){
   // Both toggles are MANUAL and independent. Precedence when reading the number:
-  //   threshold mode        → compliance across the period's readings (no start → no journey)
+  //   threshold mode        → no % at all (pass/fail against a line — status carries the verdict)
   //   roll-up ON            → level-below aggregation (explicit override, even on an annual)
   //   annual ON, roll-up OFF → equal-weighted progress of its quarters (quarters or nothing)
   //   both OFF              → the objective's own check-ins
-  if(okrIsThresh(o))return _okrCompliancePct(o);
+  if(okrIsThresh(o))return null;
   if(o&&o.isAnnual&&!o.rollup)return _okrQProgressAvg(o);
   return _okrLeafPct(o);
 }
@@ -635,7 +653,9 @@ function okrStatusOf(o){
     const over=!!(o.periodEnd&&todayISO()>o.periodEnd);
     return ok?(over?'Achieved':'On track'):(over?'Not achieved':'Off track');
   }
-  const pct=okrProgress(o);
+  /* v3.18: an allowance reports no % any more, so the pace comparison below reads the internal
+     consumption figure instead. It is never shown to anyone - status carries the verdict. */
+  const pct=okrIsLimit(o)?_okrLimitUsedPct(o):okrProgress(o);
   if(pct===null)return 'No data';
   /* LEGACY ALLOWANCE: 'down' with the target above the start. The % is "how much of the limit
      is used", so the comparisons flip — burning the allowance faster than the clock is the risk,
@@ -1080,8 +1100,8 @@ App._okrSummaryList=(key)=>{
         <div style="font-size:12.5px;font-weight:700;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.title||'Untitled')}</div>
         <div style="font-size:10.5px;color:var(--c-text-3);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${owners.length?esc(owners.map(fullName).join(', ')):'No owner'}${dept?' · '+esc(dept.name):''}</div>
       </div>
-      <div style="width:56px;height:4px;background:var(--c-border);border-radius:2px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${_okrBarColor(st)}"></div></div>
-      <span class="fd" style="font-size:12px;font-weight:800;color:var(--c-text);width:40px;text-align:right;flex-shrink:0">${pct===null?'—':pct+'%'}</span>
+      ${okrNoPct(o)?'':`<div style="width:56px;height:4px;background:var(--c-border);border-radius:2px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${_okrBarColor(st)}"></div></div>
+      <span class="fd" style="font-size:12px;font-weight:800;color:var(--c-text);width:40px;text-align:right;flex-shrink:0">${pct===null?'—':pct+'%'}</span>`}
       ${okrStatusChip(st,true)}
       <span style="color:var(--c-text-3);flex-shrink:0">${ic('chevR','w-3.5 h-3.5')}</span>
     </div>`;
@@ -1169,7 +1189,7 @@ App._okrProgressModal=(id)=>{
   // (L1s etc.) have their own cards and panels. With the roll-up override on, all children feed it.
   const kids=(o.isAnnual&&!o.rollup)?okrChildrenVisible(o.id).filter(k=>k.quarterLabel):okrChildrenVisible(o.id);
   const pct=okrProgress(o),st=okrStatusOf(o);
-  modalShell({title:'Progress & Updates',sub:(o.title||'')+' — '+(pct===null?'no data yet':pct+'%'),size:'max-w-2xl',key:'okr-pm',
+  modalShell({title:'Progress & Updates',sub:(o.title||'')+(okrNoPct(o)?'':' — '+(pct===null?'no data yet':pct+'%')),size:'max-w-2xl',key:'okr-pm',
     body:`<div id="okr-pm" data-okr="${o.id}" style="margin:-6px -2px 0">${_okrProgressPanel(o,kids,pct,st)}</div>`});
   setTimeout(()=>{try{_drawOKRCharts();}catch(e){}},80);
 };
@@ -1406,7 +1426,9 @@ function _okrNodeHTML(o,depth){
   const ownersHTML=owners.length?`<span title="Owner${owners.length===1?'':'s'}: ${esc(owners.map(fullName).join(', '))}${owners.length>1?' — any of them can update':''}" style="flex-shrink:0;display:inline-flex;align-items:center;cursor:default">${owners.slice(0,3).map((u,i)=>`<span style="display:inline-flex;${i?'margin-left:-5px;':''}border-radius:50%;box-shadow:0 0 0 1.5px var(--c-surface)">${avatar(u,'w-5 h-5','text-[8px]')}</span>`).join('')}${owners.length>3?`<span style="font-size:9.5px;font-weight:800;color:var(--c-text-3);margin-left:4px">+${owners.length-3}</span>`:''}<span style="${meta};margin-left:5px">${esc(owners.map(fullName)[0]||'')}${owners.length>1?' +'+(owners.length-1):''}</span></span>`:'';
   const sel=_OKRSEL.has(o.id);
   const selBox=canEdit?`<button onclick="event.stopPropagation();App._okrTogSel('${o.id}')" role="checkbox" aria-checked="${sel}" title="${sel?'Deselect':'Select for bulk edit'}" style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;cursor:pointer;flex-shrink:0"><span style="width:16px;height:16px;border-radius:5px;border:1.5px solid ${sel?'var(--c-brand)':'var(--c-border-2)'};background:${sel?'var(--c-brand)':'var(--c-surface)'};display:grid;place-items:center;color:#fff">${sel?ic('check','w-3 h-3'):''}</span></button>`:`<span style="width:24px;flex-shrink:0"></span>`;
-  const barTitle=pct===null?'No data yet':okrIsThresh(o)?(pct+'% of this period\'s updates stayed '+(okrDirOf(o)==='gte'?'at or above':'at or below')+' '+_okrFmtVal(o,_okrTargetEff(o))):(_isLim?(pct+'% of the limit used — lower is better'):(pct+'% of target'));
+  const barTitle=okrIsThresh(o)?('Stay '+(okrDirOf(o)==='gte'?'at or above ':'at or below ')+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
+    :_isLim?('Stay under '+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
+    :pct===null?'No data yet':(pct+'% of target');
   // Indentation follows the tree ON SCREEN, not the absolute level — see okrLevelVisible().
   const _ind=_qv?okrLevelVisible(o):depth;const card=`<div onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*16+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
     <div style="padding:10px 13px">
@@ -1428,8 +1450,8 @@ function _okrNodeHTML(o,depth){
         </div>
         <div class="okr-nums" style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;padding-left:6px">
           <span style="font-size:11px;font-weight:700;color:var(--c-text-2);white-space:nowrap">${curTgt}</span>
-          <div title="${barTitle}" style="width:70px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
-          <span class="fd" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct===null?'—':pct+'%'}</span>
+          ${okrNoPct(o)?'':`<div title="${barTitle}" style="width:70px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
+          <span class="fd" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct===null?'—':pct+'%'}</span>`}
           ${o.closed?`<span title="Closed${o.closedReason?': '+esc(o.closedReason):''}" style="display:inline-flex;cursor:default">${okrStatusChip(st)}</span>`:okrStatusChip(st)}
         </div>
       </div>
@@ -1531,13 +1553,13 @@ function _okrProgressPanel(o,kids,pct,st){
     const X=`<button onclick="event.stopPropagation();try{localStorage.setItem('bridge_note_okrmath','1')}catch(e){};App._okrProgressModal('${o.id}')" title="Hide this explanation" aria-label="Dismiss" style="margin-left:auto;flex-shrink:0;border:none;background:transparent;color:var(--c-text-3);cursor:pointer;font-size:14px;line-height:1;padding:0 2px">×</button>`;
     const wrap=t2=>`<div style="display:flex;gap:7px;align-items:flex-start;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:7px 10px;margin-top:10px;font-size:11px;color:var(--c-text-2);line-height:1.55">${ic('info','w-3.5 h-3.5')}<span style="min-width:0">${t2}</span>${X}</div>`;
     const f=v2=>esc(_okrFmtVal(o,v2));
+    if(okrIsLimit(o)){const t1=_okrTargetEff(o),v1=okrCurrentOf(o);return wrap(`No % here \u2014 an allowance is <b>pass/fail</b>: stay under ${f(t1)} for the period and it is met, break it and it is not.${(v1===null||v1===undefined)?'':` So far <b>${f(v1)}</b> of the ${f(t1)} allowance.`}`);}
+    if(okrIsThresh(o)){const r=_okrReadings(o),ok=r.filter(x=>okrThreshOK(o,x.value)===true).length,t0=_okrTargetEff(o);return wrap(`No % here — a threshold objective is <b>pass/fail</b> against the ${f(t0)} line, judged on where the number is right now. <b>${ok} of ${r.length}</b> update${r.length===1?'':'s'} this period stayed ${okrDirOf(o)==='gte'?'at or above':'at or below'} it.`);}
     const p=okrProgress(o);if(p===null)return '';
     if(o.rollup)return wrap(`<b>${p}%</b> = ${esc(_okrModeLabel(o.rollupMode))} of its direct sub-objectives.`);
     if(o.isAnnual)return wrap(`<b>${p}%</b> = the average of its quarters' progress, each counting equally.`);
     const t=_okrTargetEff(o),s2=Number(o.startValue||0),v=okrCurrentOf(o);
-    if(okrIsThresh(o)){const r=_okrReadings(o),ok=r.filter(x=>okrThreshOK(o,x.value)===true).length;return wrap(`<b>${p}%</b> = compliance — <b>${ok} of ${r.length}</b> update${r.length===1?'':'s'} this period ${okrDirOf(o)==='gte'?'at or above':'at or below'} the ${f(t)} line.`);}
     if(v===null||t===null||!isFinite(Number(t)))return '';
-    if(okrIsLimit(o))return wrap(`<b>${p}%</b> of the allowance used = ${f(v)} ÷ (${f(t)} − ${f(s2)}).`);
     if(Number(t)===s2)return wrap(`<b>${p}%</b> — hold the line at ${f(t)}: meeting it reads 100%.`);
     const raw=((Number(v)-s2)/(Number(t)-s2))*100;
     return wrap(`<b>${p}%</b> = (current − start) ÷ (target − start) = (${f(v)} − ${f(s2)}) ÷ (${f(t)} − ${f(s2)})${(isFinite(raw)&&raw<0)?' — the number is moving <b>away</b> from the target, so it reads 0%':(p>100?' — target beaten':'')}.`);
@@ -1548,7 +1570,7 @@ function _okrProgressPanel(o,kids,pct,st){
       ${OKR_STATUSES.map(s=>{const on=o.statusMode==='manual'&&o.statusManual===s;const m=OKR_ST_META[s];return`<button onclick="App._okrMarkStatus('${o.id}','${s}')" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
       <button onclick="App._okrMarkStatus('${o.id}','auto')" title="Let progress decide the status" style="padding:4px 10px;border-radius:20px;border:1.5px solid ${o.statusMode!=='manual'?'var(--c-text)':'var(--c-border)'};background:${o.statusMode!=='manual'?'var(--c-ink)':'var(--c-surface)'};color:${o.statusMode!=='manual'?'#fff':'var(--c-text-2)'};font-size:11px;font-weight:700;cursor:pointer">Auto</button>
     </div>`:'';
-  const cmpBars=okrHasRevision(o)?(function(){
+  const cmpBars=(okrHasRevision(o)&&!okrNoPct(o))?(function(){
     const pr=okrProgress(o),po=okrProgressOrig(o);
     const bar=(lbl,pct,col)=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:88px;font-size:10.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.03em">${lbl}</span><div style="flex:1;height:6px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${col}"></div></div><span style="width:46px;text-align:right;font-size:11.5px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span></div>`;
     const who=o.revisedBy&&uById(o.revisedBy)?fullName(uById(o.revisedBy)):'';
@@ -1594,8 +1616,8 @@ function _okrProgressPanel(o,kids,pct,st){
       ${kids.map(k=>{const kp=okrProgress(k),ks=okrStatusOf(k);return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0">
         ${_okrLvlChip(okrLevel(k))}${k.quarterLabel?_okrQtrChip(k.quarterLabel):''}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
-        <div style="width:90px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${kp===null?0:Math.max(0,Math.min(100,kp))}%;background:${_okrBarColor(ks)}"></div></div>
-        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+' '+(_okrTargetSign(k)||'/')+' '+esc(_okrFmtVal(k,_okrTargetEff(k)))}</span><span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>
+        ${okrNoPct(k)?'':`<div style="width:90px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${kp===null?0:Math.max(0,Math.min(100,kp))}%;background:${_okrBarColor(ks)}"></div></div>`}
+        <span style="font-size:10.5px;color:var(--c-text-3);white-space:nowrap">${k.metricType==='yesno'?((okrLatestCheckin(k.id)||{}).value>=1?'Done':'Not done'):esc(_okrFmtVal(k,_okrOwnCur(k)))+' '+(_okrTargetSign(k)||'/')+' '+esc(_okrFmtVal(k,_okrTargetEff(k)))}</span>${okrNoPct(k)?'':`<span style="font-size:12px;font-weight:800;color:var(--c-text);width:44px;text-align:right">${kp===null?'—':kp+'%'}</span>`}
         ${okrStatusChip(ks,true)}
       </div>`;}).join('')}
     </div>`:'';
@@ -1608,7 +1630,7 @@ function _okrProgressPanel(o,kids,pct,st){
         <div><div style="${lab}">Current${(o.rollup||o.isAnnual)?' · auto':''}</div><div style="${big}">${cur}</div></div>
         <div><div style="${lab}">${(()=>{const w=_okrTargetWord(o);const W=w.charAt(0).toUpperCase()+w.slice(1);return okrHasRevision(o)?('Original '+w):W;})()}</div><div style="${big}${okrHasRevision(o)?';text-decoration:line-through;opacity:.6':''}">${tgt}</div></div>
         ${okrHasRevision(o)?`<div><div style="${lab};color:#8A5F00">Revised ${_okrTargetWord(o)}</div><div style="${big};color:#8A5F00">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
-        <div><div style="${lab}">${okrIsThresh(o)?'Compliance':okrIsLimit(o)?'Limit used':'Progress'}</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>${okrIsThresh(o)?`<div><div style="${lab}">Updates on the good side</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOK(o,x.value)===true).length+' / '+r.length;})()}</div></div>`:''}
+        ${okrNoPct(o)?'':`<div><div style="${lab}">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div><div style="${lab}">Updates on the good side</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOK(o,x.value)===true).length+' / '+r.length;})()}</div></div>`:''}
         <div><div style="${lab}">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
       </div>
       ${canCk?btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'}):''}
@@ -1619,7 +1641,7 @@ function _okrProgressPanel(o,kids,pct,st){
     ${o.closed?`<div style="display:flex;gap:8px;align-items:center;background:#DFEAEC;border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;color:#2F4C55">${ic('lock','w-3.5 h-3.5')}<b>Closed</b>&nbsp;${o.closedAt?esc(fmtS(String(o.closedAt).slice(0,10))):''}${o.closedBy&&uById(o.closedBy)?' by '+esc(fullName(uById(o.closedBy))):''}${o.closedReason?' — “'+esc(o.closedReason)+'”':''} · kept for record, updates are frozen</div>`:''}
     ${rollupNote}
     <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px;position:relative">
-      <div style="position:absolute;top:10px;right:12px;z-index:2;display:flex;align-items:baseline;gap:4px;background:var(--c-surface);padding:1px 8px;border-radius:8px;border:1px solid var(--c-border)"><span style="font-size:15px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--c-text-3)">progress</span></div>
+      ${okrNoPct(o)?'':`<div style="position:absolute;top:10px;right:12px;z-index:2;display:flex;align-items:baseline;gap:4px;background:var(--c-surface);padding:1px 8px;border-radius:8px;border:1px solid var(--c-border)"><span style="font-size:15px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--c-text-3)">progress</span></div>`}
       <canvas data-okr-chart="${o.id}"></canvas>
     </div>
     ${kidRows}
@@ -1894,7 +1916,7 @@ App._renderOKREdit=()=>{
             return _plain('A journey from '+esc(_okrFmtVal(o,_s))+' down to '+esc(_okrFmtVal(o,_t))+'. The % is <b>how much of that drop is done</b>, and the graph draws the planned pace down to the target.');
           }
           const _word=_d==='gte'?'at or above':'at or below';
-          return _amber('One line, no start value. Any update <b>'+_word+' '+(_set?esc(_okrFmtVal(o,_t)):'the value')+'</b> is good — <b>On track</b> while the period runs, <b>Achieved</b> once it closes. Anything on the wrong side reads <b>Off track</b>, then <b>Not achieved</b>. The % beside it is <b>compliance</b>: the share of this period\'s updates that stayed on the good side, so 8 of 10 reads <b>80%</b>. The graph draws that line flat, with every reading dotted green or red against it.');
+          return _amber('One line, no start value. Any update <b>'+_word+' '+(_set?esc(_okrFmtVal(o,_t)):'the value')+'</b> is good — <b>On track</b> while the period runs, <b>Achieved</b> once it closes. Anything on the wrong side reads <b>Off track</b>, then <b>Not achieved</b>. There is <b>no progress %</b> on this mode — the question is only which side of the line the number is on, so a percentage would be misleading. The graph draws that line flat, with every reading dotted green or red against it.');
         })()}
       </div>
       ${okrHasRevision(o)?`<div style="background:#FEFAEC;border:1px solid #FBE6A6;border-radius:11px;padding:10px 12px">
@@ -2527,7 +2549,7 @@ App._renderOKRBulk=()=>{
       `<input type="number" step="any" value="${d.targetValue===null||d.targetValue===undefined?'':d.targetValue}" oninput="App._okrBulkNum('targetValue',this.value)" placeholder="e.g. 100" class="ui-input"/>`)}
     ${row('unit','Unit / currency','Percentage objectives always keep “%” and are skipped.',
       `<input type="text" value="${esc(d.unit||'')}" oninput="App._okrBulkSet('unit',this.value)" placeholder="e.g. AED, orders, hrs" class="ui-input"/>`)}
-    ${row('direction','Which way is good?','Higher / Lower is better run from a start value to a target. Greater than / Less than use the target as a single line to stay on the right side of — the start value is ignored and the % becomes compliance.',
+    ${row('direction','Which way is good?','Higher / Lower is better run from a start value to a target. Greater than / Less than use the target as a single line to stay on the right side of — the start value is ignored and no progress % is shown; status carries the verdict.',
       `<select class="ui-select" onchange="App._okrBulkSetR('direction',this.value)">
         ${OKR_DIRS.map(x=>`<option value="${x[0]}" ${(d.direction||'up')===x[0]?'selected':''}>${esc(OKR_DIR_LONG[x[0]])}</option>`).join('')}
       </select>`)}
@@ -2884,7 +2906,7 @@ App._okrExport=async()=>{
         'L'+okrLevel(o), o.title||'', o.description||'', par?(par.title||''):'',
         okrOwners(o).map(_okrNameOf).filter(Boolean).join(', '), dn.dept, dn.sub,
         (OKR_METRICS.find(m=>m[0]===o.metricType)||[,o.metricType])[1], o.unit||'',
-        okrDirLabel(o), okrIsThresh(o)?'Compliance with the threshold':okrIsLimit(o)?'Share of the allowance used':'Distance from start to target',
+        okrDirLabel(o), okrIsThresh(o)?'Not scored — pass/fail against the threshold':okrIsLimit(o)?'Not scored \u2014 pass/fail against the allowance':'Distance from start to target',
         _okrPlain(o.startValue), _okrPlain(_okrOwnCur(o)), _okrPlain(o.targetValue),
         _okrPlain(o.revisedTarget), _okrPlain(_okrTargetEff(o)),
         pct===null?'':pct, okrStatusOf(o), o.statusMode==='manual'?'Manual':'Automatic',
