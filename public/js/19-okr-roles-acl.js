@@ -1422,23 +1422,26 @@ function _okrNodeHTML(o,depth){
   /* The separator carries the comparison, so the target is not prefixed a second time:
      "40 / 50" reaching a target \u00b7 "40 \u2264 50" a ceiling \u00b7 "99.2 \u2265 99" a floor. */
   const _sep=_okrTargetSign(o)||'/';
-  const curTgt=o.metricType==='yesno'?((okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'):`${_okrFmtVal(o,_okrOwnCur(o))} <span style="opacity:.55">${_sep}</span> ${_tgtTxt}`;
+  /* v3.19 — current value and target are separate spans, not one string, so the mobile card can
+     stack them (big number over "≤ 36%") while the desktop row still reads "39% ≤ 36%" inline. */
+  const curTgt=o.metricType==='yesno'?`<span class="okr-curv">${(okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done'}</span>`
+    :`<span class="okr-curv">${_okrFmtVal(o,_okrOwnCur(o))}</span><span class="okr-tgt"><span style="opacity:.55">${_sep}</span> ${_tgtTxt}</span>`;
   const ownersHTML=owners.length?`<span title="Owner${owners.length===1?'':'s'}: ${esc(owners.map(fullName).join(', '))}${owners.length>1?' — any of them can update':''}" style="flex-shrink:0;display:inline-flex;align-items:center;cursor:default">${owners.slice(0,3).map((u,i)=>`<span style="display:inline-flex;${i?'margin-left:-5px;':''}border-radius:50%;box-shadow:0 0 0 1.5px var(--c-surface)">${avatar(u,'w-5 h-5','text-[8px]')}</span>`).join('')}${owners.length>3?`<span style="font-size:9.5px;font-weight:800;color:var(--c-text-3);margin-left:4px">+${owners.length-3}</span>`:''}<span style="${meta};margin-left:5px">${esc(owners.map(fullName)[0]||'')}${owners.length>1?' +'+(owners.length-1):''}</span></span>`:'';
   const sel=_OKRSEL.has(o.id);
-  const selBox=canEdit?`<button onclick="event.stopPropagation();App._okrTogSel('${o.id}')" role="checkbox" aria-checked="${sel}" title="${sel?'Deselect':'Select for bulk edit'}" style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;cursor:pointer;flex-shrink:0"><span style="width:16px;height:16px;border-radius:5px;border:1.5px solid ${sel?'var(--c-brand)':'var(--c-border-2)'};background:${sel?'var(--c-brand)':'var(--c-surface)'};display:grid;place-items:center;color:#fff">${sel?ic('check','w-3 h-3'):''}</span></button>`:`<span style="width:24px;flex-shrink:0"></span>`;
+  const selBox=canEdit?`<button class="okr-selbox" onclick="event.stopPropagation();App._okrTogSel('${o.id}')" role="checkbox" aria-checked="${sel}" title="${sel?'Deselect':'Select for bulk edit'}" style="width:24px;height:24px;display:grid;place-items:center;border:none;background:transparent;cursor:pointer;flex-shrink:0"><span style="width:16px;height:16px;border-radius:5px;border:1.5px solid ${sel?'var(--c-brand)':'var(--c-border-2)'};background:${sel?'var(--c-brand)':'var(--c-surface)'};display:grid;place-items:center;color:#fff">${sel?ic('check','w-3 h-3'):''}</span></button>`:`<span class="okr-selbox" style="width:24px;flex-shrink:0"></span>`;
   const barTitle=okrIsThresh(o)?('Stay '+(okrDirOf(o)==='gte'?'at or above ':'at or below ')+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
     :_isLim?('Stay under '+_okrFmtVal(o,_okrTargetEff(o))+' \u2014 judged pass/fail, not scored as a %')
     :pct===null?'No data yet':(pct+'% of target');
   // Indentation follows the tree ON SCREEN, not the absolute level — see okrLevelVisible().
   const _ind=_qv?okrLevelVisible(o):depth;const card=`<div class="okr-card" onclick="App._okrProgressModal('${o.id}')" style="background:var(--c-surface);border:1px solid ${sel?'var(--c-brand)':'var(--c-border)'};${sel?'box-shadow:0 0 0 2px var(--c-brand-soft);':''}border-radius:12px;margin-bottom:6px;${_ind?'margin-left:'+Math.min(_ind,5)*16+'px;':''}${o.closed?'opacity:.72;':''}overflow:hidden;cursor:pointer;transition:border-color .12s,box-shadow .12s" onmouseover="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-text-3)'}'" onmouseout="this.style.borderColor='${sel?'var(--c-brand)':'var(--c-border)'}'" title="Open Progress &amp; Updates">
     <div class="okr-cardpad" style="padding:10px 13px">
-      <div style="display:flex;align-items:flex-start;gap:9px">
+      <div class="okr-row" style="display:flex;align-items:flex-start;gap:9px">
         ${selBox}
-        ${kids.length?`<button onclick="event.stopPropagation();App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${icBtn};transform:${exp?'rotate(90deg)':'none'}">${ic('chevR','w-4 h-4')}</button>`:`<span style="width:24px;flex-shrink:0;display:grid;place-items:center;height:24px"><span style="width:4px;height:4px;border-radius:50%;background:var(--c-border-2)"></span></span>`}
-        <div style="flex:1;min-width:140px">
-          <div style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;row-gap:4px">
+        ${kids.length?`<button class="okr-exp" onclick="event.stopPropagation();App._okrTogExp('${o.id}')" title="${exp?'Collapse':'Expand'} sub-objectives" style="${icBtn};transform:${exp?'rotate(90deg)':'none'}">${ic('chevR','w-4 h-4')}</button>`:`<span class="okr-exp okr-leaf" style="width:24px;flex-shrink:0;display:grid;place-items:center;height:24px"><span style="width:4px;height:4px;border-radius:50%;background:var(--c-border-2)"></span></span>`}
+        <div class="okr-main" style="flex:1;min-width:140px">
+          <div class="okr-titlerow" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;row-gap:4px">
             ${_okrLvlChip(lvl)}${o.quarterLabel?_okrQtrChip(o.quarterLabel):''}${o.isAnnual?_okrAnnualChip():''}
-            <span class="fd" style="font-size:13.5px;font-weight:600;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
+            <span class="fd okr-title" style="font-size:13.5px;font-weight:600;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
             ${okrHasRevision(o)?`<span style="${meta};color:#8A5F00;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
           </div>
           <div class="okr-meta" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:3px;margin-top:5px">
@@ -1449,10 +1452,10 @@ function _okrNodeHTML(o,depth){
           </div>
         </div>
         <div class="okr-nums" style="display:flex;align-items:center;gap:10px;flex-shrink:0;margin-left:auto;padding-left:6px">
-          <span style="font-size:11px;font-weight:700;color:var(--c-text-2);white-space:nowrap">${curTgt}</span>
+          <span class="okr-cur" style="font-size:11px;font-weight:700;color:var(--c-text-2);white-space:nowrap">${curTgt}</span>
           ${(okrNoPct(o)||pct===null)?'':`<div class="okr-bar" title="${barTitle}" style="width:70px;height:5px;background:var(--c-border);border-radius:3px;overflow:hidden;flex-shrink:0"><div style="height:100%;width:${Math.max(0,Math.min(100,pct))}%;background:${barC};border-radius:3px;transition:width .3s"></div></div>
-          <span class="fd" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct}%</span>`}
-          ${o.closed?`<span title="Closed${o.closedReason?': '+esc(o.closedReason):''}" style="display:inline-flex;cursor:default">${okrStatusChip(st)}</span>`:okrStatusChip(st)}
+          <span class="fd okr-pct" title="${barTitle}" style="font-size:13px;font-weight:800;color:var(--c-text);min-width:38px;text-align:right">${pct}%</span>`}
+          <span class="okr-stwrap"${o.closed?` title="Closed${o.closedReason?': '+esc(o.closedReason):''}" style="display:inline-flex;cursor:default"`:''}>${okrStatusChip(st)}</span>
         </div>
       </div>
     </div>
