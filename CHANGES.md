@@ -1,3 +1,54 @@
+# Bridge v87 — annual OKRs: choose how the quarters combine
+
+One file of logic (`public/js/19-okr-roles-acl.js`) + cache-buster `?v=87`. No database changes — the choice is stored in the existing `rollup_mode` column with a `q-` prefix, so every existing annual keeps its current behaviour until you pick something else.
+
+## "How is this annual calculated from its quarters?"
+
+The annual section of the editor now has a mode dropdown:
+
+- **Combined progress of the quarters** *(default — what every existing annual does today)*: each quarter counts equally; Q1 done 10% with three untouched quarters → 2.5%.
+- **Total — sum of the quarterly values**: quarterly current values are added up and measured against the annual's own start → target (set quarterly targets so they add up to the annual one, e.g. 4 × 3M = 12M).
+- **Average of the quarterly values**: right for rates/percentages ("hold 90% every quarter").
+- **Highest quarterly value** / **Lowest quarterly value**: best (or weakest) quarter is the annual's current value.
+- **Latest quarterly update**: the newest reported value is the annual's current value — right for running totals the quarters report cumulatively.
+
+The chosen rule drives the progress %, the Current value, the graph line and the readings that feed threshold judgement; the Progress & Updates panel and the maths explainer say which rule is active. Leaving an annual (toggle off) cleans the stored mode back to a plain roll-up value.
+
+Verified with a 19-case simulation (all modes, negative %, threshold daily-average incl. same-day duplicates, legacy annuals with the old roll-up flag) — **19/19 pass**.
+
+---
+
+# Bridge v86 — OKR scoring fixes + full re-theme (Light Teal · Cream · Gold)
+
+Cumulative. **24 files** (every `public/js/*.js` except `01-supabase-sync.js`/`99-boot.js`, plus `index.html`, `src/main.js`, `src/styles/main.css`, this file). Cache-buster `?v=86`. No database changes — everything below is client logic/presentation.
+
+---
+
+## 1. Greater than / Less than is now judged on the **average of each day**
+
+Threshold objectives (Which way is good? = *Greater than* / *Less than*) used to take their status from the **latest reading** — one good day could hide a bad month. Now every reported day in the period is averaged (last report of a day wins) and **that average** is what must sit on the good side of the line: average on the good side → On track / Achieved, wrong side → Off track / Not achieved. The Progress & Updates panel shows the new **Daily average** figure next to "Held the line", and the editor/help texts explain the rule. (Objectives with no in-period readings fall back to the latest value, so old rows don't flip to No data.)
+
+## 2. Progress % can go **negative**
+
+If the number moves backwards past its start value (start 100 → target 150, reading 80), progress now reads **−40%** instead of being floored at 0. Works for Higher- and Lower-is-better, flows through quarter → annual averaging, and the maths explainer says "moved backwards past the start" instead of pretending it's 0. Bars still render empty at ≤0 — only the figure goes negative (floor −999, ceiling 999 unchanged).
+
+## 3. Annual objectives are **quarters-only** — the roll-up toggle is gone for them
+
+- An **Annual objective** no longer shows the "Auto-update from the level below" toggle; it is always calculated from its **quarterly objectives** (each counting equally). Turning Annual on forces the roll-up flag off; saving an annual clears any stray flag from old data; bulk-edit skips annuals for roll-up.
+- **Non-annual** objectives (quarterly and every other level) keep the toggle exactly as before.
+- Old annuals that had the roll-up override on now read from their quarters — the override is retired everywhere (progress, current value, graph series, readings).
+
+## 4. Full re-theme — light everywhere: **teal · grey · black · white · cream · gold**
+
+- **Primary/brand**: Energizing Orange (#FF7F11 family) → **deep teal** (#0F766E family) across every button, toggle, focus ring, link, progress fill, chart line and inline style in all 20 JS files + CSS + Tailwind config.
+- **Gold** (#C9A227/#D4A72C family) takes celebration & waiting: Achieved chips, ANNUAL/Draft/Admin chips (ex-purple), pending-approval pills, revised-target accents, the logo mark's gradient tip.
+- **Cream** canvas (#FAF9F3 + warm paper gradient) with white cards and the existing light grey/ink neutrals.
+- **Sidebar is light now** — white→cream gradient, dark teal-grey text, teal active accent (was near-black).
+- Login hero stays deep ink-teal with teal/gold accents; info-blues and chip-purples remapped into the teal/gold families; semantic red/green/amber untouched.
+- New CSS tokens: `--c-gold`, `--c-gold-ink`, `--c-gold-soft`, `--c-cream` (theme block v7 in `main.css`).
+
+---
+
 # Bridge v77 — three fixes
 
 Cumulative. **7 files**, same repo paths. Cache-buster `?v=77`.
