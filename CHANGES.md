@@ -1,3 +1,62 @@
+# Bridge v95 — the new-ticket form lives IN the row
+
+`public/js/06-crm.js` + cache-buster `?v=95`. No DB changes.
+
+- No popup: **+ New ticket** opens an entry row at the **top of the table**, one input under each column header — Title + Customer under Ticket, the Assignee picker (people & groups), the Status dropdown, and every custom column in its own cell — ending in an **Add** button (Enter also adds, Esc or × closes). The row stays open after adding, so several tickets can be entered back-to-back.
+- Same permissions and behaviour as the v94 form: Status/custom cells need Edit, Assignee needs Assign, assigning at creation notifies like a normal assignment, "created"/"assigned" automations run, and date/time inputs stay grey until committed.
+
+---
+
+# Bridge v94 — New ticket is a full form
+
+`public/js/06-crm.js` + cache-buster `?v=94`. No DB changes.
+
+- **+ New ticket** now opens a form with every field up front — Ticket title (required), Customer, **Assignee** (people & groups), **Status**, **Due date**, and **all of the board's custom columns** — then one **Add ticket** button. The two-field inline row at the top of the table is gone.
+- Access rules match the table: title/customer come with Workspace → Create; Status, Due date and custom columns show only with Edit; the Assignee picker only with Assign. Creating with an assignee notifies them (or every group member) exactly like assigning from the table, and "created"/"assigned" automations both run. Date/time fields in the form use the same grey-until-committed treatment as the table (no Safari ghosts).
+
+---
+
+# Bridge v93 — the Remind column is opt-in now
+
+`public/js/06-crm.js` + cache-buster `?v=93`. No DB changes.
+
+- The built-in trailing **Remind** column is gone from ticket tables. Personal ⏰ reminders are now a **column type**: hit **+ Column → ⏰ Reminder** on any board that wants the bell — it behaves like any other column (drag to position, resize, rename, delete) and renders the same per-person bell (each person's own date & time reminder, in-app + email, fires with Bridge closed; the cell stores no data). Reminder columns don't appear in filters, automation column pickers or the details panel (which already has its My-reminders block). Setting reminders from the chat header, message hover and details panel is unchanged.
+
+---
+
+# Bridge v92 — Column reminder lives inside "+ New rule"
+
+`public/js/06-crm.js` + cache-buster `?v=92`. No DB changes.
+
+- The always-visible Column-reminder card is gone. **+ New rule** now asks what to create — **Automation rule** (the existing trigger → actions flow) or **Column reminder** (pick the Date and Time columns, one per board). Once added, the reminder sits **in the rules list** like any other rule, with its own on/off toggle, pencil to edit the columns, and a remove button (with confirmation — columns and values untouched). Everything else about how it fires is unchanged.
+
+---
+
+# Bridge v91 — empty date/time cells can no longer look filled (Safari) · "no assignee" badge
+
+`public/js/06-crm.js` + cache-buster `?v=91`. No DB changes.
+
+- **Safari showed a ghost value in EMPTY date/time cells** (today's date / a default time, in full ink) — an untouched cell looked saved, so rows silently never qualified for column reminders. Empty cells now render **grey** ("Empty — click to pick" on hover) and turn ink only once a value is actually committed. Commits happen on change **and** on blur (Safari sometimes skips change), deduped so column automations never run twice for one edit.
+- **Amber "!" badge** on the Time cell when a row has its date & time set but **no assignee** (and isn't done) — hover explains that nobody will be auto-reminded until an Assignee is picked.
+
+---
+
+# Bridge v90 — OKR "Achieved" waits for the end date · column-driven reminders for assignees
+
+Two files (`public/js/19-okr-roles-acl.js`, `public/js/06-crm.js`) + cache-buster `?v=90`. **DB additive only**: `crm_column_reminder_log` table, `crm-column-reminders-every-minute` pg_cron job, `colReminder` setting on one board.
+
+## OKR: Achieved only after the end date
+- `okrStatusOf` no longer returns **Achieved** the moment progress hits 100% — before the period's end date it reads **On track**, and flips to Achieved only once the end date has passed. Manual status marks and Closed still win. Threshold/allowance modes were already end-gated; this closes the plain-target path. Editor explainer updated to say so.
+
+## Workspace: Column reminder (assignee pinged at the row's date & time)
+- New card at the top of every ticket board's **Automations** dialog: toggle **Column reminder** on, pick the board's **Date** and **Time** columns. At that wall-clock moment (Asia/Dubai) the assignee — or every member of the assigned group — gets an in-app notification + email, fired by an every-minute server job, so it works with everyone's app closed.
+- Skips rows missing the date or the time (per choice: no default hour), tickets whose status is a done status, and unassigned rows. Each (ticket, moment) fires at most once — edit the date/time and it re-arms for the new moment; enabling never replays moments older than an hour.
+- Permission: same as Automations (Workspace → Edit/Manage). The setting lives in `board.settings.colReminder` and syncs live to all clients (v89 realtime).
+- Preconfigured on **Available Date and Time** (Pro x Inventory): Date + Time columns, enabled.
+- Note: personal ⏰ reminders were already server-fired every minute (`crm-reminders-every-minute`) — bell column, chat header, message hover, details panel — nothing changed there.
+
+---
+
 # Bridge v89 — Workspace: assign to groups · views built in one dialog · ⏰ Remind-me on every row
 
 One file of logic (`public/js/06-crm.js`) + cache-buster `?v=89`. **DB: one additive column** — `crm_conversations.assigned_group text` (nullable; nothing else touched, nothing deleted).
