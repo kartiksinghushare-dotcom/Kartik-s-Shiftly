@@ -1242,7 +1242,11 @@ App._okrProgressModal=(id)=>{
   if(!okrCanSee(o))return toast('You don\u2019t have access to that objective','err');
   // An annual's progress panel lists ONLY what feeds it — its quarters. Regular sub-objectives
   // (L1s etc.) have their own cards and panels. With the roll-up override on, all children feed it.
-  const kids=o.isAnnual?okrChildrenVisible(o.id).filter(k=>k.quarterLabel):okrChildrenVisible(o.id); // v3.19: annual ⇒ quarters always
+  // v3.21: a roll-up node lists exactly what FEEDS it (_okrRollupKids) — for a quarterly that
+  // includes the matching below-level quarters (L0·Q1 ← every L1·Q1), same panel as the annual's.
+  const _vset=new Set(okrVisible().map(x=>x.id));
+  const kids=o.isAnnual?okrChildrenVisible(o.id).filter(k=>k.quarterLabel)
+    :(o.rollup?_okrRollupKids(o).filter(k=>_vset.has(k.id)):okrChildrenVisible(o.id)); // v3.19: annual ⇒ quarters always
   const pct=okrProgress(o),st=okrStatusOf(o);
   modalShell({title:'Progress & Updates',sub:(o.title||'')+(okrNoPct(o)?'':' — '+(pct===null?'no data yet':pct+'%')),size:'max-w-2xl',key:'okr-pm',
     body:`<div id="okr-pm" data-okr="${o.id}" style="margin:-6px -2px 0">${_okrProgressPanel(o,kids,pct,st)}</div>`});
@@ -1619,7 +1623,7 @@ function _okrProgressPanel(o,kids,pct,st){
       const vC=okrCurrentOf(o);
       return wrap(`<b>${p}%</b> — current value${vC===null?'':` <b>${f(vC)}</b>`} = the ${_okrAnnualModeLabel(o)}, measured against this annual's own start → target.`);
     }
-    if(o.rollup)return wrap(`<b>${p}%</b> = ${esc(_okrModeLabel(o.rollupMode))} of its direct sub-objectives.`);
+    if(o.rollup)return wrap(`<b>${p}%</b> = ${esc(_okrModeLabel(o.rollupMode))} of ${o.quarterLabel?('the '+esc(o.quarterLabel)+' objectives one level below'):'its direct sub-objectives'}.`);
     const t=_okrTargetEff(o),s2=Number(o.startValue||0),v=okrCurrentOf(o);
     if(v===null||t===null||!isFinite(Number(t)))return '';
     if(Number(t)===s2)return wrap(`<b>${p}%</b> — hold the line at ${f(t)}: meeting it reads 100%.`);
@@ -1642,7 +1646,7 @@ function _okrProgressPanel(o,kids,pct,st){
     </div>`;})():'';
   const rollupNote=(o.rollup||o.isAnnual)?dismissNote('okr-auto-'+(o.isAnnual?'annual':'rollup'),
     (o.isAnnual?`This annual objective updates automatically from its quarterly objectives — ${okrAnnualMode(o)==='progress'?'its progress is the <b>&nbsp;combined progress of its quarters&nbsp;</b> (each quarter counts equally':'its current value is the <b>&nbsp;'+esc(_okrAnnualModeLabel(o))+'&nbsp;</b> (measured against its own start → target'}; the level below doesn't feed it).`
-               :`This objective updates automatically — its current value is the <b>&nbsp;${esc(_okrModeLabel(o.rollupMode))}&nbsp;</b> of its direct sub-objectives.`),
+               :`This objective updates automatically — its current value is the <b>&nbsp;${esc(_okrModeLabel(o.rollupMode))}&nbsp;</b> of ${o.quarterLabel?('the matching <b>&nbsp;'+esc(o.quarterLabel)+'&nbsp;</b> objectives one level below (plus any of its own sub-objectives)'):'its direct sub-objectives'}.`),
     {icon:'refresh',style:'margin-top:10px',onDismiss:`App._okrProgressModal('${o.id}')`}):'';
   // check-in feed (latest first)
   const feed=okrCheckinsOf(o.id).slice().reverse().slice(0,30).map(c=>{
@@ -1674,7 +1678,7 @@ function _okrProgressPanel(o,kids,pct,st){
   }).join('')||`<div style="padding:12px 0;color:var(--c-text-3);font-size:12.5px;border-top:1px solid var(--c-border)">No updates yet${canCk?' — add the first one.':'.'}</div>`;
   // children breakdown (roll-up view)
   const kidRows=kids.length?`<div style="margin-top:12px">
-      <div style="${lab};margin-bottom:6px">${o.isAnnual?'Quarterly objectives — feeding this annual (other sub-objectives have their own panels)':o.rollup?('Sub-objectives — feeding this objective ('+esc(_okrModeLabel(o.rollupMode))+')'):'Sub-objectives (each tracks its own progress)'}</div>
+      <div style="${lab};margin-bottom:6px">${o.isAnnual?'Quarterly objectives — feeding this annual (other sub-objectives have their own panels)':o.rollup?((o.quarterLabel?('Below-level '+esc(o.quarterLabel)+' objectives — feeding this quarterly ('):'Sub-objectives — feeding this objective (')+esc(_okrModeLabel(o.rollupMode))+')'):'Sub-objectives (each tracks its own progress)'}</div>
       ${kids.map(k=>{const kp=okrProgress(k),ks=okrStatusOf(k);return`<div style="display:flex;align-items:center;gap:9px;padding:6px 0">
         ${_okrLvlChip(okrLevel(k))}${k.quarterLabel?_okrQtrChip(k.quarterLabel):''}
         <span style="flex:1;min-width:0;font-size:12.5px;font-weight:600;color:var(--c-text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(k.title)}</span>
@@ -2005,7 +2009,7 @@ App._renderOKREdit=()=>{
       ${(o.metricType!=='yesno'&&!o.isAnnual)?`<div style="border-top:1px dashed var(--c-border);padding-top:12px">
         <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
           <div style="min-width:0"><label style="${L}">Auto-update from the level below</label>
-          <div style="font-size:11px;color:var(--c-text-3);margin-top:2px;line-height:1.5">L${lvl} takes its current value from its <b>direct L${lvl+1} sub-objectives only</b> — the owner never enters it by hand. Progress is still measured against this objective's own start → target.</div></div>
+          <div style="font-size:11px;color:var(--c-text-3);margin-top:2px;line-height:1.5">${o.quarterLabel?`This ${esc(o.quarterLabel)} takes its current value from the <b>matching ${esc(o.quarterLabel)} objectives one level below</b> (every L${lvl+1}·${esc(o.quarterLabel)}, plus any sub-objectives created under it) — the owner never enters it by hand.`:`L${lvl} takes its current value from its <b>direct L${lvl+1} sub-objectives only</b> — the owner never enters it by hand.`} Progress is still measured against this objective's own start → target.</div></div>
           <button type="button" role="switch" aria-checked="${o.rollup?'true':'false'}" class="tog ${o.rollup?'on':'off'}" style="margin-top:2px" onclick="_OKRED.rollup=!_OKRED.rollup;App._renderOKREdit()"><span></span></button>
         </div>
         ${o.rollup?`<div style="margin-top:10px"><label style="${L}">How to combine the L${lvl+1} values</label>
@@ -3131,9 +3135,27 @@ const _OKR_MODE_LABEL={sum:'total',avg:'average',max:'highest',min:'lowest',late
 function _okrModeLabel(m){return _OKR_MODE_LABEL[m]||'total';}
 /* Which children feed a roll-up node: the classic rule — ALL direct children. (Annuals never
    roll up from the level below any more — they read their quarter-tagged children only, per
-   the annual mode; see okrAnnualMode().) */
+   the annual mode; see okrAnnualMode().)
+   v3.21 — QUARTERLY objectives: a quarter rarely has real children in the tree (the level
+   below's quarters belong to their own annual), so "the level below" for L0·Q1 additionally
+   means every MATCHING quarter one level down — the exact relation the Quarterly view nests
+   by (_okrQParent): every L1·Q1 whose nearest-ancestor-annual's Q1 is this node. A child
+   annual that sits directly under the quarter is skipped when its own quarters already feed
+   here, so one number is never counted twice. */
+let _okrRKCache={t:0,map:{}};
 function _okrRollupKids(o){
-  return okrChildren(o.id);
+  const own=okrChildren(o.id);
+  if(!o||!o.quarterLabel)return own;
+  /* Graphs evaluate this per date per node — memoise the quarter-matching for 300ms so one
+     render pass scans the tree once per node, while edits still see fresh data next paint. */
+  const now=Date.now();
+  if(now-_okrRKCache.t>300)_okrRKCache={t:now,map:{}};
+  if(_okrRKCache.map[o.id])return _okrRKCache.map[o.id];
+  const matched=(DB.okrs||[]).filter(k=>k&&k.id!==o.id&&k.quarterLabel&&k.parentId&&(_okrQParent(k)||{}).id===o.id);
+  const viaQ=new Set(matched.map(k=>k.parentId));
+  const out=matched.length?own.filter(k=>!viaQ.has(k.id)).concat(matched):own;
+  _okrRKCache.map[o.id]=out;
+  return out;
 }
 /* 'latest' roll-up: the value of the MOST RECENT update on any feeding sub-objective (≤ date).
    Made for annual objectives fed by quarters — Q2's newest number supersedes Q1's.

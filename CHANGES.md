@@ -1,3 +1,18 @@
+# Bridge v96 — automations on built-in columns · reminders ARE an automation now · quarterly roll-up sees the level below
+
+`public/js/06-crm.js`, `public/js/18-settings-notifications.js`, `public/js/19-okr-roles-acl.js` + cache-buster `?v=96`.
+DB (additive): new `crm_rule_reminders` table + `crm-rule-reminders-every-minute` cron job. The old `crm-column-reminders-every-minute` job was unscheduled (its feature is replaced below); `crm-reminders-every-minute` stays and keeps firing any personal reminders people had already set. Nothing else touched or deleted.
+
+- **Workspace: automations react to (and set) built-in columns.** The "When a column…" trigger now lists **Status, Assignee, Priority, Due date, Customer and Ticket (title)** in a *Built-in columns* group above the board's own columns — with the right conditions per column (Status/Priority "becomes…", Assignee "becomes person/group", Due date "date has passed (checked daily)", text contains/equals…). The **"Set a column value…"** action gets the same list (Assignee stays on the dedicated *Assign to…* action). Changing Status, Priority, Due date or Assignee anywhere in the UI now fires these column triggers; existing rules are untouched.
+- **Reminders rebuilt as an automation action — the three old reminder features are gone.** The per-row/message/chat-header ⏰ bells, the "My reminders" block in ticket details, the **⏰ Reminder column type** (the emoji button is gone with it) and the **Column reminder** card were all removed; "+ New rule" goes straight to the rule editor. In their place, every automation rule can now **Set a reminder…**:
+  - **Who** — *Only me* (the person who saves the rule — private to them), or any mix of **people and groups**.
+  - **When** — the row's **date column** (built-in Due date or any date column) plus a **time column** or a fixed time of day; or one **fixed date & time**. All times are Dubai time.
+  - When the trigger fires, the reminder is scheduled; firing it is a **server job (every minute)** that sends the in-app note + email at that exact minute — Bridge open or closed — honouring the Settings toggles (In-App / Email → Workspace reminders) and each person's email switch. One pending reminder per rule+ticket: re-triggering **re-arms** it to the latest date & time; past or empty dates are skipped, and nothing older than a day is ever replayed after an outage.
+  - Old boards keep working: any leftover ⏰ Reminder columns are simply hidden, reminders people had already set still fire once (server job unchanged), and existing automation rules run exactly as before.
+- **OKR: a quarterly objective's "Auto-update from the level below" now actually sees the level below.** A quarter rarely has real children in the tree — the level below's quarters belong to *their own* annual — so L0·Q1's roll-up used to find nothing. It now aggregates every **matching quarter one level down** (each L1·Q1, exactly the relation the Quarterly view nests by), plus any sub-objectives created directly under the quarter, with double-counting guarded (a child annual is skipped when its quarters already feed in). The **Progress & Updates panel lists the feeding objectives** — "Below-level Q1 objectives — feeding this quarterly (total)" — with the same bars/status chips the annual's quarterly panel has, and the graph, %, status and editor wording all follow. Non-quarterly roll-ups are unchanged.
+
+---
+
 # Bridge v95 — the new-ticket form lives IN the row
 
 `public/js/06-crm.js` + cache-buster `?v=95`. No DB changes.

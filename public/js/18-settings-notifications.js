@@ -375,7 +375,6 @@ const EMAIL_EVENTS=[
   {key:'crm_mention',   label:'Workspace chat mention',           vars:'{{user_name}}, {{actor}}, {{title}}, {{action_url}}'},
   {key:'crm_approval',  label:'Workspace approval needed',        vars:'{{user_name}}, {{title}}, {{customer}}, {{action_url}}'},
   {key:'crm_decided',   label:'Workspace approval decided',       vars:'{{user_name}}, {{title}}, {{decision}}, {{actor}}, {{action_url}}'},
-  {key:'crm_reminder',  label:'Workspace reminder',               vars:'{{user_name}}, {{note}}, {{title}}, {{action_url}}'},
 ];
 
 function _defaultTemplates(){
@@ -394,7 +393,7 @@ function _defaultTemplates(){
     crm_ticket:{subject:'🎫 New {{type}} ticket: {{title}}',body:'Hi {{user_name}},\n\nA new {{type}} ticket was created: "{{title}}" ({{customer}}).\n\n{{action_url}}'},
     crm_approval:{subject:'✅ Approval needed: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" ({{customer}}) needs your approval.\n\n{{action_url}}'},
     crm_decided:{subject:'{{decision}}: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" was {{decision}} by {{actor}}.\n\n{{action_url}}'},
-    crm_reminder:{subject:'⏰ Reminder: {{note}}',body:'Hi {{user_name}},\n\nYour reminder is due: {{note}}\n\nConversation: "{{title}}"\n\n{{action_url}}'},
+    crm_reminder:{subject:'Reminder: {{note}}',body:'Hi {{user_name}},\n\nYour reminder is due: {{note}}\n\nConversation: "{{title}}"\n\n{{action_url}}'},
     okr_assigned:{subject:'🎯 New OKR assigned: {{okr_title}}',body:'Hi {{user_name}},\n\n{{assigner}} assigned you an objective: {{okr_title}}\n\nTarget: {{target}}\nCheck-ins: {{schedule}}\nPeriod: {{period}}\n\nIf the objective has several owners, any one of you can submit an update — it counts for the whole group.\n\n{{action_url}}'},
     okr_checkin_due:{subject:'⏰ OKR check-in due today ({{count}})',body:'Hi {{user_name}},\n\nYou have {{count}} OKR check-in(s) scheduled for today ({{date}}):\n\n{{okr_titles}}\n\nOpen Bridge to submit your update — if a co-owner already submitted, you\'re covered.\n\n{{action_url}}'},
     okr_update_added:{subject:'📈 {{okr_title}} — updated by {{actor}}',body:'Hi {{user_name}},\n\n{{actor}} added an update on "{{okr_title}}": {{value}}\n\n{{comment}}\n\nThis counts for the whole owner group — nothing more to do for today\'s check-in.\n\n{{action_url}}'},
@@ -603,7 +602,7 @@ function settingsPage(){
         <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
         ${_nsTogRow('inapp_crm_mention','Tagged in Workspace chat','When someone @mentions you in a conversation')}
         ${_nsTogRow('inapp_crm_ticket','Workspace ticket activity','Created, assigned, moved & automation alerts')}
-        ${_nsTogRow('inapp_crm_reminder','Workspace reminders','Your ⏰ date & time reminders on tickets and messages')}
+        ${_nsTogRow('inapp_crm_reminder','Workspace reminders','Reminders scheduled by board automations (date & time)')}
         <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
         ${_nsTogRow('inapp_okr_assigned','OKR assigned','Sent to every owner when an objective is assigned to them')}
         ${_nsTogRow('inapp_okr_update_added','OKR update added','Sent to co-owners when someone submits the group\'s check-in')}
@@ -662,7 +661,7 @@ function settingsPage(){
         <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
         ${_nsTogRow('email_crm_mention','Tagged in Workspace chat','Email when someone @mentions you')}
         ${_nsTogRow('email_crm_ticket','Workspace ticket activity','Email for created / assigned / automation alerts')}
-        ${_nsTogRow('email_crm_reminder','Workspace reminders','Email for your ⏰ date & time reminders')}
+        ${_nsTogRow('email_crm_reminder','Workspace reminders','Email for reminders scheduled by board automations')}
         <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
         ${_nsTogRow('email_okr_assigned','OKR assigned','Email to every owner when an objective is assigned to them')}
         ${_nsTogRow('email_okr_checkin_due','OKR check-in due (daily)','Sent automatically every morning (server schedule) to owners with a check-in due that day')}
