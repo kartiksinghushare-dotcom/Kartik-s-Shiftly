@@ -496,6 +496,9 @@ function _okrTargetEff(o){return okrHasRevision(o)?Number(o.revisedTarget):((o.t
             all — the panel shows how many updates held the line as a plain count (e.g. 1 / 3).
             v3.19: status follows the PERIOD'S DAILY AVERAGE — every reported day's value,
             averaged, judged against the line — so one good day can no longer hide a bad month.
+            v3.21: AMOUNT thresholds (number / currency) with a period are PACED — the threshold
+            is the period's total budget split per day, and the running total is judged against
+            the budget-so-far on the day of the latest report. Percent thresholds keep v3.19.
    v3.17: the % is uncapped above 100 (real overachievement shows); bars still fill at 100.
    v3.19: the floor is gone too — a number that moves BACKWARDS from its start value reads as
    a NEGATIVE % (start 100 → target 150, reading 80 → −40%), so regression is visible. */
@@ -536,6 +539,46 @@ function okrThreshOK(o,v){
   if(t===null||t===undefined||!isFinite(t)||v===null||v===undefined||!isFinite(Number(v)))return null;
   return okrDirOf(o)==='gte'?(Number(v)>=t):(Number(v)<=t);
 }
+/* ══ v3.21 — PACED (budget) THRESHOLDS ════════════════════════════════════════════
+   An AMOUNT threshold (number / currency — NOT percent) that has a period is that period's
+   TOTAL BUDGET (lte) or TOTAL GOAL (gte), split evenly across its days: ≤50k over a 92-day
+   quarter = ≤543.48 a day. On the day of a report the RUNNING TOTAL may use no more than its
+   share so far — day 58 allows 50k × 58 ÷ 92 = 31,521.74. Inside the share = On track, past
+   it = Off track; once the period closes the FULL threshold decides Achieved / Not achieved.
+   Percent thresholds are ratios — a line to hold, not a pot to spend — and keep the v3.19
+   daily-average rule, as does any threshold without period dates (nothing to pace by). */
+function _okrPace(o){ // {ps,pe,days,perDay} — null when this objective can't be paced
+  if(!okrIsThresh(o)||o.metricType==='percent')return null;
+  const t=_okrTargetEff(o);
+  if(t===null||t===undefined||!isFinite(t))return null;
+  const eff=_okrEffPeriod(o);
+  const ps=o.periodStart||eff.ps,pe=o.periodEnd||eff.pe;
+  if(!ps||!pe)return null;
+  const days=Math.round((new Date(pe+'T00:00:00')-new Date(ps+'T00:00:00'))/86400000)+1;
+  if(!(days>0))return null;
+  return{ps,pe,days,perDay:Number(t)/days};
+}
+function okrIsPaced(o){return _okrPace(o)!==null;}
+function _okrDayNo(o,date){ // 1-based day number of `date` inside the period (clamped to it)
+  const p=_okrPace(o);if(!p)return null;
+  const d=Math.round((new Date(date+'T00:00:00')-new Date(p.ps+'T00:00:00'))/86400000)+1;
+  return Math.max(1,Math.min(p.days,d));
+}
+/* The threshold's fair share as of `date` — perDay × day number, rounded to 2 decimals (what
+   every label shows and what verdicts compare against, so display and judgment always agree). */
+function _okrBudgetAt(o,date){
+  const p=_okrPace(o);if(!p||!date)return null;
+  return Math.round(p.perDay*_okrDayNo(o,date)*100)/100;
+}
+/* Verdict for value `v` reported on `date`: paced → the running total vs that day's
+   budget-so-far; anything else → the plain flat line (okrThreshOK). null = can't judge. */
+function okrThreshOKAt(o,v,date){
+  if(!okrIsThresh(o))return null;
+  if(v===null||v===undefined||!isFinite(Number(v)))return null;
+  const b=date?_okrBudgetAt(o,date):null;
+  if(b===null)return okrThreshOK(o,v);
+  return okrDirOf(o)==='gte'?(Number(v)>=b):(Number(v)<=b);
+}
 /* Every reading that feeds this objective, inside its period, oldest first.
    Roll-ups and annuals are evaluated on their aggregated value on each date a child reported —
    the same series the graph plots — so compliance means the same thing at every level. */
@@ -562,7 +605,7 @@ function _okrReadings(o){
 function _okrCompliancePct(o){
   const pts=_okrReadings(o);
   if(!pts.length)return null;
-  const ok=pts.filter(p=>okrThreshOK(o,p.value)===true).length;
+  const ok=pts.filter(p=>okrThreshOKAt(o,p.value,p.date)===true).length;
   return Math.round((ok/pts.length)*1000)/10;
 }
 /* v3.19 — THRESHOLD verdicts run on the period's DAILY AVERAGE, not the latest reading.
@@ -694,16 +737,24 @@ function _okrExpectedForNode(o,_seen){
 function okrStatusOf(o){
   if(o.closed)return 'Closed'; // closed beats everything — frozen for record
   if(o.statusMode==='manual'&&o.statusManual)return o.statusManual;
-  /* v3.19 — THRESHOLD modes are judged on the PERIOD'S DAILY AVERAGE, not on a pace and not on
-     the latest reading alone: every reported day's value is averaged, and that average is what
-     must sit on the good side of the line. Average on the good side reads On track (Achieved
-     once the period closes); on the wrong side reads Off track (Not achieved once it closes).
-     The count beside it ("held the line") is the day-by-day history, a separate question. */
+  /* v3.21 — PACED thresholds (amounts with a period): the RUNNING TOTAL is judged against the
+     BUDGET-SO-FAR on the day of the latest report — threshold × day ÷ days-in-period. Inside
+     the share reads On track, past it Off track; when the period closes the full threshold
+     decides Achieved / Not achieved. Percent thresholds (and ones with no period) keep the
+     v3.19 rule: the period's DAILY AVERAGE must sit on the good side of the line. The count
+     beside either ("held the line") is the day-by-day history, a separate question. */
   if(okrIsThresh(o)){
+    const over=!!(o.periodEnd&&todayISO()>o.periodEnd);
+    if(okrIsPaced(o)){
+      const pts=_okrReadings(o),last=pts.length?pts[pts.length-1]:null;
+      const ok=last?(over?okrThreshOK(o,last.value):okrThreshOKAt(o,last.value,last.date))
+                   :okrThreshOK(o,okrCurrentOf(o)); // nothing reported inside the period yet → latest value vs the line
+      if(ok===null)return 'No data';
+      return ok?(over?'Achieved':'On track'):(over?'Not achieved':'Off track');
+    }
     const avg=_okrThreshAvg(o);
     const ok=okrThreshOK(o,avg!==null?avg:okrCurrentOf(o)); // no in-period readings → fall back to the latest value
     if(ok===null)return 'No data';
-    const over=!!(o.periodEnd&&todayISO()>o.periodEnd);
     return ok?(over?'Achieved':'On track'):(over?'Not achieved':'Off track');
   }
   /* v3.18: an allowance reports no % any more, so the pace comparison below reads the internal
@@ -1616,6 +1667,7 @@ function _okrProgressPanel(o,kids,pct,st){
     const wrap=t2=>`<div style="display:flex;gap:7px;align-items:flex-start;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:9px;padding:7px 10px;margin-top:10px;font-size:11px;color:var(--c-text-2);line-height:1.55">${ic('info','w-3.5 h-3.5')}<span style="min-width:0">${t2}</span>${X}</div>`;
     const f=v2=>esc(_okrFmtVal(o,v2));
     if(okrIsLimit(o)){const t1=_okrTargetEff(o),v1=okrCurrentOf(o);return wrap(`No % here \u2014 an allowance is <b>pass/fail</b>: stay under ${f(t1)} for the period and it is met, break it and it is not.${(v1===null||v1===undefined)?'':` So far <b>${f(v1)}</b> of the ${f(t1)} allowance.`}`);}
+    if(okrIsPaced(o)){const r=_okrReadings(o),p1=_okrPace(o),t0=_okrTargetEff(o),ok=r.filter(x=>okrThreshOKAt(o,x.value,x.date)===true).length,last=r.length?r[r.length-1]:null,jd=last?last.date:(todayISO()>p1.pe?p1.pe:(todayISO()<p1.ps?p1.ps:todayISO())),dn=_okrDayNo(o,jd),bg=_okrBudgetAt(o,jd),w=okrDirOf(o)==='gte'?'goal':'budget';return wrap(`No % here — the ${_okrTargetSign(o)}${f(t0)} threshold is this period's total ${w}, split over its <b>${p1.days} days</b> (${f(Math.round(p1.perDay*100)/100)} a day). On the day you report, the running total must stay ${okrDirOf(o)==='gte'?'at or above':'at or below'} the ${w} so far — day <b>${dn}</b> allows <b>${f(bg)}</b>${last?`, total reported <b>${f(last.value)}</b>`:''}. <b>${ok} of ${r.length}</b> update${r.length===1?'':'s'} ${okrDirOf(o)==='gte'?'kept pace with':'stayed within'} their day's ${w}.`);}
     if(okrIsThresh(o)){const r=_okrReadings(o),ok=r.filter(x=>okrThreshOK(o,x.value)===true).length,t0=_okrTargetEff(o),av=_okrThreshAvg(o);return wrap(`No % here — a threshold objective is <b>pass/fail</b> against the ${f(t0)} line, judged on the <b>average of each reported day</b> this period${av===null?'':` (currently ${f(Math.round(av*100)/100)})`}. <b>${ok} of ${r.length}</b> update${r.length===1?'':'s'} stayed ${okrDirOf(o)==='gte'?'at or above':'at or below'} the line.`);}
     const p=okrProgress(o);if(p===null)return '';
     if(o.isAnnual){
@@ -1696,7 +1748,7 @@ function _okrProgressPanel(o,kids,pct,st){
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">Current${(o.rollup||o.isAnnual)?' · auto':''}</div><div style="${big}">${cur}</div></div>
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">${(()=>{const w=_okrTargetWord(o);const W=w.charAt(0).toUpperCase()+w.slice(1);return okrHasRevision(o)?('Original '+w):W;})()}</div><div style="${big}${okrHasRevision(o)?';text-decoration:line-through;opacity:.6':''}">${tgt}</div></div>
         ${okrHasRevision(o)?`<div style="min-width:84px"><div style="${lab};white-space:nowrap;color:#8A5F00">Revised ${_okrTargetWord(o)}</div><div style="${big};color:#8A5F00">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
-        ${okrNoPct(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div style="min-width:84px" title="Average of each reported day this period — this is what the status is judged on"><div style="${lab};white-space:nowrap">Daily average</div><div style="${big}">${(()=>{const av=_okrThreshAvg(o);return av===null?'—':esc(_okrFmtVal(o,Math.round(av*100)/100));})()}</div></div><div style="min-width:84px" title="Updates this period that stayed on the good side of the ${esc(_okrFmtVal(o,_okrTargetEff(o)))} line"><div style="${lab};white-space:nowrap">Held the line</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOK(o,x.value)===true).length+' / '+r.length;})()}</div></div>`:''}
+        ${okrNoPct(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div style="min-width:84px" title="${okrIsPaced(o)?'Threshold ÷ days in the period — the amount allowed per day; the running total is judged against this × the days passed':'Average of each reported day this period — this is what the status is judged on'}"><div style="${lab};white-space:nowrap">Daily average</div><div style="${big}">${(()=>{const p2=_okrPace(o);if(p2)return esc(_okrFmtVal(o,Math.round(p2.perDay*100)/100));const av=_okrThreshAvg(o);return av===null?'—':esc(_okrFmtVal(o,Math.round(av*100)/100));})()}</div></div>${okrIsPaced(o)?`<div style="min-width:84px" title="The budget allowed up to the day of the latest update — the running total must stay on the right side of this"><div style="${lab};white-space:nowrap">Budget so far</div><div style="${big}">${(()=>{const r=_okrReadings(o),p3=_okrPace(o);if(!p3)return '—';const jd=r.length?r[r.length-1].date:(todayISO()>p3.pe?p3.pe:(todayISO()<p3.ps?p3.ps:todayISO()));const b=_okrBudgetAt(o,jd);return b===null?'—':esc(_okrTargetSign(o)+_okrFmtVal(o,b));})()}</div></div>`:''}<div style="min-width:84px" title="${okrIsPaced(o)?`Updates whose running total stayed within the budget-so-far of their own day`:`Updates this period that stayed on the good side of the ${esc(_okrFmtVal(o,_okrTargetEff(o)))} line`}"><div style="${lab};white-space:nowrap">Held the line</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOKAt(o,x.value,x.date)===true).length+' / '+r.length;})()}</div></div>`:''}
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
       </div>
       ${canCk?`<div style="flex-shrink:0">${btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'})}</div>`:''}
@@ -2985,7 +3037,7 @@ App._okrExport=async()=>{
         'L'+okrLevel(o), o.title||'', o.description||'', par?(par.title||''):'',
         okrOwners(o).map(_okrNameOf).filter(Boolean).join(', '), dn.dept, dn.sub,
         (OKR_METRICS.find(m=>m[0]===o.metricType)||[,o.metricType])[1], o.unit||'',
-        okrDirLabel(o), okrIsThresh(o)?'Not scored — pass/fail against the threshold':okrIsLimit(o)?'Not scored \u2014 pass/fail against the allowance':'Distance from start to target',
+        okrDirLabel(o), okrIsPaced(o)?'Not scored — running total vs the daily-split budget':okrIsThresh(o)?'Not scored — pass/fail against the threshold':okrIsLimit(o)?'Not scored \u2014 pass/fail against the allowance':'Distance from start to target',
         _okrPlain(o.startValue), _okrPlain(_okrOwnCur(o)), _okrPlain(o.targetValue),
         _okrPlain(o.revisedTarget), _okrPlain(_okrTargetEff(o)),
         pct===null?'':pct, okrStatusOf(o), o.statusMode==='manual'?'Manual':'Automatic',
@@ -3242,7 +3294,7 @@ function _okrLeafPctAt(o,date){
   if(o.metricType==='yesno')return v>=1?100:0;
   const s=Number(o.startValue||0),t=_okrTargetEff(o);
   if(t===null||!isFinite(t))return null;
-  if(okrIsThresh(o))return okrThreshOK(o,v)?100:0;
+  if(okrIsThresh(o))return okrThreshOKAt(o,v,date)?100:0;
   if(okrIsLimit(o))return _okrClampPct((v/(t-s))*100);
   if(t===s){
     const good=okrDirDown(o)?(v<=t):(v>=t);
@@ -3338,7 +3390,8 @@ function _drawOKRCharts(){
       const byDate={};cs.forEach(c=>byDate[c.date]=Number(c.value));
       actual=dates.map(d=>(d in byDate)?byDate[d]:null);
       /* THRESHOLD modes have no ramp from a start value, so there is no planned pace to draw —
-         the flat threshold line below is the whole story. */
+         the threshold guide below is the whole story (v3.21: a flat line, or the budget-so-far
+         slope for paced amount thresholds). */
       ideal=(o.metricType==='yesno'||okrIsThresh(o))?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
       labels=dates.map(d=>fmtS(d));
       // Daily granularity (period ≤45 days): show EVERY day on the x-axis (7,8,9…31), not just ~8.
@@ -3351,9 +3404,13 @@ function _drawOKRCharts(){
       if(_th||_dn){
         const capV=_okrTargetEff(o);
         if(capV!==null&&isFinite(capV)){
-          const lbl=_th?((okrDirOf(o)==='gte'?'Stay at or above ':'Stay at or below ')+_okrFmtVal(o,capV))
+          /* v3.21: a PACED threshold's guide is the BUDGET-SO-FAR slope (threshold × day ÷ days),
+             not a flat cap — the running total must stay on the right side of the slope. */
+          const _paced=_th&&okrIsPaced(o);
+          const lbl=_paced?((okrDirOf(o)==='gte'?'Goal so far — reach ':'Budget so far — stay within ')+_okrFmtVal(o,capV)+' by '+fmtS(_okrPace(o).pe))
+                    :_th?((okrDirOf(o)==='gte'?'Stay at or above ':'Stay at or below ')+_okrFmtVal(o,capV))
                        :okrIsLimit(o)?('Allowance — stay under '+_okrFmtVal(o,capV)):('Target — '+_okrFmtVal(o,capV));
-          ds.push({label:lbl,data:dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+          ds.push({label:lbl,data:_paced?dates.map(d=>_okrBudgetAt(o,d)):dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
         }
       }
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#8CA3AA',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
@@ -3363,13 +3420,23 @@ function _drawOKRCharts(){
       }
       /* On threshold objectives each reading is scored individually, so the dots carry the verdict:
          green where the line held, red where it broke. Everywhere else they stay brand orange. */
-      const _ptCol=_th?actual.map(v=>{const k=okrThreshOK(o,v);return k===null?'#0F766E':(k?'#22C55E':'#EF4444');}):'#0F766E';
+      const _ptCol=_th?actual.map((v,i)=>{const k=okrThreshOKAt(o,v,dates[i]);return k===null?'#0F766E':(k?'#22C55E':'#EF4444');}):'#0F766E';
       ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#0F766E',backgroundColor:'rgba(15,118,110,.12)',fill:true,tension:.3,pointRadius:_th?4:3,pointBackgroundColor:_ptCol,pointBorderColor:_ptCol,borderWidth:2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
       if(o.metricType!=='yesno'){
         const _act=actual.filter(v=>v!==null&&v!==undefined&&isFinite(v));
         const _thr=_okrTargetEff(o);
-        if(_th){
+        if(_th&&okrIsPaced(o)){
+          /* Paced threshold: the whole journey 0 → threshold matters (the budget slope starts
+             near 0), so the axis anchors at 0 with the full cap kept on screen. */
+          const _base=(_thr!==null&&isFinite(_thr))?[Number(_thr)]:[];
+          const _all=_base.concat(_act);
+          if(_all.length){
+            const _hi=Math.max(..._all);
+            yOpts.beginAtZero=true;
+            yOpts.suggestedMax=_hi+Math.max(_hi*0.06,0.5);
+          }
+        }else if(_th){
           /* Threshold: the line itself must always be on screen, with a little air either side so
              a reading sitting exactly on it doesn't hug the frame. There is no start value here. */
           const _base=(_thr!==null&&isFinite(_thr))?[Number(_thr)]:[];

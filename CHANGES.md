@@ -1,3 +1,13 @@
+# Bridge v97 — amount thresholds are daily-split budgets
+
+`public/js/19-okr-roles-acl.js` + cache-buster `?v=97`. No DB changes.
+
+- **OKR: "Less than / Greater than" objectives measured in amounts (number / currency) are now judged as a daily-split budget, not on the average of the reported values.** The threshold is the period's total (≤50k over a 92-day quarter = ≤543.48 a day), and on the day of a report the running total must stay within the **budget so far** (threshold × day ÷ days): day 58 allows 50k × 58 ÷ 92 = 31,521.74, so a running total of 33,518 reads **Off track** even though it is still under 50k. Status is judged on the day of the latest update; once the period closes, the full threshold decides Achieved / Not achieved. (Budget figures are rounded to 2 decimals, and the comparison is inclusive — exactly on the budget is still On track.)
+- The panel's **Daily average** tile now shows threshold ÷ days (the allowed amount per day), a new **Budget so far** tile shows what the total may be as of the latest update, and **Held the line** re-counts each update against the budget-so-far of its own day. The graph's red dashed guide is the rising budget slope instead of a flat cap (axis anchored at 0), the dots go green/red against that slope, and the explainer note spells out the arithmetic. The Excel export's Scoring column says "running total vs the daily-split budget".
+- **Percent thresholds are untouched** — a ratio is a line to hold, not a pot to spend — they keep the v96-era rule (average of each reported day vs the line). Thresholds without period dates also keep the old rule (nothing to pace by). Manual status marks still beat everything.
+
+---
+
 # Bridge v96 — automations on built-in columns · reminders ARE an automation now · quarterly roll-up sees the level below
 
 `public/js/06-crm.js`, `public/js/18-settings-notifications.js`, `public/js/19-okr-roles-acl.js` + cache-buster `?v=96`.
