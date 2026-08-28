@@ -1,3 +1,13 @@
+# Bridge v98 — paced OKR panel polish: both guide lines, cleaner layout
+
+`public/js/19-okr-roles-acl.js` + cache-buster `?v=98`. No DB changes.
+
+- **Paced threshold graphs now draw BOTH guides:** the flat red dashed cap ("Stay at or below 50k overall") and an amber dashed **budget-so-far slope** ("Budget so far — 543.48 a day"). Status and the green/red dots are still judged against the slope; the cap is the hard limit for the whole period.
+- **"Held the line" tile removed on paced (amount) thresholds** — the explainer note still carries the count. Percent thresholds keep the tile (there it counts readings on the good side of the line).
+- **Panel layout:** the stat tiles sit in their own row, and **Status + the Add update button share one aligned row** underneath (status left, button right) — no more awkward wrapping when tiles overflow.
+
+---
+
 # Bridge v97 — amount thresholds are daily-split budgets
 
 `public/js/19-okr-roles-acl.js` + cache-buster `?v=97`. No DB changes.

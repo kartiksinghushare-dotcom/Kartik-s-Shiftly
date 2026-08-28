@@ -1742,15 +1742,15 @@ function _okrProgressPanel(o,kids,pct,st){
   const logs=(DB.okrLogs||[]).filter(l=>l.okrId===o.id);
   return `<div style="border-top:1px solid var(--c-border);background:var(--c-surface-2);padding:14px 16px">
     ${actionsBar}
-    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px 18px;flex-wrap:wrap">
-      <div style="flex:1 1 auto;min-width:0;display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end">
+    <div style="display:flex;flex-wrap:wrap;gap:14px 26px;align-items:flex-end">
         ${okrIsThresh(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Start</div><div style="${big}">${strt}</div></div>`}
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">Current${(o.rollup||o.isAnnual)?' · auto':''}</div><div style="${big}">${cur}</div></div>
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">${(()=>{const w=_okrTargetWord(o);const W=w.charAt(0).toUpperCase()+w.slice(1);return okrHasRevision(o)?('Original '+w):W;})()}</div><div style="${big}${okrHasRevision(o)?';text-decoration:line-through;opacity:.6':''}">${tgt}</div></div>
         ${okrHasRevision(o)?`<div style="min-width:84px"><div style="${lab};white-space:nowrap;color:#8A5F00">Revised ${_okrTargetWord(o)}</div><div style="${big};color:#8A5F00">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
-        ${okrNoPct(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div style="min-width:84px" title="${okrIsPaced(o)?'Threshold ÷ days in the period — the amount allowed per day; the running total is judged against this × the days passed':'Average of each reported day this period — this is what the status is judged on'}"><div style="${lab};white-space:nowrap">Daily average</div><div style="${big}">${(()=>{const p2=_okrPace(o);if(p2)return esc(_okrFmtVal(o,Math.round(p2.perDay*100)/100));const av=_okrThreshAvg(o);return av===null?'—':esc(_okrFmtVal(o,Math.round(av*100)/100));})()}</div></div>${okrIsPaced(o)?`<div style="min-width:84px" title="The budget allowed up to the day of the latest update — the running total must stay on the right side of this"><div style="${lab};white-space:nowrap">Budget so far</div><div style="${big}">${(()=>{const r=_okrReadings(o),p3=_okrPace(o);if(!p3)return '—';const jd=r.length?r[r.length-1].date:(todayISO()>p3.pe?p3.pe:(todayISO()<p3.ps?p3.ps:todayISO()));const b=_okrBudgetAt(o,jd);return b===null?'—':esc(_okrTargetSign(o)+_okrFmtVal(o,b));})()}</div></div>`:''}<div style="min-width:84px" title="${okrIsPaced(o)?`Updates whose running total stayed within the budget-so-far of their own day`:`Updates this period that stayed on the good side of the ${esc(_okrFmtVal(o,_okrTargetEff(o)))} line`}"><div style="${lab};white-space:nowrap">Held the line</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOKAt(o,x.value,x.date)===true).length+' / '+r.length;})()}</div></div>`:''}
-        <div style="min-width:84px"><div style="${lab};white-space:nowrap">Status</div><div style="margin-top:3px">${okrStatusChip(st)}</div></div>
-      </div>
+        ${okrNoPct(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div style="min-width:84px" title="${okrIsPaced(o)?'Threshold ÷ days in the period — the amount allowed per day; the running total is judged against this × the days passed':'Average of each reported day this period — this is what the status is judged on'}"><div style="${lab};white-space:nowrap">Daily average</div><div style="${big}">${(()=>{const p2=_okrPace(o);if(p2)return esc(_okrFmtVal(o,Math.round(p2.perDay*100)/100));const av=_okrThreshAvg(o);return av===null?'—':esc(_okrFmtVal(o,Math.round(av*100)/100));})()}</div></div>${okrIsPaced(o)?`<div style="min-width:84px" title="The budget allowed up to the day of the latest update — the running total must stay on the right side of this"><div style="${lab};white-space:nowrap">Budget so far</div><div style="${big}">${(()=>{const r=_okrReadings(o),p3=_okrPace(o);if(!p3)return '—';const jd=r.length?r[r.length-1].date:(todayISO()>p3.pe?p3.pe:(todayISO()<p3.ps?p3.ps:todayISO()));const b=_okrBudgetAt(o,jd);return b===null?'—':esc(_okrTargetSign(o)+_okrFmtVal(o,b));})()}</div></div>`:''}${okrIsPaced(o)?'':`<div style="min-width:84px" title="Updates this period that stayed on the good side of the ${esc(_okrFmtVal(o,_okrTargetEff(o)))} line"><div style="${lab};white-space:nowrap">Held the line</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOKAt(o,x.value,x.date)===true).length+' / '+r.length;})()}</div></div>`}`:''}
+    </div>
+    <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px 18px;flex-wrap:wrap;margin-top:13px">
+      <div style="min-width:84px"><div style="${lab};white-space:nowrap">Status</div><div style="margin-top:4px">${okrStatusChip(st)}</div></div>
       ${canCk?`<div style="flex-shrink:0">${btn(kids.length?'Add note / update':'Add update',`App._okrCheckin('${o.id}','${todayISO()}')`,{variant:'primary',size:'sm',icon:'plus'})}</div>`:''}
     </div>
     ${dirNote}
@@ -3390,8 +3390,8 @@ function _drawOKRCharts(){
       const byDate={};cs.forEach(c=>byDate[c.date]=Number(c.value));
       actual=dates.map(d=>(d in byDate)?byDate[d]:null);
       /* THRESHOLD modes have no ramp from a start value, so there is no planned pace to draw —
-         the threshold guide below is the whole story (v3.21: a flat line, or the budget-so-far
-         slope for paced amount thresholds). */
+         the threshold guides below are the whole story (v3.22: the flat cap, plus the
+         budget-so-far slope on paced amount thresholds). */
       ideal=(o.metricType==='yesno'||okrIsThresh(o))?null:dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false));
       labels=dates.map(d=>fmtS(d));
       // Daily granularity (period ≤45 days): show EVERY day on the x-axis (7,8,9…31), not just ~8.
@@ -3404,13 +3404,14 @@ function _drawOKRCharts(){
       if(_th||_dn){
         const capV=_okrTargetEff(o);
         if(capV!==null&&isFinite(capV)){
-          /* v3.21: a PACED threshold's guide is the BUDGET-SO-FAR slope (threshold × day ÷ days),
-             not a flat cap — the running total must stay on the right side of the slope. */
+          /* v3.22: a PACED threshold draws BOTH guides — the flat cap (the period's full
+             threshold, red) and the BUDGET-SO-FAR slope (threshold × day ÷ days, amber).
+             Status and the dots are judged against the slope; the cap is the hard limit. */
           const _paced=_th&&okrIsPaced(o);
-          const lbl=_paced?((okrDirOf(o)==='gte'?'Goal so far — reach ':'Budget so far — stay within ')+_okrFmtVal(o,capV)+' by '+fmtS(_okrPace(o).pe))
-                    :_th?((okrDirOf(o)==='gte'?'Stay at or above ':'Stay at or below ')+_okrFmtVal(o,capV))
+          const lbl=_th?((okrDirOf(o)==='gte'?'Stay at or above ':'Stay at or below ')+_okrFmtVal(o,capV)+(_paced?' overall':''))
                        :okrIsLimit(o)?('Allowance — stay under '+_okrFmtVal(o,capV)):('Target — '+_okrFmtVal(o,capV));
-          ds.push({label:lbl,data:_paced?dates.map(d=>_okrBudgetAt(o,d)):dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+          ds.push({label:lbl,data:dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+          if(_paced)ds.push({label:(okrDirOf(o)==='gte'?'Goal so far — ':'Budget so far — ')+_okrFmtVal(o,Math.round(_okrPace(o).perDay*100)/100)+' a day',data:dates.map(d=>_okrBudgetAt(o,d)),borderColor:'#E0A106',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
         }
       }
       if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#8CA3AA',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
