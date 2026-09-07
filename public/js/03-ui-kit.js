@@ -5,7 +5,7 @@
    ============================================================ */
 /* ===== AVATARS ===== */
 const PAL=['bg-rose-100 text-rose-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-sky-100 text-sky-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700'];
-const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-ink-200 rounded-full grid place-items-center '+tx+' shrink-0">?</div>';return`<div class="${sz} ${PAL[((u.firstName||'?').charCodeAt(0)+(u.lastName||'?').charCodeAt(0))%PAL.length]} rounded-full grid place-items-center font-semibold ${tx} shrink-0 fd">${esc(initials(u))}</div>`;}
+const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-ink-200 rounded-full grid place-items-center '+tx+' shrink-0">?</div>';const _dot=u.id?`<span class="bb-dot${(window._bbOnline&&window._bbOnline[u.id])?' on':''}" data-pres="${u.id}"></span>`:'';return`<div class="${sz} ${PAL[((u.firstName||'?').charCodeAt(0)+(u.lastName||'?').charCodeAt(0))%PAL.length]} rounded-full grid place-items-center font-semibold ${tx} shrink-0 fd" style="position:relative">${esc(initials(u))}${_dot}</div>`;}
 
 /* ═══════════ SHARED UI — token-driven design system (Evarca-aligned) ═══════════
    ONE button helper btn() with variants; btnP/btnG kept as thin aliases so every
@@ -43,9 +43,9 @@ function chipBar(items,activeKey,fnName,opts={}){
   return pill?`<div style="display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch">${inner}</div>`:`<div class="ui-tabs">${inner}</div>`;
 }
 const togV=id=>{const el=$(`#${id}`);if(!el)return false;return el.classList?.contains('on')||false;};
-const STAT_C={sky:'#128A84',brand:'#0F766E',rose:'#DE2440',amber:'#C08400',orange:'#0C5F59',emerald:'#0B6660'};
+const STAT_C={sky:'#936659',brand:'#54433C',rose:'#B43A33',amber:'#A97C33',orange:'#43362F',emerald:'#463830'};
 const statCard=(t,v,c='sky',oc='')=>{
-  const col=STAT_C[c]||c||'#128A84';
+  const col=STAT_C[c]||c||'#936659';
   const base='background:var(--c-surface);border-radius:var(--r-lg);border:1px solid var(--c-border);box-shadow:var(--sh-sm);padding:18px';
   const lbl='<div style="font-size:11px;font-weight:700;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.05em;margin-bottom:10px">'+t+'</div>';
   const val='<div class="fd" style="font-size:30px;font-weight:800;line-height:1;color:'+col+'">'+v+'</div>';
@@ -133,7 +133,7 @@ function confirmP(o){
     // Escape means "no" too (backdrop and X already route through closeModal).
     // The listener is detached by _confirmSettle on EVERY exit, not just the Escape one —
     // detaching only inside this branch left a live capture-phase handler on `document`
-    // after each Cancel/Delete/X, and a later Escape (in the OKR editor, say) would then
+    // after each Cancel/Delete/X, and a later Escape (in the BOLT editor, say) would then
     // fire all of them and tear that unrelated modal out of the DOM with its unsaved work.
     _confirmKey=ev=>{if(ev.key==='Escape')App._confirmEnd(0);};
     document.addEventListener('keydown',_confirmKey,true);

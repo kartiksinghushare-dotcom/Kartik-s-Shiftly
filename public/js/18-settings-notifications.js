@@ -37,7 +37,7 @@ function profilePage(){
         ${fld('Phone','ep-ph',u.phone||'','tel')}
         ${fld('Position','ep-pos',u.position||'')}
       </div>
-      <button id="ep-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';App.saveProfile().finally(()=>{const b=document.getElementById('ep-save-btn');if(b){b.disabled=false;b.textContent='Save changes';}})" style="padding:10px 20px;border-radius:12px;background:#10262E;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
+      <button id="ep-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Saving…';App.saveProfile().finally(()=>{const b=document.getElementById('ep-save-btn');if(b){b.disabled=false;b.textContent='Save changes';}})" style="padding:10px 20px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Save changes</button>
     </div>
   </div>
   <!-- Change password -->
@@ -46,7 +46,7 @@ function profilePage(){
     <div class="space-y-2">
       ${fld('Current password','pw-cur','','password','')}
       ${fld('New password','pw-new','','password','min 6 characters')}
-      <button id="pw-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Updating…';App.changePw().finally(()=>{const b=document.getElementById('pw-save-btn');if(b){b.disabled=false;b.textContent='Update password';}})" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#10262E;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
+      <button id="pw-save-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent='Updating…';App.changePw().finally(()=>{const b=document.getElementById('pw-save-btn');if(b){b.disabled=false;b.textContent='Update password';}})" style="margin-top:8px;padding:10px 20px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">Update password</button>
     </div>
   </div>
   <!-- Feedback history -->
@@ -56,17 +56,17 @@ function profilePage(){
     return '<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">'
       +'<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">'
       +'<h3 class="fd font-semibold text-sm">Recent Feedback</h3>'
-      +'<button onclick="App._goNotifFeedback()" style="font-size:12px;font-weight:600;color:#0F766E;background:none;border:none;cursor:pointer">View all</button>'
+      +'<button onclick="App._goNotifFeedback()" style="font-size:12px;font-weight:600;color:#54433C;background:none;border:none;cursor:pointer">View all</button>'
       +'</div>'
       +myFb.map(fb=>{
         const mgr=uById(fb.managerId);
-        const stClr=fb.status==='Responded'?'#0B6660':fb.status==='Acknowledged'?'#22A79C':'#18948C';
-        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F1F7F8">'
+        const stClr=fb.status==='Responded'?'#463830':fb.status==='Acknowledged'?'#A5796A':'#96695B';
+        return '<div style="display:flex;align-items:flex-start;gap:10px;padding:10px 0;border-bottom:1px solid #F4F0EA">'
           +'<div style="flex:1;min-width:0">'
           +'<div style="font-size:13px;font-weight:600">'+(fb.title||fb.type+' Feedback')+'</div>'
-          +'<div style="font-size:11px;color:#90A5AB;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))+'</div>'
+          +'<div style="font-size:11px;color:#A59788;margin-top:2px">From '+(mgr?esc(fullName(mgr)):'Manager')+' · '+fmtD(fb.date||fb.createdAt?.slice(0,10))+'</div>'
           +'</div>'
-          +'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#F4F9FA;color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
+          +'<span style="font-size:11px;font-weight:700;padding:2px 8px;border-radius:20px;background:#F7F3EE;color:'+stClr+';flex-shrink:0">'+(fb.status||'Sent')+'</span>'
           +'</div>';
       }).join('')
       +'</div>';
@@ -118,18 +118,18 @@ App._uploadDoc=()=>{
   openModal(
     '<div class="p-6">'
     +'<div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">Upload file</h2><button onclick="App.closeModal()" class="text-ink-400">'+ic('x')+'</button></div>'
-    +'<div id="ud-dropzone" style="border:2px dashed #C9D9DD;border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px" onclick="document.getElementById(\'ud-file\').click()" ondragover="event.preventDefault();this.style.borderColor=\'#0F766E\';this.style.background=\'#F2FBF5\'" ondragleave="this.style.borderColor=\'#C9D9DD\';this.style.background=\'transparent\'" ondrop="App._handleFileDrop(event)">'
+    +'<div id="ud-dropzone" style="border:2px dashed #D5C9BC;border-radius:16px;padding:32px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:14px" onclick="document.getElementById(\'ud-file\').click()" ondragover="event.preventDefault();this.style.borderColor=\'#54433C\';this.style.background=\'#F2F7F1\'" ondragleave="this.style.borderColor=\'#D5C9BC\';this.style.background=\'transparent\'" ondrop="App._handleFileDrop(event)">'
     +'<div style="font-size:32px;margin-bottom:8px">📎</div>'
-    +'<div style="font-size:14px;font-weight:600;color:#2F4C55">Click to browse or drag & drop</div>'
-    +'<div style="font-size:12px;color:#90A5AB;margin-top:4px">PDF, Word, Excel, PowerPoint, Images — max 50MB</div>'
+    +'<div style="font-size:14px;font-weight:600;color:#3A312A">Click to browse or drag & drop</div>'
+    +'<div style="font-size:12px;color:#A59788;margin-top:4px">PDF, Word, Excel, PowerPoint, Images — max 50MB</div>'
     +'<input type="file" id="ud-file" style="display:none" onchange="App._previewUpload(this)" multiple>'
     +'</div>'
     +'<div id="ud-preview" style="display:none;margin-bottom:14px"></div>'
     +'<div id="ud-progress" style="display:none;margin-bottom:14px">'
-    +'<div style="font-size:13px;font-weight:600;color:#2F4C55;margin-bottom:6px">Uploading…</div>'
-    +'<div style="height:6px;background:#F1F7F8;border-radius:3px;overflow:hidden"><div id="ud-bar" style="height:100%;background:#0F766E;border-radius:3px;width:0%;transition:width .3s"></div></div>'
+    +'<div style="font-size:13px;font-weight:600;color:#3A312A;margin-bottom:6px">Uploading…</div>'
+    +'<div style="height:6px;background:#F4F0EA;border-radius:3px;overflow:hidden"><div id="ud-bar" style="height:100%;background:#54433C;border-radius:3px;width:0%;transition:width .3s"></div></div>'
     +'</div>'
-    +'<button id="ud-btn" onclick="App._doUpload()" style="width:100%;padding:12px;border-radius:12px;background:#10262E;color:#fff;font-weight:700;font-size:15px;border:none;cursor:pointer;display:none">Upload</button>'
+    +'<button id="ud-btn" onclick="App._doUpload()" style="width:100%;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:700;font-size:15px;border:none;cursor:pointer;display:none">Upload</button>'
     +'</div>',
     'max-w-md'
   );
@@ -138,7 +138,7 @@ App._uploadDoc=()=>{
 
 App._handleFileDrop=(e)=>{
   e.preventDefault();
-  document.getElementById('ud-dropzone').style.borderColor='#C9D9DD';
+  document.getElementById('ud-dropzone').style.borderColor='#D5C9BC';
   document.getElementById('ud-dropzone').style.background='transparent';
   App._previewUpload({files:e.dataTransfer.files});
 };
@@ -153,10 +153,10 @@ App._previewUpload=(input)=>{
     preview.innerHTML='<div style="display:flex;flex-direction:column;gap:6px">'+files.map(f=>{
       const ext=(f.name.split('.').pop()||'').toLowerCase();
       const icon=ext==='pdf'?'📄':ext.match(/xlsx?|csv/)?'📊':ext.match(/docx?/)?'📝':'📎';
-      return'<div style="display:flex;align-items:center;gap:10px;background:#F4F9FA;border-radius:10px;padding:10px">'
+      return'<div style="display:flex;align-items:center;gap:10px;background:#F7F3EE;border-radius:10px;padding:10px">'
         +'<span style="font-size:20px">'+icon+'</span>'
         +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">'+esc(f.name)+'</div>'
-        +'<div style="font-size:11px;color:#90A5AB">'+_fmtSize(f.size)+'</div></div>'
+        +'<div style="font-size:11px;color:#A59788">'+_fmtSize(f.size)+'</div></div>'
         +'</div>';
     }).join('')+'</div>';
   }
@@ -269,34 +269,34 @@ App._clearOperational=(pre)=>{
   const rows=cats.map(cat=>{
     const n=cat.count();
     const _on=_pre.indexOf(cat.key)>=0;
-    return '<label id="lbl-clr-'+cat.key+'" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid '+(_on?'#EF4444':'#F1F7F8')+';margin-bottom:6px;transition:all .12s" onmouseover="this.style.background=\'#F8FBFC\'" onmouseout="this.style.background=\'\'">'
-      +'<input type="checkbox" id="clr-'+cat.key+'"'+(_on?' checked':'')+' onchange="this.closest(\'label\').style.borderColor=this.checked?\'#EF4444\':\'#F1F7F8\'" style="width:17px;height:17px;accent-color:#EF4444;cursor:pointer;flex-shrink:0"/>'
+    return '<label id="lbl-clr-'+cat.key+'" style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-radius:12px;cursor:pointer;border:1.5px solid '+(_on?'#C25441':'#F4F0EA')+';margin-bottom:6px;transition:all .12s" onmouseover="this.style.background=\'#FAF7F3\'" onmouseout="this.style.background=\'\'">'
+      +'<input type="checkbox" id="clr-'+cat.key+'"'+(_on?' checked':'')+' onchange="this.closest(\'label\').style.borderColor=this.checked?\'#C25441\':\'#F4F0EA\'" style="width:17px;height:17px;accent-color:#C25441;cursor:pointer;flex-shrink:0"/>'
       +'<span style="font-size:20px;flex-shrink:0">'+cat.icon+'</span>'
       +'<div style="flex:1;min-width:0">'
-      +'<div style="font-size:13px;font-weight:700;color:#10262E">'+cat.label+'</div>'
-      +'<div style="font-size:11px;color:#90A5AB;margin-top:1px">'+cat.desc+'</div>'
+      +'<div style="font-size:13px;font-weight:700;color:#13171B">'+cat.label+'</div>'
+      +'<div style="font-size:11px;color:#A59788;margin-top:1px">'+cat.desc+'</div>'
       +'</div>'
-      +'<span style="font-size:12px;font-weight:800;background:'+(n?'#FEF0F0':'#F4F9FA')+';color:'+(n?'#DC2626':'#90A5AB')+';padding:3px 9px;border-radius:20px;flex-shrink:0">'+n+' records</span>'
+      +'<span style="font-size:12px;font-weight:800;background:'+(n?'#FAEDE8':'#F7F3EE')+';color:'+(n?'#B3402E':'#A59788')+';padding:3px 9px;border-radius:20px;flex-shrink:0">'+n+' records</span>'
       +'</label>';
   }).join('');
 
   openModal(
     '<div style="display:flex;flex-direction:column;max-height:88vh">'
-    +'<div style="padding:18px 20px 14px;border-bottom:1px solid #F1F7F8;flex-shrink:0">'
+    +'<div style="padding:18px 20px 14px;border-bottom:1px solid #F4F0EA;flex-shrink:0">'
     +'<div style="display:flex;align-items:center;justify-content:space-between">'
     +'<div><div style="font-size:17px;font-weight:800;font-family:var(--font-display)">🧹 Clear Data</div>'
-    +'<div style="font-size:12px;color:#90A5AB;margin-top:2px">Select categories to permanently delete</div></div>'
-    +'<button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#90A5AB">'+ic('x')+'</button>'
+    +'<div style="font-size:12px;color:#A59788;margin-top:2px">Select categories to permanently delete</div></div>'
+    +'<button onclick="App.closeModal()" style="width:28px;height:28px;display:grid;place-items:center;border-radius:8px;border:none;background:transparent;cursor:pointer;color:#A59788">'+ic('x')+'</button>'
     +'</div>'
     +'<div style="display:flex;gap:8px;margin-top:12px">'
-    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=true;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#EF4444\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #DFEAEC;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Select all</button>'
-    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=false;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#F1F7F8\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #DFEAEC;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Deselect all</button>'
+    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=true;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#C25441\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #E6DED3;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Select all</button>'
+    +'<button onclick="document.querySelectorAll(\'[id^=clr-]\').forEach(c=>{c.checked=false;document.getElementById(\'lbl-\'+c.id).style.borderColor=\'#F4F0EA\';})" style="padding:5px 14px;border-radius:8px;border:1.5px solid #E6DED3;background:#fff;font-size:12px;font-weight:600;cursor:pointer">Deselect all</button>'
     +'</div>'
     +'</div>'
     +'<div style="overflow-y:auto;flex:1;padding:14px 20px">'+rows+'</div>'
-    +'<div style="padding:14px 20px;border-top:1px solid #F1F7F8;flex-shrink:0;display:flex;gap:10px">'
-    +'<button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #DFEAEC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
-    +'<button onclick="App._execClear()" style="flex:2;padding:12px;border-radius:12px;background:#EF4444;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">🗑 Delete selected</button>'
+    +'<div style="padding:14px 20px;border-top:1px solid #F4F0EA;flex-shrink:0;display:flex;gap:10px">'
+    +'<button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #E6DED3;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button>'
+    +'<button onclick="App._execClear()" style="flex:2;padding:12px;border-radius:12px;background:#C25441;color:#fff;font-weight:700;font-size:14px;border:none;cursor:pointer">🗑 Delete selected</button>'
     +'</div>'
     +'</div>',
     'max-w-md'
@@ -363,11 +363,11 @@ const EMAIL_EVENTS=[
   {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'escalation',       label:'Escalation raised',    vars:'{{submitter}}, {{checklist_name}}, {{question}}, {{answer}}, {{action_url}}'},
-  {key:'okr_assigned',      label:'OKR assigned',          vars:'{{user_name}}, {{okr_title}}, {{assigner}}, {{target}}, {{schedule}}, {{period}}, {{action_url}}'},
-  {key:'okr_checkin_due',   label:'OKR check-in due (daily)',vars:'{{user_name}}, {{count}}, {{date}}, {{okr_titles}}, {{action_url}}'},
-  {key:'okr_update_added',  label:'OKR update added',      vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{value}}, {{comment}}, {{action_url}}'},
-  {key:'okr_target_revised',label:'OKR target revised',    vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{old_target}}, {{new_target}}, {{reason}}, {{action_url}}'},
-  {key:'okr_closed',        label:'OKR closed / reopened', vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{status}}, {{reason}}, {{action_url}}'},
+  {key:'okr_assigned',      label:'BOLT assigned',          vars:'{{user_name}}, {{okr_title}}, {{assigner}}, {{target}}, {{schedule}}, {{period}}, {{action_url}}'},
+  {key:'okr_checkin_due',   label:'BOLT check-in due (daily)',vars:'{{user_name}}, {{count}}, {{date}}, {{okr_titles}}, {{action_url}}'},
+  {key:'okr_update_added',  label:'BOLT update added',      vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{value}}, {{comment}}, {{action_url}}'},
+  {key:'okr_target_revised',label:'BOLT target revised',    vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{old_target}}, {{new_target}}, {{reason}}, {{action_url}}'},
+  {key:'okr_closed',        label:'BOLT closed / reopened', vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{status}}, {{reason}}, {{action_url}}'},
   /* Workspace. These templates already existed and were honoured by sendEmail, but were
      absent from this list, so nothing rendered an editor for them. */
   {key:'crm_automation',label:'Workspace automation (all boards)',vars:'{{user_name}}, {{rule}}, {{title}}, {{customer}}, {{board}}, {{status}}, {{priority}}, {{assignee}}, {{due_date}}, {{actor}}, {{action_url}}'},
@@ -394,11 +394,11 @@ function _defaultTemplates(){
     crm_approval:{subject:'✅ Approval needed: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" ({{customer}}) needs your approval.\n\n{{action_url}}'},
     crm_decided:{subject:'{{decision}}: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" was {{decision}} by {{actor}}.\n\n{{action_url}}'},
     crm_reminder:{subject:'Reminder: {{note}}',body:'Hi {{user_name}},\n\nYour reminder is due: {{note}}\n\nConversation: "{{title}}"\n\n{{action_url}}'},
-    okr_assigned:{subject:'🎯 New OKR assigned: {{okr_title}}',body:'Hi {{user_name}},\n\n{{assigner}} assigned you an objective: {{okr_title}}\n\nTarget: {{target}}\nCheck-ins: {{schedule}}\nPeriod: {{period}}\n\nIf the objective has several owners, any one of you can submit an update — it counts for the whole group.\n\n{{action_url}}'},
-    okr_checkin_due:{subject:'⏰ OKR check-in due today ({{count}})',body:'Hi {{user_name}},\n\nYou have {{count}} OKR check-in(s) scheduled for today ({{date}}):\n\n{{okr_titles}}\n\nOpen Bridge to submit your update — if a co-owner already submitted, you\'re covered.\n\n{{action_url}}'},
+    okr_assigned:{subject:'🎯 New BOLT assigned: {{okr_title}}',body:'Hi {{user_name}},\n\n{{assigner}} assigned you an objective: {{okr_title}}\n\nTarget: {{target}}\nCheck-ins: {{schedule}}\nPeriod: {{period}}\n\nIf the objective has several owners, any one of you can submit an update — it counts for the whole group.\n\n{{action_url}}'},
+    okr_checkin_due:{subject:'⏰ BOLT check-in due today ({{count}})',body:'Hi {{user_name}},\n\nYou have {{count}} BOLT check-in(s) scheduled for today ({{date}}):\n\n{{okr_titles}}\n\nOpen Bridge to submit your update — if a co-owner already submitted, you\'re covered.\n\n{{action_url}}'},
     okr_update_added:{subject:'📈 {{okr_title}} — updated by {{actor}}',body:'Hi {{user_name}},\n\n{{actor}} added an update on "{{okr_title}}": {{value}}\n\n{{comment}}\n\nThis counts for the whole owner group — nothing more to do for today\'s check-in.\n\n{{action_url}}'},
     okr_target_revised:{subject:'✏️ Target revised: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} revised the target on "{{okr_title}}": {{old_target}} → {{new_target}}\n\nReason: {{reason}}\n\nThe original target stays visible for comparison — the same updates feed both numbers.\n\n{{action_url}}'},
-    okr_closed:{subject:'🔒 OKR {{status}}: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} {{status}} the objective "{{okr_title}}".\n\n{{reason}}\n\n{{action_url}}'},
+    okr_closed:{subject:'🔒 BOLT {{status}}: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} {{status}} the objective "{{okr_title}}".\n\n{{reason}}\n\n{{action_url}}'},
   };
 }
 
@@ -460,25 +460,25 @@ function _bodyToHtml(fromName, bodyText, actionUrl=''){
     :ctaUrl.includes('notifications')?'View Notifications'
     :ctaUrl.includes('settings')?'Open Settings'
     :ctaUrl.includes('analytics')?'View Analytics'
-    :ctaUrl.includes('okr')?'Open OKRs'
+    :ctaUrl.includes('okr')?'Open BOLTs'
     :'Open Bridge';
-  return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#FAF9F3;font-family:sans-serif">
-  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #E7F0F2;overflow:hidden">
-    <div style="background:#10262E;padding:20px 28px;display:flex;align-items:center;gap:10px">
-      <div style="width:28px;height:28px;border-radius:8px;background:#0F766E;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">B</div>
+  return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#FAF7F1;font-family:sans-serif">
+  <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #EDE7DC;overflow:hidden">
+    <div style="background:#13171B;padding:20px 28px;display:flex;align-items:center;gap:10px">
+      <div style="width:28px;height:28px;border-radius:8px;background:#54433C;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:14px;color:#fff">B</div>
       <span style="font-weight:700;font-size:16px;color:#fff">${safeName}</span>
     </div>
     <div style="padding:28px">
       ${lines.filter(Boolean).map((l,i)=>i===0
-        ?`<p style="font-size:15px;color:#2F4C55;margin:0 0 16px">${l}</p>`
-        :`<p style="font-size:14px;color:#5E767D;margin:0 0 8px;line-height:1.6">${l}</p>`
+        ?`<p style="font-size:15px;color:#3A312A;margin:0 0 16px">${l}</p>`
+        :`<p style="font-size:14px;color:#786A5F;margin:0 0 8px;line-height:1.6">${l}</p>`
       ).join('')}
       ${ctaUrl?`<div style="margin-top:24px">
-        <a href="${ctaUrl}" style="display:inline-block;background:#10262E;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none">${ctaLabel} →</a>
-        <p style="margin:10px 0 0;font-size:11px;color:#93A6AC">Or copy: ${ctaUrl}</p>
+        <a href="${ctaUrl}" style="display:inline-block;background:#13171B;color:#fff;font-weight:700;font-size:14px;padding:12px 24px;border-radius:10px;text-decoration:none">${ctaLabel} →</a>
+        <p style="margin:10px 0 0;font-size:11px;color:#A8998A">Or copy: ${ctaUrl}</p>
       </div>`:''}
     </div>
-    <div style="padding:16px 28px;background:#F2F8F9;border-top:1px solid #E7F0F2;font-size:11px;color:#90A5AB">
+    <div style="padding:16px 28px;background:#F5F1EB;border-top:1px solid #EDE7DC;font-size:11px;color:#A59788">
       ${safeName} · Automated notification · Do not reply
     </div>
   </div></body></html>`;
@@ -520,10 +520,10 @@ async function sendEmail(eventType, userId, vars){
 
 function _nsTogRow(key,label,desc){
   const on=_ns?(_ns[key]!==false):true;
-  return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #EDF4F5">
+  return`<div style="display:flex;align-items:center;gap:12px;padding:11px 0;border-bottom:1px solid #F1ECE3">
     <div style="flex:1;min-width:0">
-      <div style="font-size:13px;font-weight:600;color:#10262E">${label}</div>
-      ${desc?`<div style="font-size:11px;color:#93A6AC;margin-top:1px">${desc}</div>`:''}
+      <div style="font-size:13px;font-weight:600;color:#13171B">${label}</div>
+      ${desc?`<div style="font-size:11px;color:#A8998A;margin-top:1px">${desc}</div>`:''}
     </div>
     <button role="switch" aria-checked="${on?'true':'false'}" aria-label="${esc(label)}" class="tog ${on?'on':'off'}" onclick="App._nsTog(this,'${key}')"><span></span></button>
   </div>`;}
@@ -575,39 +575,40 @@ App._testEmail=async()=>{
 App._setSTab=(k)=>{S.filters.stab=k;rr();};
 function settingsPage(){
   const stab=(S.filters.stab&&S.filters.stab!=='workflow')?S.filters.stab:'inapp';
-  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}<div style="padding:40px;text-align:center;color:#90A5AB;font-size:13px">Loading…</div></div>`;}
+  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}<div style="padding:40px;text-align:center;color:#A59788;font-size:13px">Loading…</div></div>`;}
   const ns=_ns;
   // Workflow tab removed (Evarca-aligned): its 4 toggles were saved but never read by any code.
   const TABS=[['inapp','In-App'],['email','Email'],['templates','Templates'],['data','Data']];
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,l])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${l}</button>`).join('')}</div>`;
 
   const inappTab=`<div class="space-y-4">
+    ${typeof _bbSndCard==='function'?_bbSndCard():''}
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F2F8F9;border-bottom:1px solid #E8F1F3">
+      <div style="padding:14px 20px;background:#F5F1EB;border-bottom:1px solid #EEE8DE">
         <div style="font-size:14px;font-weight:700">In-app notifications</div>
-        <div style="font-size:12px;color:#90A5AB;margin-top:2px">Bell icon — shown only to the relevant user</div>
+        <div style="font-size:12px;color:#A59788;margin-top:2px">Bell icon — shown only to the relevant user</div>
       </div>
       <div style="padding:4px 20px 12px">
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
         ${_nsTogRow('inapp_checklist_assigned','Checklist assigned','Sent to the user the checklist is assigned to')}
         ${_nsTogRow('inapp_submission_submitted','Submission submitted','Sent to the manager when their team submits')}
         ${_nsTogRow('inapp_submission_late','Submission late','Sent to the manager when a submission is overdue')}
         ${_nsTogRow('inapp_submission_approved','Submission approved','Sent to the user whose submission was approved')}
         ${_nsTogRow('inapp_submission_rejected','Submission rejected','Sent to the user whose submission was rejected')}
         ${_nsTogRow('inapp_deadline_reminder','Deadline reminder','Sent to the user before their task cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
         ${_nsTogRow('inapp_approval_requested','Approval requested','Sent to admin when an approval is pending')}
         ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
         ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
         ${_nsTogRow('inapp_crm_mention','Tagged in Workspace chat','When someone @mentions you in a conversation')}
         ${_nsTogRow('inapp_crm_ticket','Workspace ticket activity','Created, assigned, moved & automation alerts')}
         ${_nsTogRow('inapp_crm_reminder','Workspace reminders','Reminders scheduled by board automations (date & time)')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
-        ${_nsTogRow('inapp_okr_assigned','OKR assigned','Sent to every owner when an objective is assigned to them')}
-        ${_nsTogRow('inapp_okr_update_added','OKR update added','Sent to co-owners when someone submits the group\'s check-in')}
-        ${_nsTogRow('inapp_okr_target_revised','OKR target revised','Sent to the owners when a target is revised')}
-        ${_nsTogRow('inapp_okr_closed','OKR closed / reopened','Sent to the owners when an objective is closed or reopened')}
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">BOLTs</div>
+        ${_nsTogRow('inapp_okr_assigned','BOLT assigned','Sent to every owner when an objective is assigned to them')}
+        ${_nsTogRow('inapp_okr_update_added','BOLT update added','Sent to co-owners when someone submits the group\'s check-in')}
+        ${_nsTogRow('inapp_okr_target_revised','BOLT target revised','Sent to the owners when a target is revised')}
+        ${_nsTogRow('inapp_okr_closed','BOLT closed / reopened','Sent to the owners when an objective is closed or reopened')}
       </div>
     </div>
   </div>`;
@@ -615,59 +616,59 @@ function settingsPage(){
   const emailOn=ns.email_enabled!==false;
   const emailTab=`<div class="space-y-4">
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
-      <div style="padding:14px 20px;background:#F2F8F9;border-bottom:1px solid #E8F1F3;display:flex;align-items:center;justify-content:space-between">
+      <div style="padding:14px 20px;background:#F5F1EB;border-bottom:1px solid #EEE8DE;display:flex;align-items:center;justify-content:space-between">
         <div>
           <div style="font-size:14px;font-weight:700">Email notifications</div>
-          <div style="font-size:12px;color:#90A5AB;margin-top:2px">Sends to the email address set on each user's account</div>
+          <div style="font-size:12px;color:#A59788;margin-top:2px">Sends to the email address set on each user's account</div>
         </div>
         <button role="switch" aria-checked="${emailOn?'true':'false'}" aria-label="Email notifications" class="tog ${emailOn?'on':'off'}" onclick="App._nsTog(this,'email_enabled')"><span></span></button>
       </div>
-      <div style="padding:16px 20px;border-bottom:1px solid #E8F1F3">
-        <div style="font-size:11px;font-weight:700;color:#90A5AB;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
+      <div style="padding:16px 20px;border-bottom:1px solid #EEE8DE">
+        <div style="font-size:11px;font-weight:700;color:#A59788;letter-spacing:.05em;text-transform:uppercase;margin-bottom:10px">Sender identity</div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
           <div>
-            <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#5E767D;margin-bottom:4px">From name</label>
+            <label for="ns-from-name" style="display:block;font-size:11px;font-weight:700;color:#786A5F;margin-bottom:4px">From name</label>
             <input id="ns-from-name" value="${esc(ns.email_from_name||'Bridge')}" placeholder="Bridge"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #DFEAEC;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E6DED3;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
-            <label for="ns-from-addr" style="display:block;font-size:11px;font-weight:700;color:#5E767D;margin-bottom:4px">From address</label>
+            <label for="ns-from-addr" style="display:block;font-size:11px;font-weight:700;color:#786A5F;margin-bottom:4px">From address</label>
             <input id="ns-from-addr" type="email" value="${esc(ns.email_from_address||'')}" placeholder="you@company.com"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #DFEAEC;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E6DED3;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
         </div>
         <div style="margin-bottom:12px">
-          <label for="ns-reminder-mins" style="display:block;font-size:11px;font-weight:700;color:#5E767D;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
+          <label for="ns-reminder-mins" style="display:block;font-size:11px;font-weight:700;color:#786A5F;margin-bottom:4px">Reminder lead time (minutes before deadline)</label>
           <input id="ns-reminder-mins" type="number" min="5" max="120" value="${ns.email_reminder_minutes||15}"
-            style="width:120px;border:1.5px solid #DFEAEC;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+            style="width:120px;border:1.5px solid #E6DED3;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
         </div>
         <div style="display:flex;gap:8px">
-          <button onclick="App._nsSaveEmail()" style="flex:1;padding:10px;border-radius:11px;background:#10262E;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#10262E'">Save settings</button>
-          <button id="ns-test-btn" onclick="App._testEmail()" style="padding:10px 16px;border-radius:11px;background:#fff;color:#2F4C55;font-size:13px;font-weight:700;border:1.5px solid #DFEAEC;cursor:pointer" onmouseover="this.style.background='#F2F8F9'" onmouseout="this.style.background='#fff'">Send test email</button>
+          <button onclick="App._nsSaveEmail()" style="flex:1;padding:10px;border-radius:11px;background:#13171B;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer" onmouseover="this.style.background='#000'" onmouseout="this.style.background='#13171B'">Save settings</button>
+          <button id="ns-test-btn" onclick="App._testEmail()" style="padding:10px 16px;border-radius:11px;background:#fff;color:#3A312A;font-size:13px;font-weight:700;border:1.5px solid #E6DED3;cursor:pointer" onmouseover="this.style.background='#F5F1EB'" onmouseout="this.style.background='#fff'">Send test email</button>
         </div>
       </div>
       <div style="padding:4px 20px 12px">
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:12px 0 4px">Checklists</div>
         ${_nsTogRow('email_checklist_assigned','Checklist assigned','Email sent to the assigned user')}
         ${_nsTogRow('email_submission_late','Submission late','Email sent to the manager')}
         ${_nsTogRow('email_submission_approved','Submission approved','Email sent to the user')}
         ${_nsTogRow('email_submission_rejected','Submission rejected','Email sent to the user')}
         ${_nsTogRow('email_deadline_reminder','Deadline reminder','Email sent to the user before cutoff')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Approvals & Feedback</div>
         ${_nsTogRow('email_approval_requested','Approval requested','Email sent to admin')}
         ${_nsTogRow('email_approval_decided','Approval decided','Email sent to the user')}
         ${_nsTogRow('email_feedback_received','Feedback received','Email sent to the user')}
         ${_nsTogRow('email_escalation','Escalation raised','Email sent to the person it escalates to')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
         ${_nsTogRow('email_crm_mention','Tagged in Workspace chat','Email when someone @mentions you')}
         ${_nsTogRow('email_crm_ticket','Workspace ticket activity','Email for created / assigned / automation alerts')}
         ${_nsTogRow('email_crm_reminder','Workspace reminders','Email for reminders scheduled by board automations')}
-        <div style="font-size:10px;font-weight:800;color:#93A6AC;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
-        ${_nsTogRow('email_okr_assigned','OKR assigned','Email to every owner when an objective is assigned to them')}
-        ${_nsTogRow('email_okr_checkin_due','OKR check-in due (daily)','Sent automatically every morning (server schedule) to owners with a check-in due that day')}
-        ${_nsTogRow('email_okr_update_added','OKR update added','Email to co-owners when someone submits the group\'s check-in')}
-        ${_nsTogRow('email_okr_target_revised','OKR target revised','Email to the owners when a target is revised')}
-        ${_nsTogRow('email_okr_closed','OKR closed / reopened','Email to the owners when an objective is closed or reopened')}
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">BOLTs</div>
+        ${_nsTogRow('email_okr_assigned','BOLT assigned','Email to every owner when an objective is assigned to them')}
+        ${_nsTogRow('email_okr_checkin_due','BOLT check-in due (daily)','Sent automatically every morning (server schedule) to owners with a check-in due that day')}
+        ${_nsTogRow('email_okr_update_added','BOLT update added','Email to co-owners when someone submits the group\'s check-in')}
+        ${_nsTogRow('email_okr_target_revised','BOLT target revised','Email to the owners when a target is revised')}
+        ${_nsTogRow('email_okr_closed','BOLT closed / reopened','Email to the owners when an objective is closed or reopened')}
       </div>
     </div>
   </div>`;
@@ -677,45 +678,45 @@ function settingsPage(){
   const expandedTpl=S.filters.tplKey||null;
   const templatesTab=`<div class="space-y-2">
     <div style="padding:4px 0 10px">
-      <div style="font-size:13px;color:#90A5AB;line-height:1.6">
+      <div style="font-size:13px;color:#A59788;line-height:1.6">
         Customise the subject and body for each email. Use these variables anywhere in your text:
         <div style="margin-top:8px;display:flex;flex-wrap:wrap;gap:6px">
-          ${['{{user_name}}','{{checklist_name}}','{{date}}','{{status}}','{{manager_name}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#EDF4F5;border-radius:6px;padding:2px 8px;font-size:12px;color:#2F4C55">${v}</code>`).join('')}
+          ${['{{user_name}}','{{checklist_name}}','{{date}}','{{status}}','{{manager_name}}','{{action_url}}','{{app_url}}'].map(v=>`<code style="background:#F1ECE3;border-radius:6px;padding:2px 8px;font-size:12px;color:#3A312A">${v}</code>`).join('')}
         </div>
       </div>
     </div>
     ${EMAIL_EVENTS.map(ev=>{
       const tpl={...(defaults[ev.key]||{}), ...(ns.templates?.[ev.key]||{})};
       const open=expandedTpl===ev.key;
-      return`<div style="background:#fff;border-radius:14px;border:1.5px solid ${open?'#0F766E':'#E7F0F2'};overflow:hidden;transition:border-color .15s">
+      return`<div style="background:#fff;border-radius:14px;border:1.5px solid ${open?'#54433C':'#EDE7DC'};overflow:hidden;transition:border-color .15s">
         <button onclick="S.filters.tplKey='${open?'':ev.key}';rr()"
           style="width:100%;display:flex;align-items:center;justify-content:space-between;padding:13px 16px;background:transparent;border:none;cursor:pointer;text-align:left">
           <div>
-            <div style="font-size:13px;font-weight:700;color:#10262E">${ev.label}</div>
-            <div style="font-size:11px;color:#93A6AC;margin-top:1px">${ev.vars}</div>
+            <div style="font-size:13px;font-weight:700;color:#13171B">${ev.label}</div>
+            <div style="font-size:11px;color:#A8998A;margin-top:1px">${ev.vars}</div>
           </div>
           <div style="display:flex;align-items:center;gap:8px">
-            ${(ns.templates?.[ev.key])?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#E4F2F0;color:#0B5F37">Custom</span>`:''}
-            <span style="color:#93A6AC;font-size:16px">${open?'▲':'▼'}</span>
+            ${(ns.templates?.[ev.key])?`<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:#EEE4D5;color:#2B5638">Custom</span>`:''}
+            <span style="color:#A8998A;font-size:16px">${open?'▲':'▼'}</span>
           </div>
         </button>
-        ${open?`<div style="padding:0 16px 16px;border-top:1px solid #EDF4F5">
+        ${open?`<div style="padding:0 16px 16px;border-top:1px solid #F1ECE3">
           <div style="margin-bottom:10px">
-            <label for="tpl-subj-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#5E767D;margin-bottom:4px;margin-top:12px">Subject</label>
+            <label for="tpl-subj-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#786A5F;margin-bottom:4px;margin-top:12px">Subject</label>
             <input id="tpl-subj-${ev.key}" value="${esc(tpl.subject||'')}" placeholder="Email subject…"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #DFEAEC;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E6DED3;border-radius:10px;padding:8px 12px;font-size:13px;outline:none" class="rf"/>
           </div>
           <div>
-            <label for="tpl-body-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#5E767D;margin-bottom:4px">Body</label>
+            <label for="tpl-body-${ev.key}" style="display:block;font-size:11px;font-weight:700;color:#786A5F;margin-bottom:4px">Body</label>
             <textarea id="tpl-body-${ev.key}" rows="6"
-              style="width:100%;box-sizing:border-box;border:1.5px solid #DFEAEC;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
-            <div style="font-size:11px;color:#93A6AC;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
+              style="width:100%;box-sizing:border-box;border:1.5px solid #E6DED3;border-radius:10px;padding:8px 12px;font-size:13px;outline:none;resize:vertical;font-family:monospace;line-height:1.6" class="rf">${esc(tpl.body||'')}</textarea>
+            <div style="font-size:11px;color:#A8998A;margin-top:4px">Tip: each line in the body becomes a paragraph in the email.</div>
           </div>
           <div style="display:flex;gap:8px;margin-top:12px">
             <button onclick="App._resetTpl('${ev.key}')"
-              style="padding:8px 14px;border-radius:9px;border:1.5px solid #E7F0F2;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#90A5AB">Reset to default</button>
+              style="padding:8px 14px;border-radius:9px;border:1.5px solid #EDE7DC;background:#fff;font-size:12px;font-weight:600;cursor:pointer;color:#A59788">Reset to default</button>
             <button onclick="App._saveTpl('${ev.key}')"
-              style="flex:1;padding:8px 14px;border-radius:9px;background:#10262E;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Save template</button>
+              style="flex:1;padding:8px 14px;border-radius:9px;background:#13171B;color:#fff;font-size:13px;font-weight:700;border:none;cursor:pointer">Save template</button>
           </div>
         </div>`:''}
       </div>`;
@@ -744,8 +745,8 @@ function settingsPage(){
       <h3 class="fd font-semibold text-sm mb-3">Export & Reset</h3>
       <div class="flex gap-3 flex-wrap">
         ${btnG('Export CSV','App._exportCSV()','download')}
-        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FFD9B8;color:#0B6660;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#F6F1E1'" onmouseout="this.style.background='#fff'">🧹 Clear data</button>
-        <button onclick="App._resetWorkspaceCache()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #FBCDCD;color:#C41E32;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#FEEEEF'" onmouseout="this.style.background='#fff'">Reset workspace</button>
+        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #F5DCC0;color:#463830;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#F5EFDF'" onmouseout="this.style.background='#fff'">🧹 Clear data</button>
+        <button onclick="App._resetWorkspaceCache()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #EFC9BE;color:#A63528;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#F9EBE5'" onmouseout="this.style.background='#fff'">Reset workspace</button>
       </div>
     </div>
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
@@ -781,3 +782,184 @@ App._exportCSV=()=>{
   toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
 };
 
+
+
+/* ═══════════ SOUND ALERTS — every Bridge notification rings once ═══════════
+   Loud bell on arrival (realtime + poll), rate-limited to one ring, with
+   per-person per-type opt-outs stored on this device. */
+var _BB_SND_TYPES=[
+ ['workspace_message','Workspace chat messages','A new message in any of your conversations'],
+ ['crm_mention','Tagged / @mentions','Someone @mentions you anywhere in Workspace'],
+ ['workspace','Workspace activity','Tickets created, assigned, moved and automation updates'],
+ ['checklist','Checklists','When someone assigns a checklist to you, or removes one'],
+ ['approval','Approvals','Approval requested, approved or rejected'],
+ ['edit','Edit requests','Edit requests and re-submissions'],
+ ['escalation','Escalations','A question or task escalates to you'],
+ ['feedback','Feedback','Feedback and feedback replies'],
+ ['late','Late & reminders','Overdue submissions and deadline reminders'],
+ ['okr','BOLT','When a BOLT is assigned to you, checked in or revised'],
+ ['general','Everything else','Any other Bridge notification']
+];
+function _bbSndKey(){return 'bb_snd_prefs_'+((typeof S!=='undefined'&&S&&S.uid)||'anon');}
+function _bbSndPrefs(){try{var p=JSON.parse(localStorage.getItem(_bbSndKey())||'{}');p.types=p.types||{};if(p.master===undefined)p.master=true;return p;}catch(e){return{master:true,types:{}};}}
+function _bbSndSave(p){try{localStorage.setItem(_bbSndKey(),JSON.stringify(p));}catch(e){}}
+function _bbSndAllow(t){var p=_bbSndPrefs();if(p.master===false)return false;return p.types[t]!==false;}
+function _bbSndSet(t,on){var p=_bbSndPrefs();p.types[t]=!!on;_bbSndSave(p);}
+App._bbSndMaster=()=>{var p=_bbSndPrefs();p.master=(p.master===false);_bbSndSave(p);if(p.master)try{_crmDing(null,true);}catch(e){}render();};
+App._bbSndTogType=(t)=>{var p=_bbSndPrefs();p.types[t]=(p.types[t]===false);_bbSndSave(p);if(p.types[t]&&p.master!==false)try{_crmDing(null,true);}catch(e){}render();};
+App._bbSndOpen=()=>{window._bbSndOpen=!window._bbSndOpen;render();};
+function _bbNotifKind(n){
+  var text=(n&&n.text)||'';var link=(n&&n.link)||'';
+  if(n&&n.kind==='okr')return'okr';
+  if(/OKR|BOLT|objective/i.test(text))return'okr';
+  if(/tagged you in/i.test(text))return'crm_mention';
+  if(link&&String(link).indexOf('crm:')===0)return'workspace';
+  if(text.indexOf('\u{1F3AB}')>=0||text.indexOf('\u21AA')>=0||text.indexOf('\u26A1')>=0||text.indexOf('\u{1F4AC}')>=0)return'workspace';
+  if(/^\u2705 Approval needed:/.test(text))return'workspace';
+  if(/checklist assigned|checklist removed/i.test(text))return'checklist';
+  if(/escalat/i.test(text))return'escalation';
+  if(/feedback|replied|reply/i.test(text))return'feedback';
+  if(/approv|reject/i.test(text))return'approval';
+  if(/edit request|re-submit|resubmit/i.test(text))return'edit';
+  if(/overdue|late|reminder|deadline/i.test(text))return'late';
+  return'general';
+}
+function _bbRing(kind){
+  try{
+    if(!_bbSndPrefs().master)return;
+    if(!_bbSndAllow(kind))return;
+    var now=Date.now();if(now-(window._bbDingT||0)<1500)return;window._bbDingT=now;
+    _crmDing(null,true);
+  }catch(e){}
+}
+window._bbSeenN=window._bbSeenN||{};
+function _bbSB(){try{if(typeof sb!=='undefined'&&sb)return sb;}catch(e){}try{return window.sb||null;}catch(e){}return null;}
+function _bbOnNotifRow(row){
+  try{
+    if(!row||!row.id||!S||row.user_id!==S.uid)return;
+    if(window._bbSeenN[row.id])return;window._bbSeenN[row.id]=1;
+    var known=(DB.notifications||[]).some(function(x){return x.id===row.id;});
+    if(!known){
+      try{DB.notifications.unshift({id:row.id,userId:row.user_id,text:row.text||'',read:row.read||false,time:row.created_at,link:row.link||null});_invalidateNotifCache();}catch(e){}
+      var age=row.created_at?(Date.now()-new Date(row.created_at).getTime()):9e9;
+      if(age<120000&&!row.read)_bbRing(_bbNotifKind({text:row.text,link:row.link}));
+      try{var _ae=document.activeElement;var _typing=_ae&&/^(INPUT|TEXTAREA)$/.test(_ae.tagName);if(S.route==='notifications'){render();}else if(!_typing){render();}}catch(e){}
+    }
+  }catch(e){}
+}
+(function(){
+  if(window._bbNotifBoot)return;window._bbNotifBoot=true;
+  /* history never rings: keep marking whatever is already loaded as seen */
+  setInterval(function(){try{(DB&&DB.notifications||[]).forEach(function(n){window._bbSeenN[n.id]=1;});}catch(e){}},2000);
+  /* live: one realtime channel per signed-in user */
+  setInterval(function(){try{
+    var _s=_bbSB();
+    if(!_s||typeof S==='undefined'||!S||!S.uid||window._bbNotifRT)return;
+      window._bbNotifRT=_s.channel('bb-notif-'+S.uid)
+        .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+S.uid},function(p){_bbOnNotifRow(p.new||p.record||{});})
+        .subscribe();
+    }catch(e){window._bbNotifRT=null;}
+  },2500);
+  /* fallback: light refresh once a minute while the tab is visible */
+  setInterval(function(){
+    if(!S||!S.uid||document.visibilityState!=='visible')return;
+    try{if(typeof _lazyLoad==='function')_lazyLoad('notifications');}catch(e){}
+  },60000);
+  /* poll path rings too: wrap the apply step, ring only brand-new fresh rows */
+  if(typeof _applyNotifications==='function'){
+    var _oap=_applyNotifications;
+    _applyNotifications=function(notifs){
+      var prev={};try{(DB.notifications||[]).forEach(function(n){prev[n.id]=1;});}catch(e){}
+      _oap(notifs);
+      try{
+        (DB.notifications||[]).forEach(function(n){
+          if(prev[n.id]||window._bbSeenN[n.id]){window._bbSeenN[n.id]=1;return;}
+          window._bbSeenN[n.id]=1;
+          var age=n.time?(Date.now()-new Date(n.time).getTime()):9e9;
+          if(age<120000&&!n.read)_bbRing(_bbNotifKind(n));
+        });
+      }catch(e){}
+    };
+  }
+})();
+function _bbSndRow(t,label,desc){
+  var on=_bbSndAllow(t);var p=_bbSndPrefs();
+  return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1ECE3'+(p.master===false?';opacity:.45;pointer-events:none':'')+'">'
+   +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#13171B">'+label+'</div>'
+   +(desc?'<div style="font-size:11px;color:#A8998A;margin-top:1px">'+desc+'</div>':'')+'</div>'
+   +'<button class="tog'+(on?' on':'')+'" onclick="App._bbSndTogType(\''+t+'\')" aria-label="Toggle sound for '+label+'"><span></span></button></div>';
+}
+function _bbSndCard(){
+  var p=_bbSndPrefs();var open=!!window._bbSndOpen;
+  return '<div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden;margin-bottom:16px">'
+   +'<div style="padding:13px 18px;background:#F5F1EB;'+(open?'border-bottom:1px solid #EEE8DE;':'')+'display:flex;align-items:center;gap:11px">'
+   +'<button onclick="App._bbSndOpen()" style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:none;background:transparent;cursor:pointer;text-align:left;padding:0">'
+   +'<span style="font-size:17px">\u{1F514}</span>'
+   +'<span style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:#13171B">Notification sounds</span>'
+   +'<span style="display:block;font-size:11.5px;color:#A59788;margin-top:1px">'+(p.master===false?'All sounds off':'Rings once per notification \u00B7 tap to choose which types')+'</span></span>'
+   +'<span style="margin-left:auto;color:#B8AA9C;transform:rotate('+(open?'90':'0')+'deg);transition:transform .15s">'+ic('chevR','w-4 h-4')+'</span></button>'
+   +'<button onclick="try{_crmDing(null,true)}catch(e){}" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex-shrink:0">Test</button>'
+   +'<button class="tog'+(p.master!==false?' on':'')+'" onclick="App._bbSndMaster()" aria-label="All notification sounds"><span></span></button>'
+   +'</div>'
+   +(open?'<div style="padding:2px 18px 10px">'+_BB_SND_TYPES.map(function(r){return _bbSndRow(r[0],r[1],r[2]);}).join('')+'</div>':'')
+   +'</div>';
+}
+window._bbSndCard=_bbSndCard;
+
+
+/* ═══════════ PRESENCE — green dot while a person's Bridge tab is open ═══════════ */
+window._bbOnline=window._bbOnline||{};
+function _bbPresPaint(){try{var els=document.querySelectorAll('[data-pres]');for(var i=0;i<els.length;i++){els[i].classList.toggle('on',!!window._bbOnline[els[i].getAttribute('data-pres')]);}}catch(e){}}
+(function(){
+  if(window._bbPresBoot)return;window._bbPresBoot=true;
+  document.head.insertAdjacentHTML('beforeend','<style id="bb-pres-css">'
+   +'.bb-dot{position:absolute;right:-1px;bottom:-1px;width:30%;height:30%;min-width:8px;min-height:8px;max-width:12px;max-height:12px;border-radius:50%;background:#C25441;border:2px solid #fff;box-sizing:border-box;z-index:2;transition:background .25s}'
+   +'.bb-dot.on{background:#2FA36B;box-shadow:0 0 5px rgba(47,163,107,.55)}'
+   +'aside.sidebar .bb-dot{border-color:#181D23}'
+   +'</style>');
+  /* join the shared presence channel once signed in; tab close = socket close = red */
+  setInterval(function(){try{
+    var _s=_bbSB();
+    if(!_s||typeof S==='undefined'||!S||!S.uid||window._bbPresRT)return;
+      var ch=_s.channel('bb-presence',{config:{presence:{key:S.uid}}});
+      window._bbPresRT=ch;window._bbPresUid=S.uid;
+      ch.on('presence',{event:'sync'},function(){
+        try{var st=ch.presenceState();var o={};for(var k in st)o[k]=true;window._bbOnline=o;_bbPresPaint();}catch(e){}
+      }).subscribe(function(s){if(s==='SUBSCRIBED'){try{ch.track({uid:S.uid,at:new Date().toISOString()});}catch(e){}}});
+    }catch(e){window._bbPresRT=null;}
+  },2500);
+  /* sign-out or user switch: leave and re-key */
+  setInterval(function(){
+    try{
+      if(window._bbPresRT&&(!S||!S.uid||S.uid!==window._bbPresUid)){
+        try{var _s2=_bbSB();if(_s2)_s2.removeChannel(window._bbPresRT);}catch(e){}
+        window._bbPresRT=null;window._bbOnline={};_bbPresPaint();
+      }
+    }catch(e){}
+  },4000);
+})();
+
+
+/* ═══════════ PASSWORD EYE — every password field gets a show/hide toggle ═══════════ */
+(function(){
+  if(window._bbEyeBoot)return;window._bbEyeBoot=true;
+  var EYE='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-6.5 10-6.5S22 12 22 12s-3.5 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.7"/></svg>';
+  var EYEOFF='<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3l18 18"/><path d="M10.6 5.9a10 10 0 0 1 1.4-.4c6.5 0 10 6.5 10 6.5a17 17 0 0 1-3 3.6M6.6 6.9A16.7 16.7 0 0 0 2 12s3.5 6.5 10 6.5a10 10 0 0 0 4.4-1"/><path d="M9.9 9.9a2.7 2.7 0 0 0 3.8 3.8"/></svg>';
+  document.head.insertAdjacentHTML('beforeend','<style id="bb-eye-css">.bb-eyewrap{position:relative;display:block;min-width:0;width:100%}.bb-eye{position:absolute;right:6px;top:50%;transform:translateY(-50%);width:30px;height:30px;border:none;background:transparent;color:#A59788;cursor:pointer;display:grid;place-items:center;border-radius:8px;z-index:3;padding:0}.bb-eye:hover{color:#54433C;background:rgba(84,67,60,.06)}.bb-eyewrap input{padding-right:40px!important;width:100%;box-sizing:border-box}</style>');
+  function _bbEyeEnhance(){
+    try{
+      var ins=document.querySelectorAll('input[type="password"]:not([data-eye])');
+      for(var i=0;i<ins.length;i++){
+        var inp=ins[i];inp.setAttribute('data-eye','1');
+        var w=document.createElement('div');w.className='bb-eyewrap';
+        inp.parentNode.insertBefore(w,inp);w.appendChild(inp);
+        var b=document.createElement('button');b.type='button';b.className='bb-eye';b.setAttribute('aria-label','Show password');b.tabIndex=-1;b.innerHTML=EYE;
+        b.addEventListener('click',function(ev){ev.preventDefault();ev.stopPropagation();var ip=this.parentNode.querySelector('input');if(!ip)return;var show=ip.type==='password';ip.type=show?'text':'password';this.innerHTML=show?EYEOFF:EYE;this.setAttribute('aria-label',show?'Hide password':'Show password');try{ip.focus();var L=ip.value.length;ip.setSelectionRange(L,L);}catch(e){}});
+        w.appendChild(b);
+      }
+    }catch(e){}
+  }
+  var deb=null;
+  try{new MutationObserver(function(){clearTimeout(deb);deb=setTimeout(_bbEyeEnhance,120);}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
+  _bbEyeEnhance();
+})();

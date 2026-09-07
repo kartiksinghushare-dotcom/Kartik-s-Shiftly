@@ -3,12 +3,12 @@
    Classic script: shares top-level scope with the other /js files.
    Load order matters — see index.html.
    ============================================================ */
-/* ── PORTED: chart registry shim (OKR progress charts; Chart.js loaded in <head>) ── */
+/* ── PORTED: chart registry shim (BOLT progress charts; Chart.js loaded in <head>) ── */
 let _aCharts=[];
 function _destroyACharts(){_aCharts.forEach(c=>{try{c.destroy();}catch(e){}});_aCharts=[];}
 
 
-/* ═══ PORTED: shared helpers required by AC/OKR modules (Safe Backup) ═══ */
+/* ═══ PORTED: shared helpers required by AC/BOLT modules (Safe Backup) ═══ */
 function _isRlsErr(e){const m=(e&&(e.message||e.error_description||''))+'';return /row-level security|permission denied|violates|not authorized|forbidden|RLS/i.test(m);}
 // .catch / .then-error handler for a TARGETED write. Returns a fn so it can be passed directly to .catch.
 function _syncErr(label){return (e)=>{
@@ -30,8 +30,8 @@ function modalShell({title='',sub='',body='',footer='',size='max-w-lg',key=''}={
   ${footer?`<div style="position:sticky;bottom:0;background:var(--c-surface);border-top:1px solid var(--c-border);padding:14px 20px;display:flex;gap:10px;justify-content:flex-end;flex-wrap:wrap">${footer}</div>`:''}`,size,{key});
 }
 const HOW={
-  dashboard:{t:'Your day at a glance: who\'s in, what needs you, and quick actions. Most people never need another tab.',d:['Clock in/out here — it feeds Attendance and Payroll automatically.','“Mark today as WFH” tags your attendance for reports and payslips.','Cards show today\'s checklists, leave status and OKR check-ins — tap any to act.'],l:[['mychecklists','My Checklists'],['approvals','Approvals']]},
-  mychecklists:{t:'Everything assigned to YOU, day by day. Pick a date on the strip; submit each card.',d:['Miss the due time → the card turns LATE (red) and analytics record it.','Whether you may submit past/future dates or edit comes from your Personal settings.','Scheduled OKR check-ins appear here as one combined card on their due day.'],l:[['okr','OKRs'],['approvals','Approvals']]},
+  dashboard:{t:'Your day at a glance: who\'s in, what needs you, and quick actions. Most people never need another tab.',d:['Clock in/out here — it feeds Attendance and Payroll automatically.','“Mark today as WFH” tags your attendance for reports and payslips.','Cards show today\'s checklists, leave status and BOLT check-ins — tap any to act.'],l:[['mychecklists','My Checklists'],['approvals','Approvals']]},
+  mychecklists:{t:'Everything assigned to YOU, day by day. Pick a date on the strip; submit each card.',d:['Miss the due time → the card turns LATE (red) and analytics record it.','Whether you may submit past/future dates or edit comes from your Personal settings.','Scheduled BOLT check-ins appear here as one combined card on their due day.'],l:[['okr','BOLT'],['approvals','Approvals']]},
   tickets:{t:'Issues raised by people or auto-created when a checklist answer breaches a rule.',d:['Bad answers on escalation questions open tickets automatically and re-escalate while open.','Resolve with a note — the submitter is notified.'],l:[['mychecklists','My Checklists'],['questions','Questions']]},
   teamview:{t:'Live board of your team: today\'s checklist status, lates and open tickets per person. Click someone to drill into their calendar.',l:[['users','Users'],['approvals','Approvals']]},
   users:{t:'The people directory: identity, manager, HRM schedule, salary and documents.',d:['“Reports to” decides who approves this person\'s leave/overtime and who sees them in Team.','Salary + IBAN here feed Payroll and the bank file.','Access is NOT set here — one role per person in Access Control.'],l:[['accesscontrol','Access Control'],['payroll','Payroll'],['hierarchy','Hierarchy']]},
@@ -42,12 +42,12 @@ const HOW={
   approvals:{t:'One inbox for every decision: leave, submissions, edits, documents, overtime.',d:['Approve/reject inline; the requester is notified instantly.','Filter by type and use “Approve all” for bulk.'],l:[['leave','Leave'],['overtime','Overtime']]},
   notifications:{t:'Every alert lands here (and is queued for email once a provider is connected). Tap one to jump to the right tab.',l:[]},
   locations:{t:'Offices with GPS geofence — controls where clock-in works and holds location documents.',l:[['attendance','Attendance'],['users','Users']]},
-  departments:{t:'Departments and sub-departments; also holds each department\'s document folders.',l:[['users','Users'],['okr','OKRs']]},
+  departments:{t:'Departments and sub-departments; also holds each department\'s document folders.',l:[['users','Users'],['okr','BOLTs']]},
   settings:{t:'App-wide settings and templates.',l:[]},
   audit:{t:'Every action anyone takes, filterable by person, department and tab. If you wonder “who changed this?” — the answer is here.',l:[['accesscontrol','Access Control']]},
   profile:{t:'Your own details, documents and preferences.',l:[]},
   accesscontrol:{t:'One rule runs everything: a ROLE is a bundle of switches (which tabs, which buttons) — give each person ONE role, done. “Personal” only holds personal facts: past/future submission rights, HR-approver stage, cities and document folders.',d:['Edit a role → everyone with it changes instantly.','You can never remove the last person holding Access Control.'],l:[['users','Users'],['audit','Audit']]},
-  okr:{t:'Create an objective with a target and a check-in day → the owner gets it as a task on that day → their numbers roll up the tree (L2 → L1 → L0) and the graph shows planned pace vs reality.',d:['Who sees what is set in Access Control (OKRs → “sees”): only their own, their team\'s, their department\'s, or everyone\'s. Owners always see their own objectives, and anything below a visible objective is visible too.','Green = on pace, red = off pace, computed against the period; you can also mark status manually.','Turn on “Annual objective” in the editor to split it into quarterly targets — same owner & metric, only dates and targets differ; the quarters\' updates drive the annual number automatically.','Click any objective to open Progress & Updates — every action (add sub-objective, edit, move, revise, close, delete) now sits in one row at the top of that popup, so the cards themselves stay readable. Move still carries the whole subtree with it.',
+  okr:{t:'Create an objective with a target and a check-in day → the owner gets it as a task on that day → their numbers roll up the tree (L2 → L1 → L0) and the graph shows planned pace vs reality.',d:['Who sees what is set in Access Control (BOLTs → “sees”): only their own, their team\'s, their department\'s, or everyone\'s. Owners always see their own objectives, and anything below a visible objective is visible too.','Green = on pace, red = off pace, computed against the period; you can also mark status manually.','Turn on “Annual objective” in the editor to split it into quarterly targets — same owner & metric, only dates and targets differ; the quarters\' updates drive the annual number automatically.','Click any objective to open Progress & Updates — every action (add sub-objective, edit, move, revise, close, delete) now sits in one row at the top of that popup, so the cards themselves stay readable. Move still carries the whole subtree with it.',
     'Set “Which way is good?” to <b>Lower is better</b> when the target is a limit rather than a goal (spend, errors, complaints). The graph then draws a straight line at the limit — cross it and the objective reads Not achieved — and the % becomes how much of the limit is used.',
     'Tick the box on any objective to select it, then <b>Bulk edit</b> changes owners, department, dates, targets, direction, schedule, roll-up or status across all of them at once — and can close, reopen or delete them. Only the fields you tick are written.','The quarter filter has an All / Annual / Quarterly switch, so you can view just the annual picture, just the quarters, or everything.','Every input and edit is kept in the objective\'s activity log.'],l:[['mychecklists','My Checklists'],['dashboard','Dashboard'],['accesscontrol','Access Control']]},
 };
@@ -64,16 +64,16 @@ App._howModal=()=>{
 function _howBar(key){return'';// v3.16: blue helper banners removed (user request) — the "?" HOW modal content stays available to future UI
   const h=HOW[key];if(!h)return'';
   try{if(localStorage.getItem('bridge_how_'+key))return'';}catch(e){}
-  return `<div style="display:flex;gap:10px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BFE3DF;border-radius:12px;padding:10px 14px;margin-bottom:14px">
+  return `<div style="display:flex;gap:10px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #E0CDB9;border-radius:12px;padding:10px 14px;margin-bottom:14px">
     <span style="flex-shrink:0;margin-top:1px">${ic('help','w-4 h-4')}</span>
     <div style="flex:1;min-width:0">
-      <div style="font-size:12.5px;color:#0B5F5A;line-height:1.55">${h.t}</div>
+      <div style="font-size:12.5px;color:#42352E;line-height:1.55">${h.t}</div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px;align-items:center">
-        <span style="font-size:10px;font-weight:800;color:#0B5F5A;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
-        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #BFE3DF;background:var(--c-surface);color:#0B5F5A;cursor:pointer">${x[1]} →</button>`).join('')}
+        <span style="font-size:10px;font-weight:800;color:#42352E;text-transform:uppercase;letter-spacing:.05em">Linked:</span>
+        ${h.l.filter(x=>navFor().some(n=>n[0]===x[0])).map(x=>`<button onclick="App.go('${x[0]}')" style="font-size:11px;font-weight:700;padding:2px 10px;border-radius:20px;border:1px solid #E0CDB9;background:var(--c-surface);color:#42352E;cursor:pointer">${x[1]} →</button>`).join('')}
       </div>
     </div>
-    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" style="border:none;background:transparent;color:#0B5F5A;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
+    <button onclick="try{localStorage.setItem('bridge_how_${key}','1')}catch(e){};rr()" title="Got it — hide" style="border:none;background:transparent;color:#42352E;cursor:pointer;font-size:14px;line-height:1;flex-shrink:0">×</button>
   </div>`;
 }
 /* dismissNote(key,html,opts) — an informational note the user can dismiss with × ("got it,
@@ -82,13 +82,13 @@ function _howBar(key){return'';// v3.16: blue helper banners removed (user reque
 function dismissNote(key,html,opts={}){return'';// v3.16: blue info notes removed (user request)
   try{if(localStorage.getItem('bridge_note_'+key))return'';}catch(e){}
   const after=opts.onDismiss||'rr()';
-  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #BFE3DF;border-radius:10px;padding:8px 12px;font-size:12px;color:#0B5F5A;${opts.style||''}">
+  return `<div style="display:flex;gap:8px;align-items:flex-start;background:var(--c-info-soft);border:1px solid #E0CDB9;border-radius:10px;padding:8px 12px;font-size:12px;color:#42352E;${opts.style||''}">
     ${opts.icon?`<span style="flex-shrink:0;margin-top:1px">${ic(opts.icon,'w-3.5 h-3.5')}</span>`:''}
     <div style="flex:1;min-width:0;line-height:1.5">${html}</div>
-    <button type="button" onclick="event.stopPropagation();try{localStorage.setItem('bridge_note_${key}','1')}catch(e){};${after}" title="Got it — don't show this again" aria-label="Dismiss" style="flex-shrink:0;width:18px;height:18px;border:none;background:transparent;color:#0B5F5A;cursor:pointer;font-size:14px;line-height:1;padding:0;display:grid;place-items:center">×</button>
+    <button type="button" onclick="event.stopPropagation();try{localStorage.setItem('bridge_note_${key}','1')}catch(e){};${after}" title="Got it — don't show this again" aria-label="Dismiss" style="flex-shrink:0;width:18px;height:18px;border:none;background:transparent;color:#42352E;cursor:pointer;font-size:14px;line-height:1;padding:0;display:grid;place-items:center">×</button>
   </div>`;
 }
-function _aChartTheme(){return {tick:'#5F777E',grid:'rgba(144,165,171,0.18)'};}
+function _aChartTheme(){return {tick:'#796B60',grid:'rgba(144,165,171,0.18)'};}
 App._searchRR=(inputId)=>{const a=document.activeElement;const ss=a?a.selectionStart:null,se=a?a.selectionEnd:null;rr();const el=document.getElementById(inputId);if(el){el.focus();try{if(ss!=null)el.setSelectionRange(ss,se);}catch(e){}}};
 
 /* shims for ported shell (index approvals model; announcements not included) */
@@ -96,7 +96,7 @@ function _approvalPendingCount(){return (DB.approvals||[]).filter(a=>a.status===
 /* ── PORTED: ⌘K global search ── */
 App._cmdk=()=>{
   if(!S.uid)return;
-  modalShell({title:'Quick search',sub:'Pages · people · OKRs — type, then Enter',size:'max-w-md',
+  modalShell({title:'Quick search',sub:'Pages · people · BOLTs — type, then Enter',size:'max-w-md',
     body:`<div><input id="cmdk-in" class="ui-input rf" placeholder="e.g. tickets, Sara, revenue…" oninput="App._cmdkQ(this.value)" onkeydown="if(event.key==='Enter'){const b=document.querySelector('#cmdk-res [data-go]');if(b)b.click();}"/>
       <div id="cmdk-res" style="margin-top:10px;max-height:320px;overflow-y:auto"></div></div>`,
     footer:btnG('Close','App.closeModal()')});
@@ -113,7 +113,7 @@ App._cmdkQ=(q)=>{
   //   a person in ⌘K landed on an unfiltered Users list; and jsq() not esc(), because these
   //   strings are JS inside an attribute and esc()'s &#39; decodes back to a bare quote that
   //   breaks the handler outright for anyone named O'Brien.
-  if(can('okr','view'))okrVisible().forEach(o=>{if(q&&(o.title||'').toLowerCase().includes(q))out.push({icon:'chart',label:o.title,sub:'OKR · L'+okrLevel(o),go:`App.closeModal();App.go('okr');S.filters.okrQ='${jsq(o.title)}';rr()`});});
+  if(can('okr','view'))okrVisible().forEach(o=>{if(q&&(o.title||'').toLowerCase().includes(q))out.push({icon:'chart',label:o.title,sub:'BOLT · L'+okrLevel(o),go:`App.closeModal();App.go('okr');S.filters.okrQ='${jsq(o.title)}';rr()`});});
   const SUB=[['Email settings','settings','stab','email','settings'],['Templates (Settings)','settings','stab','templates','settings'],['In-app notification rules','settings','stab','inapp','settings'],['Roles (Access Control)','accesscontrol','acTab','roles','accessControl'],['People (Access Control)','accesscontrol','acTab','people','accessControl']];
   SUB.forEach(([label,route,fk,fv,area])=>{if(q&&label.toLowerCase().includes(q)&&can(area,'view'))out.push({icon:'cog',label:label,sub:'Screen',go:`App.closeModal();App.go('${route}');S.filters.${fk}='${fv}';rr()`});});
   box.innerHTML=out.slice(0,12).map(r=>`<button data-go onclick="${r.go}" style="width:100%;display:flex;align-items:center;gap:10px;padding:9px 10px;border-radius:10px;border:none;background:transparent;cursor:pointer;text-align:left" onmouseover="this.style.background='var(--c-surface-2)'" onmouseout="this.style.background='transparent'">
@@ -156,7 +156,7 @@ const PERM_AREAS=[
   {key:'documentsOrg',label:'Documents (organization)',desc:'Shared dept/location files',actions:['view','create','edit','delete','upload','download','approve'],scoped:true,group:'Content'},
   {key:'documentsPersonal',label:'Personal documents',desc:'Files on a person\'s profile',actions:['view','create','edit','delete','upload','download'],scoped:true,group:'Content'},
   {key:'analytics',label:'Analytics',desc:'Operational analytics dashboard (checklists, compliance, tickets)',actions:['view','export'],scoped:false,group:'Insights'},
-  {key:'okr',label:'OKRs',desc:'Hierarchical objectives (L0 → L1 → L2). “Sees” decides WHOSE objectives they can view — owners always see their own (they have to update them); sub-objectives of anything visible are included',actions:['view','create','edit','checkin','manage','delete'],scoped:true,group:'Insights'},
+  {key:'okr',label:'BOLT',desc:'Hierarchical objectives (L0 → L1 → L2). “Sees” decides WHOSE objectives they can view — owners always see their own (they have to update them); sub-objectives of anything visible are included',actions:['view','create','edit','checkin','manage','delete'],scoped:true,group:'Insights'},
   {key:'locations',label:'Locations',desc:'Offices and GPS boundary',actions:['view','create','edit','manage','delete','manageGeofence'],scoped:false,group:'System'},
   {key:'approvals',label:'Approvals inbox',desc:'The unified approvals page (what they can act on is still per-area)',actions:['view','decide'],scoped:false,group:'System'},
   {key:'audit',label:'Audit / Activity log',desc:'History of actions',actions:['view','export'],scoped:false,group:'System'},
@@ -180,7 +180,7 @@ function _seedRoleProfiles(){
   const presets={
     superadmin:{id:'superadmin',name:'Super Admin',description:'Everything, including Access Control itself.',builtin:true,perms:allOf(false)},
     admin:{id:'admin',name:'Administrator',description:'Full operational access across the whole organization — everything except Access Control.',builtin:true,perms:allOf(true)},
-    manager:{id:'manager',name:'Team Lead / Manager',description:'Sees and acts on their team: approvals, checklists, tickets, team OKRs, reports.',builtin:true,perms:{
+    manager:{id:'manager',name:'Team Lead / Manager',description:'Sees and acts on their team: approvals, checklists, tickets, team BOLTs, reports.',builtin:true,perms:{
       dashboard:A('none','view'),
       employees:A('team','view'),
       teamview:A('none','view'),
@@ -372,13 +372,13 @@ function chipBar(items,activeKey,fnName,opts={}){
   }).join('');
   return pill?`<div style="display:flex;gap:8px;flex-wrap:wrap;overflow-x:auto;-webkit-overflow-scrolling:touch">${inner}</div>`:`<div class="ui-tabs">${inner}</div>`;
 }
-const COUNT_TONE={danger:'#EF4444',approve:'#0F766E',rose:'#DE2440',brand:'#0F766E'};
+const COUNT_TONE={danger:'#C25441',approve:'#54433C',rose:'#B43A33',brand:'#54433C'};
 const countBadge=(n,tone='danger',extra='')=>!n?'':`<span class="ui-count" style="background:${COUNT_TONE[tone]||tone};${extra}">${n}</span>`;
 /* badge(text,tone) — generic soft pill */
 
 
-/* ═════════════════ PORTED BLOCK: OKR MODULE (from Safe Backup) ═════════════════ */
-/* ═══ PORTED: OKR mappers ═══ */
+/* ═════════════════ PORTED BLOCK: BOLT MODULE (from Safe Backup) ═════════════════ */
+/* ═══ PORTED: BOLT mappers ═══ */
 function _mOKR(rows){return(rows||[]).map(o=>({id:o.id,parentId:o.parent_id||null,title:_unesc(o.title)||'',description:_unesc(o.description)||'',departmentId:o.department_id||null,subDepartmentId:o.sub_department_id||null,ownerId:o.owner_id||null,owners:(Array.isArray(o.owners)&&o.owners.length)?o.owners.filter(Boolean):(o.owner_id?[o.owner_id]:[]),metricType:o.metric_type||'number',startValue:(o.start_value===null||o.start_value===undefined)?0:Number(o.start_value),targetValue:(o.target_value===null||o.target_value===undefined)?null:Number(o.target_value),unit:_unesc(o.unit)||'',direction:o.direction||'up',frequency:(o.frequency&&typeof o.frequency==='object')?o.frequency:{},periodStart:o.period_start||null,periodEnd:o.period_end||null,statusMode:o.status_mode||'auto',statusManual:o.status_manual||null,rollup:!!o.rollup,rollupMode:o.rollup_mode||'sum',isAnnual:!!o.is_annual,quarterLabel:_unesc(o.quarter_label)||null,closed:!!o.closed,closedReason:_unesc(o.closed_reason)||'',closedAt:o.closed_at||null,closedBy:o.closed_by||null,revisedTarget:(o.revised_target===null||o.revised_target===undefined)?null:Number(o.revised_target),revisedNote:_unesc(o.revised_note)||'',revisedAt:o.revised_at||null,revisedBy:o.revised_by||null,deletedAt:o.deleted_at||null,deletedBy:o.deleted_by||null,sort:o.sort||0,createdBy:o.created_by||null,createdAt:o.created_at,updatedAt:o.updated_at||null}));}
 function _mOKRCheckin(rows){return(rows||[]).map(c=>({id:c.id,okrId:c.okr_id,userId:c.user_id||null,date:c.date,value:(c.value===null||c.value===undefined)?null:Number(c.value),comment:_unesc(c.comment)||'',photos:Array.isArray(c.photos)?c.photos:[],statusMark:c.status_mark||null,editCount:c.edit_count||0,createdAt:c.created_at,updatedAt:c.updated_at||null}));}
 function _mOKRLog(rows){return(rows||[]).map(l=>({id:l.id,okrId:l.okr_id,actorId:l.actor_id||null,action:l.action||'',details:(l.details&&typeof l.details==='object')?l.details:{},createdAt:l.created_at}));}
@@ -392,15 +392,15 @@ function _okrRow(o){return{id:o.id,parent_id:o.parentId||null,title:o.title||'',
      delete state can be changed by exactly two places: _okrPurgeIds and _okrBinRestore. */
   sort:o.sort||0,created_by:o.createdBy||null,created_at:o.createdAt||new Date().toISOString(),updated_at:new Date().toISOString()};}
 function _okrCheckinRow(c){return{id:c.id,okr_id:c.okrId,user_id:c.userId||null,date:c.date,value:(c.value===null||c.value===undefined||c.value==='')?null:c.value,comment:c.comment||'',photos:(c.photos||[]).filter(p=>typeof p==='string'&&p!=='[photo]'),status_mark:c.statusMark||null,edit_count:c.editCount||0,created_at:c.createdAt||new Date().toISOString(),updated_at:new Date().toISOString()};}
-/* ═══ PORTED: OKR helpers ═══ */
+/* ═══ PORTED: BOLT helpers ═══ */
 const OKR_METRICS=[['number','Number'],['percent','Percentage'],['currency','Currency'],['yesno','Yes / No (done or not)']];
 const OKR_STATUSES=['On track','Off track','Achieved','Not achieved'];
 const okrById=id=>(DB.okrs||[]).find(o=>o.id===id);
 /* ── v3.11: MULTIPLE OWNERS — okrOwners() is the single source of truth. Falls back to the
-   legacy single ownerId so every pre-existing OKR keeps working. ownerId stays = owners[0]. ── */
+   legacy single ownerId so every pre-existing BOLT keeps working. ownerId stays = owners[0]. ── */
 function okrOwners(o){if(!o)return[];const a=Array.isArray(o.owners)?o.owners.filter(Boolean):[];if(a.length)return[...new Set(a)];return o.ownerId?[o.ownerId]:[];}
 function okrOwnerIs(o,uid2){return !!uid2&&okrOwners(o).includes(uid2);}
-/* Effective department: an OKR's own department, or (when empty) the nearest ancestor's — so
+/* Effective department: a BOLT's own department, or (when empty) the nearest ancestor's — so
    every level can carry its own department/sub-department while children inherit by default. */
 function okrDeptOf(o,_g){_g=_g||0;if(!o)return{deptId:null,subDeptId:null};if(o.departmentId)return{deptId:o.departmentId,subDeptId:o.subDepartmentId||null};const p=o.parentId?okrById(o.parentId):null;return(p&&_g<15)?okrDeptOf(p,_g+1):{deptId:null,subDeptId:null};}
 /* Children of a node. QUARTERLY SPLITS always group together FIRST (in date order) so the
@@ -780,7 +780,7 @@ function okrStatusOf(o){
   if(exp===null)return pct>=50?'On track':'Off track';
   return pct>=exp-15?'On track':'Off track';
 }
-const OKR_ST_META={'Achieved':{bg:'#F0E4BE',fg:'#0B5F37',dot:'#D4A72C'},'On track':{bg:'#E4F2F0',fg:'#0B6660',dot:'#22C55E'},'Off track':{bg:'#FEEEEF',fg:'#C41E32',dot:'#EF4444'},'Not achieved':{bg:'#FEF0F0',fg:'#991B1B',dot:'#B91C1C'},'No data':{bg:'#F4F9FA',fg:'#5E767D',dot:'#90A5AB'},'Closed':{bg:'#DFEAEC',fg:'#2F4C55',dot:'#5E767D'}};
+const OKR_ST_META={'Achieved':{bg:'#F0E5CF',fg:'#2B5638',dot:'#D1B68F'},'On track':{bg:'#EEE4D5',fg:'#463830',dot:'#58996E'},'Off track':{bg:'#F9EBE5',fg:'#A63528',dot:'#C25441'},'Not achieved':{bg:'#FAEDE8',fg:'#7E2A1C',dot:'#93301F'},'No data':{bg:'#F7F3EE',fg:'#786A5F',dot:'#A59788'},'Closed':{bg:'#E6DED3',fg:'#3A312A',dot:'#786A5F'}};
 function okrStatusChip(st,sm){const m=OKR_ST_META[st]||OKR_ST_META['No data'];return`<span style="display:inline-flex;align-items:center;gap:5px;padding:${sm?'2px 8px':'3px 10px'};border-radius:20px;font-size:${sm?'10.5':'11.5'}px;font-weight:800;background:${m.bg};color:${m.fg};white-space:nowrap"><span style="width:6px;height:6px;border-radius:50%;background:${m.dot};flex-shrink:0"></span>${esc(st)}</span>`;}
 function _okrBarColor(st){return(OKR_ST_META[st]||OKR_ST_META['No data']).dot;}
 /* Abbreviate big values: 1000 → 1k · 10000 → 10k · 1000000 → 1M (2 decimals max: 1.25M) */
@@ -812,7 +812,7 @@ function _okrFreqLabel(o){
   if(f.type==='custom')return 'Custom · '+((f.dates||[]).length)+' date'+((f.dates||[]).length===1?'':'s');
   return 'No schedule';
 }
-/* ── Check-in scheduling: is this OKR's update due on `date`? ── */
+/* ── Check-in scheduling: is this BOLT's update due on `date`? ── */
 function okrDueOn(o,date){
   if(o.closed)return false; // closed — no reminders, no tasks
   if(o.isAnnual)return false; // auto-updates from its quarters — nothing to ask the owner
@@ -830,17 +830,17 @@ function okrDueOn(o,date){
   if(f.type==='custom')return(f.dates||[]).includes(date);
   return false;
 }
-// Every OKR whose scheduled check-in lands on `date` for `uid2` — the OWNER gets the task.
-// This is the "combined checklist": all of a user's OKR tasks for one day, in one list.
+// Every BOLT whose scheduled check-in lands on `date` for `uid2` — the OWNER gets the task.
+// This is the "combined checklist": all of a user's BOLT tasks for one day, in one list.
 function okrDueForUser(uid2,date){return(DB.okrs||[]).filter(o=>okrOwnerIs(o,uid2)&&okrDueOn(o,date));}
 function okrCheckinFor(okrId,uid2,date){return(DB.okrCheckins||[]).find(c=>c.okrId===okrId&&c.userId===uid2&&c.date===date);}
 /* GROUP RULE (multi-owner): a check-in by ANY owner on that date counts for the whole group —
    same semantics as "any one can complete" checklists. Latest one wins for display. */
 function okrCheckinForDate(okrId,date){const cs=(DB.okrCheckins||[]).filter(c=>c.okrId===okrId&&c.date===date);return cs.length?cs[cs.length-1]:null;}
-/* ── Visibility — fully driven by ACCESS CONTROL (role's OKR scope, or a per-person override) ──
+/* ── Visibility — fully driven by ACCESS CONTROL (role's BOLT scope, or a per-person override) ──
    The area's "sees" scope decides WHOSE objectives are visible:
-     everyone → all OKRs · team → own + owned by their team · department → own + owned by
-     people in their department + OKRs assigned to their department · location → own + owned
+     everyone → all BOLTs · team → own + owned by their team · department → own + owned by
+     people in their department + BOLTs assigned to their department · location → own + owned
      at their office · self / none → only their own.
    Two rules always apply on top:
      1) OWNERSHIP FLOOR — you always see objectives you own or created (you must update them).
@@ -855,7 +855,7 @@ function okrVisible(){
   // 'none' means none. Previously it fell through and behaved like 'self'.
   if(sc==='none')return[];
   // 'self' means STRICTLY the objectives they own or co-own: no sub-objective
-  // expansion, and creating an OKR for someone else does not grant sight of it.
+  // expansion, and creating a BOLT for someone else does not grant sight of it.
   if(sc==='self')return all.filter(o=>okrOwnerIs(o,S.uid));
   const mine=new Set();
   // 1) ownership floor
@@ -865,7 +865,7 @@ function okrVisible(){
     const f=scopeFilter('okr');
     all.forEach(o=>{if(okrOwners(o).some(id=>f(id)))mine.add(o.id);});
     if(sc==='department'){
-      // an OKR ASSIGNED to my department (own or inherited from its ancestors) is departmental
+      // a BOLT ASSIGNED to my department (own or inherited from its ancestors) is departmental
       // work — visible even if its owner sits elsewhere
       const myDept=(me()||{}).department;
       const dRow=myDept?(DB.departments||[]).find(d=>d.name===myDept):null;
@@ -892,16 +892,16 @@ function okrCanSee(o){
 function okrChildrenVisible(id){const vis=new Set(okrVisible().map(o=>o.id));return okrChildren(id).filter(c=>vis.has(c.id));}
 // Visible roots: a visible node whose parent is missing or not visible renders as top level.
 function okrVisibleRoots(){const vis=okrVisible();const ids=new Set(vis.map(o=>o.id));return vis.filter(o=>!o.parentId||!ids.has(o.parentId)).sort((a,b)=>((a.sort||0)-(b.sort||0))||String(a.createdAt||'').localeCompare(String(b.createdAt||'')));}
-/* ── Per-OKR activity trail + targeted Supabase writers ── */
+/* ── Per-BOLT activity trail + targeted Supabase writers ── */
 function okrLog(okrId,action,details){
   const entry={id:uid('okl'),okrId:okrId,actorId:S.uid,action:action,details:details||{},createdAt:new Date().toISOString()};
   DB.okrLogs=DB.okrLogs||[];DB.okrLogs.unshift(entry);
-  sbWrite({table:'okr_logs',op:'insert',id:entry.id,values:{id:entry.id,okr_id:okrId,actor_id:entry.actorId,action:action,details:entry.details,created_at:entry.createdAt}},{label:'OKR activity',silent:true});
+  sbWrite({table:'okr_logs',op:'insert',id:entry.id,values:{id:entry.id,okr_id:okrId,actor_id:entry.actorId,action:action,details:entry.details,created_at:entry.createdAt}},{label:'BOLT activity',silent:true});
 }
-function _okrPush(o){return sbWrite({table:'okrs',op:'upsert',id:o.id,values:_okrRow(o),opts:{onConflict:'id'}},{label:'OKR'});}
-function _okrPushCheckin(c){return sbWrite({table:'okr_checkins',op:'upsert',id:c.id,values:_okrCheckinRow(c),opts:{onConflict:'id'}},{label:'OKR update'});}
-/* ── v3.11: OKR notifications — one helper for every OKR event.
-   In-app: gated by Settings → In-App → OKRs toggles (inapp_<evKey>).
+function _okrPush(o){return sbWrite({table:'okrs',op:'upsert',id:o.id,values:_okrRow(o),opts:{onConflict:'id'}},{label:'BOLT'});}
+function _okrPushCheckin(c){return sbWrite({table:'okr_checkins',op:'upsert',id:c.id,values:_okrCheckinRow(c),opts:{onConflict:'id'}},{label:'BOLT update'});}
+/* ── v3.11: BOLT notifications — one helper for every BOLT event.
+   In-app: gated by Settings → In-App → BOLTs toggles (inapp_<evKey>).
    Email:  sendEmail() itself applies the Settings → Email toggles (email_<evKey>),
            the per-user "email notifications" switch and the custom template. ── */
 function _okrNotify(ids,evKey,text,vars){
@@ -917,7 +917,7 @@ function _okrNotify(ids,evKey,text,vars){
   });
 }
 function _okrNotifyAssigned(o,ids){
-  _okrNotify(ids,'okr_assigned','🎯 New OKR assigned to you: "'+(o.title||'')+'" — '+_okrFreqLabel(o),{
+  _okrNotify(ids,'okr_assigned','🎯 New BOLT assigned to you: "'+(o.title||'')+'" — '+_okrFreqLabel(o),{
     okr_title:o.title||'',assigner:fullName(me()),
     target:o.metricType==='yesno'?'Yes':_okrFmtVal(o,o.targetValue),
     schedule:_okrFreqLabel(o),
@@ -925,11 +925,11 @@ function _okrNotifyAssigned(o,ids){
   });
 }
 
-/* ===== OKR TAB (UI) — hierarchical objectives =====
+/* ===== BOLT TAB (UI) — hierarchical objectives =====
    One tab. Summary cards on top → "due today" combined check-in panel → the L0 tree.
    Every node expands to its children (L1 under L0, L2 under L1, …) and carries TWO
    node card opens ONE popup on click — Progress & Updates (goal + rules summary, current
-   value, roll-up graph, check-ins with comments & photos, manual status marking, per-OKR
+   value, roll-up graph, check-ins with comments & photos, manual status marking, per-BOLT
    activity log). Every change writes an okr_logs entry. (v3.11: the separate Rules & Target
    panel was removed — its info lives at the top of the Progress popup + the editor.) */
 /* v3.14: which branches of the tree are open is restored from localStorage, so a refresh
@@ -964,7 +964,7 @@ function _okrQParent(qn){
   }
   return null;
 }
-const _OKR_LVL_T=['#0F3038','#0F8A84','#0A544F','#7C3AED','#8A5F00','#DB2777'];      /* the same hues as TEXT on white, AA-safe */
+const _OKR_LVL_T=['#1D1712','#8B6253','#3B2F29','#8A5D6B','#7C5A26','#BC6E62'];      /* the same hues as TEXT on white, AA-safe */
 function _okrCanManage(){return can('okr','manage');}
 function _okrCanCreate(){return can('okr','create')||_okrCanManage();}
 function _okrCanEditNode(o){return can('okr','edit')||_okrCanManage()||o.createdBy===S.uid||okrOwnerIs(o,S.uid);} // any owner can edit
@@ -978,7 +978,7 @@ function _okrCanCheckin(o){
 function _okrCanDelete(o){return okrCanSee(o)&&_okrCanEditNode(o)&&(can('okr','delete')||_okrCanManage());}
 function _okrLvlChip(lvl){const c=_OKR_LVL_T[lvl%_OKR_LVL_T.length];return`<span style="flex-shrink:0;display:inline-flex;align-items:center;font-size:11.5px;font-weight:800;line-height:1;color:${c};letter-spacing:.02em">L${lvl}</span>`;}
 /* Annual / quarter tags shown next to the level chip — keeps the tree readable at a glance. */
-function _okrAnnualChip(){return`<span title="Annual objective — updates automatically from its quarterly objectives" style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;background:#F5EBCC;color:#8A6E14;border:1px solid #E6D9A8;letter-spacing:.04em">ANNUAL</span>`;}
+function _okrAnnualChip(){return`<span title="Annual objective — updates automatically from its quarterly objectives" style="flex-shrink:0;display:inline-flex;align-items:center;font-size:10px;font-weight:800;line-height:1;padding:3px 7px;border-radius:6px;background:#F2E9D4;color:#7F6533;border:1px solid #E7D9BC;letter-spacing:.04em">ANNUAL</span>`;}
 /* Quarter tags removed from the rows — the Quarterly view already groups by quarter,
    so repeating "Q1" on every line was noise. Kept as a no-op so call sites stay put. */
 function _okrQtrChip(label){return'';}
@@ -1002,7 +1002,7 @@ function _okrMoveOptions(excl){
 }
 App._okrMove=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t move this OKR','err');
+  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t move this BOLT','err');
   const root=okrRootOf(o);
   _OKRMV={id:id,targetId:o.parentId||'',deptId:o.departmentId||(root?root.departmentId:null)||'',subDeptId:o.subDepartmentId||''};
   App._renderOKRMove();
@@ -1035,15 +1035,15 @@ App._renderOKRMove=()=>{
         <div><label style="${L}">Department *</label><select class="ui-select rf" onchange="_OKRMV.deptId=this.value||'';_OKRMV.subDeptId='';App._renderOKRMove()"><option value="">— Select department —</option>${deptOpts.map(x=>`<option value="${esc(x[0])}" ${d.deptId===x[0]?'selected':''}>${esc(x[1])}</option>`).join('')}</select></div>
         <div><label style="${L}">Sub-department</label><select class="ui-select rf" ${subOpts.length?'':'disabled'} onchange="_OKRMV.subDeptId=this.value||''"><option value="">${subOpts.length?'— All / none —':'No sub-departments'}</option>${subOpts.map(s=>`<option value="${esc(s[0])}" ${d.subDeptId===s[0]?'selected':''}>${esc(s[1])}</option>`).join('')}</select></div>
       </div>`:''}
-      <div style="display:flex;gap:8px;align-items:center;background:${same?'var(--c-surface-2)':'var(--c-info-soft)'};border:1px solid ${same?'var(--c-border)':'#BFE3DF'};border-radius:10px;padding:9px 12px;font-size:12px;color:${same?'var(--c-text-3)':'#0B5F5A'}">${ic('move','w-3.5 h-3.5')}${same?'No change yet — pick a different parent above.':`Will become <b>&nbsp;L${newLvl}&nbsp;</b>${target?' under “'+esc(target.title||'—')+'”':' at the top level'}${desc.length?' — sub-objectives shift level with it':''}.`}</div>
-      ${o.quarterLabel&&!same?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">This is a quarterly objective — moving it away from its annual objective stops it feeding that annual number.</div>`:''}
+      <div style="display:flex;gap:8px;align-items:center;background:${same?'var(--c-surface-2)':'var(--c-info-soft)'};border:1px solid ${same?'var(--c-border)':'#E0CDB9'};border-radius:10px;padding:9px 12px;font-size:12px;color:${same?'var(--c-text-3)':'#42352E'}">${ic('move','w-3.5 h-3.5')}${same?'No change yet — pick a different parent above.':`Will become <b>&nbsp;L${newLvl}&nbsp;</b>${target?' under “'+esc(target.title||'—')+'”':' at the top level'}${desc.length?' — sub-objectives shift level with it':''}.`}</div>
+      ${o.quarterLabel&&!same?`<div style="font-size:11.5px;color:#6B4E1F;background:#F8F0DE;border-radius:9px;padding:8px 11px">This is a quarterly objective — moving it away from its annual objective stops it feeding that annual number.</div>`:''}
     </div>`,
     footer:btnG('Cancel','_OKRMV=null;App.closeModal()')+btnP('Move here','App._okrMoveSave()')});
 };
 App._okrMoveSave=()=>{
   const d=_OKRMV;if(!d)return;
   const o=okrById(d.id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t move this OKR','err');
+  if(!_okrCanEditNode(o))return toast('You can\'t move this BOLT','err');
   const newParentId=d.targetId||null;
   if((newParentId||'')===(o.parentId||''))return toast('Pick a different parent first','warn');
   if(newParentId){
@@ -1079,12 +1079,12 @@ App._okrMoveSave=()=>{
    (greyed, "Closed" status) with its full history + the reason, and can be reopened. */
 App._okrCloseAsk=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t close this OKR','err');
+  if(!_okrCanEditNode(o))return toast('You can\'t close this BOLT','err');
   const desc=okrDescendants(id);
   modalShell({title:'Close objective',sub:o.title||'',size:'max-w-md',key:'okr-close',
     body:`<div style="display:flex;flex-direction:column;gap:12px">
       <div style="font-size:12.5px;color:var(--c-text-2);line-height:1.55">Closing freezes this objective — no more updates, check-ins or reminders. It stays in the list with its full history so the record is kept, and it can be reopened anytime.</div>
-      ${desc.length?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">Its ${desc.length} sub-objective${desc.length===1?'':'s'} stay open — close them separately if needed.</div>`:''}
+      ${desc.length?`<div style="font-size:11.5px;color:#6B4E1F;background:#F8F0DE;border-radius:9px;padding:8px 11px">Its ${desc.length} sub-objective${desc.length===1?'':'s'} stay open — close them separately if needed.</div>`:''}
       <div><label class="ui-label">Reason for closing *</label>
       <textarea id="okr-close-reason" rows="2" class="ui-input rf" placeholder="e.g. Deprioritised after the H2 strategy review" style="resize:vertical"></textarea></div>
     </div>`,
@@ -1092,17 +1092,17 @@ App._okrCloseAsk=(id)=>{
 };
 App._okrCloseGo=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t close this OKR','err');
+  if(!_okrCanEditNode(o))return toast('You can\'t close this BOLT','err');
   const reason=($('#okr-close-reason')?.value||'').trim();
   if(!reason)return toast('Add the reason — it\'s kept on the record','err');
   o.closed=true;o.closedReason=reason;o.closedAt=new Date().toISOString();o.closedBy=S.uid;
   okrLog(id,'Closed objective',{reason:reason});
-  _okrNotify(okrOwners(o),'okr_closed','🔒 OKR closed: "'+(o.title||'')+'" — '+reason,{okr_title:o.title||'',actor:fullName(me()),status:'closed',reason:reason});
+  _okrNotify(okrOwners(o),'okr_closed','🔒 BOLT closed: "'+(o.title||'')+'" — '+reason,{okr_title:o.title||'',actor:fullName(me()),status:'closed',reason:reason});
   _okrPush(o);saveDB();closeModal();toast('Objective closed — kept for record');rr();
 };
 App._okrReopen=async(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanEditNode(o))return toast('You can\'t reopen this OKR','err');
+  if(!_okrCanEditNode(o))return toast('You can\'t reopen this BOLT','err');
   if(!(await confirmP({
     title:'Reopen objective',
     body:'<b>'+esc(o.title||'This objective')+'</b> goes back to being active.',
@@ -1111,14 +1111,14 @@ App._okrReopen=async(id)=>{
   okrLog(id,'Reopened objective',{was:o.closedReason||''});
   const _wasReason=o.closedReason||'';
   o.closed=false;o.closedReason='';o.closedAt=null;o.closedBy=null;
-  _okrNotify(okrOwners(o),'okr_closed','🔓 OKR reopened: "'+(o.title||'')+'" — updates resume',{okr_title:o.title||'',actor:fullName(me()),status:'reopened',reason:_wasReason});
+  _okrNotify(okrOwners(o),'okr_closed','🔓 BOLT reopened: "'+(o.title||'')+'" — updates resume',{okr_title:o.title||'',actor:fullName(me()),status:'reopened',reason:_wasReason});
   _okrPush(o);saveDB();toast('Objective reopened');rr();
 };
 /* ── Revise targets: the node + its DIRECT sub-objectives in one compact screen.
    Originals are never modified; entering the original value removes that revision. ── */
 App._okrRevise=(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t revise this OKR','err');
+  if(!okrCanSee(o)||!_okrCanEditNode(o))return toast('You can\u2019t revise this BOLT','err');
   if(o.closed)return toast('This objective is closed — reopen it first','err');
   const rows=[o,...okrChildren(o.id)].filter(x=>x.metricType!=='yesno');
   if(!rows.length)return toast('Yes/No objectives can\'t be revised','err');
@@ -1186,8 +1186,8 @@ function _okrMatchF(o,fDept,fSub,fOwn,fSt,fLvl,fDir){
   if(fDir&&fDir.length&&!fDir.includes(okrDirOf(o)))return false;
   return true;
 }
-/* ── v3.11: summary "number cards" are clickable — list exactly which OKRs make the number,
-   each row opens that OKR's Progress & Updates. ── */
+/* ── v3.11: summary "number cards" are clickable — list exactly which BOLTs make the number,
+   each row opens that BOLT's Progress & Updates. ── */
 App._okrSummaryList=(key)=>{
   const vis=okrVisible();
   const hits=vis.filter(o=>key==='all'?true:okrStatusOf(o)===key);
@@ -1212,8 +1212,8 @@ App._okrSummaryList=(key)=>{
       <span style="color:var(--c-text-3);flex-shrink:0">${ic('chevR','w-3.5 h-3.5')}</span>
     </div>`;
   }).join('');
-  modalShell({title:key==='all'?'All OKRs':(key+' — OKRs'),sub:hits.length+' objective'+(hits.length===1?'':'s')+' behind this number · tap one to open it',size:'max-w-lg',key:'okr-sum',
-    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No OKRs in this bucket right now.</p>'});
+  modalShell({title:key==='all'?'All BOLTs':(key+' — BOLTs'),sub:hits.length+' objective'+(hits.length===1?'':'s')+' behind this number · tap one to open it',size:'max-w-lg',key:'okr-sum',
+    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No BOLTs in this bucket right now.</p>'});
 };
 let _OKR_FLTOPEN=false; // v3.16: the filter chips live in a collapsible panel — this is its open state (per session, not persisted)
 App._okrTogFilters=()=>{_OKR_FLTOPEN=!_OKR_FLTOPEN;S.filters.okrMSOpen=null;S.filters.okrQtrOpen=false;rr();};
@@ -1252,11 +1252,11 @@ App._okrActivity=()=>{
         <div style="font-size:11.5px;color:var(--c-text-3)">${esc(o?o.title:'(deleted objective)')} — ${esc(when)}</div>
       </div></div>`;
   }).join('');
-  modalShell({title:'OKR activity',sub:'All OKR changes — kept separate from the main audit log',size:'max-w-lg',
-    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No OKR activity yet.</p>'});
+  modalShell({title:'BOLT activity',sub:'All BOLT changes — kept separate from the main audit log',size:'max-w-lg',
+    body:rows||'<p style="font-size:13px;color:var(--c-text-3)">No BOLT activity yet.</p>'});
 };
 function _okrPMRefresh(id){
-  // If the Progress & Updates popup is open for this OKR, rebuild it so status/check-in
+  // If the Progress & Updates popup is open for this BOLT, rebuild it so status/check-in
   // changes show IMMEDIATELY (page behind the modal already re-renders via rr()).
   try{const el=document.getElementById('okr-pm');if(el&&el.getAttribute('data-okr')===id)App._okrProgressModal(id);}catch(e){}
 }
@@ -1285,7 +1285,7 @@ App._okrCkDelGo=(okrId,ckId)=>{
   const c=(DB.okrCheckins||[]).find(x=>x.id===ckId);if(!c)return;
   DB.okrCheckins=DB.okrCheckins.filter(x=>x.id!==ckId);
   okrLog(okrId,'Deleted check-in',{date:c.date,value:c.value});
-  sbWrite({table:'okr_checkins',op:'delete',id:ckId,match:{col:'id',val:ckId}},{label:'OKR update delete'});
+  sbWrite({table:'okr_checkins',op:'delete',id:ckId,match:{col:'id',val:ckId}},{label:'BOLT update delete'});
   saveDB();toast('Update deleted');rr();_okrPMRefresh(okrId);
 };
 App._okrProgressModal=(id)=>{
@@ -1308,27 +1308,27 @@ App._okrTogLogs=(id)=>{_OKR_LOGS[id]=!_OKR_LOGS[id];rr();};
 function okrPage(){
   const vis=okrVisible(),canCreate=_okrCanCreate();
   const today=todayISO();
-  const head=hdr('OKRs','Objectives & key results — inputs roll up L2 → L1 → L0',btn('Activity','App._okrActivity()',{variant:'ghost',icon:'audit'})+(canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):''));
-  // ── Summary cards — clickable (v3.11): tap a number to see exactly which OKRs it counts ──
+  const head=hdr('BOLT','Objectives & key results — inputs roll up L2 → L1 → L0',btn('Activity','App._okrActivity()',{variant:'ghost',icon:'audit'})+(canCreate?btn('New L0 objective','App._okrEdit(null,null)',{variant:'primary',icon:'plus'}):''));
+  // ── Summary cards — clickable (v3.11): tap a number to see exactly which BOLTs it counts ──
   const sts=vis.map(o=>okrStatusOf(o));
   const cnt=x=>sts.filter(s=>s===x).length;
-  const scard=(label,n,bg,fg,icon,key)=>`<div role="button" tabindex="0" onclick="App._okrSummaryList('${key}')" onkeydown="if(event.key==='Enter')App._okrSummaryList('${key}')" title="See which OKRs these are" style="flex:1;min-width:108px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:11px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:border-color .12s" onmouseover="this.style.borderColor='var(--c-text)'" onmouseout="this.style.borderColor='var(--c-border)'"><span style="width:30px;height:30px;border-radius:9px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:17px;font-weight:800;line-height:1;color:var(--c-text)">${n}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2);margin-top:2px;white-space:nowrap">${label}</span></span></div>`;
+  const scard=(label,n,bg,fg,icon,key)=>`<div role="button" tabindex="0" onclick="App._okrSummaryList('${key}')" onkeydown="if(event.key==='Enter')App._okrSummaryList('${key}')" title="See which BOLTs these are" style="flex:1;min-width:108px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:11px;padding:7px 10px;display:flex;align-items:center;gap:8px;cursor:pointer;transition:border-color .12s" onmouseover="this.style.borderColor='var(--c-text)'" onmouseout="this.style.borderColor='var(--c-border)'"><span style="width:30px;height:30px;border-radius:9px;background:${bg};color:${fg};display:grid;place-items:center;flex-shrink:0">${ic(icon,'w-4 h-4')}</span><span style="min-width:0"><span class="fd" style="display:block;font-size:17px;font-weight:800;line-height:1;color:var(--c-text)">${n}</span><span style="display:block;font-size:10.5px;color:var(--c-text-2);margin-top:2px;white-space:nowrap">${label}</span></span></div>`;
   const summary=`<div class="okr-stats">
-    ${scard('Total OKRs',vis.length,'var(--c-brand-soft)','var(--c-brand-ink)','chart','all')}
-    ${scard('Achieved',cnt('Achieved'),'#F0E4BE','#0B5F37','check','Achieved')}
-    ${scard('On track',cnt('On track'),'#E4F2F0','#0B6660','approve','On track')}
-    ${scard('Off track',cnt('Off track'),'#FEEEEF','#C41E32','alert','Off track')}
-    ${scard('Not achieved',cnt('Not achieved'),'#FEF0F0','#991B1B','x','Not achieved')}
-    ${cnt('No data')?scard('No data',cnt('No data'),'#F4F9FA','#5E767D','help','No data'):''}
-    ${cnt('Closed')?scard('Closed',cnt('Closed'),'#DFEAEC','#2F4C55','lock','Closed'):''}
+    ${scard('Total BOLTs',vis.length,'var(--c-brand-soft)','var(--c-brand-ink)','chart','all')}
+    ${scard('Achieved',cnt('Achieved'),'#F0E5CF','#2B5638','check','Achieved')}
+    ${scard('On track',cnt('On track'),'#EEE4D5','#463830','approve','On track')}
+    ${scard('Off track',cnt('Off track'),'#F9EBE5','#A63528','alert','Off track')}
+    ${scard('Not achieved',cnt('Not achieved'),'#FAEDE8','#7E2A1C','x','Not achieved')}
+    ${cnt('No data')?scard('No data',cnt('No data'),'#F7F3EE','#786A5F','help','No data'):''}
+    ${cnt('Closed')?scard('Closed',cnt('Closed'),'#E6DED3','#3A312A','lock','Closed'):''}
   </div>`;
   // ── My check-ins due today (combined task list — GROUP rule: any owner's update counts) ──
   const due=okrDueForUser(S.uid,today);
   const pendDue=due.filter(o=>!okrCheckinForDate(o.id,today));
-  const duePanel=due.length?`<div style="background:${pendDue.length?'var(--c-warn-soft)':'var(--c-success-soft)'};border:1px solid ${pendDue.length?'#FBE6A6':'#B7F0C8'};border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  const duePanel=due.length?`<div style="background:${pendDue.length?'var(--c-warn-soft)':'var(--c-success-soft)'};border:1px solid ${pendDue.length?'#EEDEC0':'#C8E2D0'};border-radius:14px;padding:14px 16px;margin-bottom:16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
       <span style="width:38px;height:38px;border-radius:11px;background:var(--c-surface);color:${pendDue.length?'var(--c-warn-ink)':'var(--c-success-ink)'};display:grid;place-items:center;flex-shrink:0">${ic('clock','w-5 h-5')}</span>
       <div style="flex:1;min-width:180px">
-        <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">OKR check-ins due today</div>
+        <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">BOLT check-ins due today</div>
         <div style="font-size:12.5px;color:var(--c-text-2);margin-top:2px">${due.length-pendDue.length}/${due.length} updated · ${pendDue.length?esc(pendDue.slice(0,3).map(o=>o.title).join(', '))+(pendDue.length>3?' +'+(pendDue.length-3)+' more':''):'all done for today'}</div>
       </div>
       ${btn(pendDue.length?('Update now ('+pendDue.length+')'):'Review / edit',`App._okrCheckinAll('${today}')`,{variant:pendDue.length?'primary':'ghost',icon:'edit'})}
@@ -1380,7 +1380,7 @@ function okrPage(){
           ${_fOn?`<button onclick="S.filters.okrQtr=[];S.filters.okrView='';rr()" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex:1">Clear</button>`:''}
           <button onclick="S.filters.okrQtrOpen=false;rr()" class="ui-btn ui-btn-primary ui-btn-sm" style="flex:1">Done</button>
         </div>
-        <div style="font-size:10.5px;color:var(--c-text-3);margin-top:8px;line-height:1.5">Shows every OKR whose period overlaps a selected quarter — a 6-month OKR appears in both. OKRs without dates are hidden while filtering.</div>
+        <div style="font-size:10.5px;color:var(--c-text-3);margin-top:8px;line-height:1.5">Shows every BOLT whose period overlaps a selected quarter — a 6-month BOLT appears in both. BOLTs without dates are hidden while filtering.</div>
       </div>`:''}
     </div>`;
   // One generic multi-select dropdown (checkbox list) — used by every filter.
@@ -1478,7 +1478,7 @@ function okrPage(){
     _OKR_SHOWN=vis.filter(o=>!o.quarterLabel).map(x=>x.id);
     const roots=okrVisibleRoots().filter(o=>!o.quarterLabel);
     tree=roots.length?roots.map(o=>_okrNodeHTML(o,0)).join('')
-      :empty('chart','No OKRs yet',canCreate?'Create your first L0 objective, assign it to a department and an owner, then add L1 / L2 sub-objectives under it.':'No OKRs have been assigned to you yet. Your manager creates them.');
+      :empty('chart','No BOLTs yet',canCreate?'Create your first L0 objective, assign it to a department and an owner, then add L1 / L2 sub-objectives under it.':'No BOLTs have been assigned to you yet. Your manager creates them.');
   }
   /* ── v3.13 BULK BAR — appears the moment anything is ticked. Selection survives
      re-renders and filter changes; "Select all" only ever covers what's on screen
@@ -1552,7 +1552,7 @@ function _okrNodeHTML(o,depth){
           <div class="okr-titlerow" style="display:flex;align-items:center;gap:7px;flex-wrap:wrap;min-width:0;row-gap:4px">
             ${_okrLvlChip(lvl)}${o.quarterLabel?_okrQtrChip(o.quarterLabel):''}${o.isAnnual?_okrAnnualChip():''}
             <span class="fd okr-title" style="font-size:13.5px;font-weight:600;color:var(--c-text);line-height:1.35;min-width:0">${esc(o.title||'Untitled')}</span>
-            ${okrHasRevision(o)?`<span style="${meta};color:#8A5F00;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
+            ${okrHasRevision(o)?`<span style="${meta};color:#7C5A26;font-weight:800" title="Target was revised — the original is kept for comparison">${ic('edit','w-3 h-3')}Revised</span>`:''}
           </div>
           <div class="okr-meta" style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;row-gap:3px;margin-top:5px">
             ${ownersHTML}
@@ -1647,7 +1647,7 @@ function _okrProgressPanel(o,kids,pct,st){
      from the cards (which are back to being readable) and became labelled buttons in one
      row at the top of this popup. ── */
   const _canEd=_okrCanEditNode(o);
-  const actBtn=(label,call,icon,danger)=>`<button type="button" onclick="${call}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:${danger?'#C41E32':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='${danger?'#C41E32':'var(--c-text)'}'" onmouseout="this.style.borderColor='var(--c-border)'">${ic(icon,'w-3.5 h-3.5')}${esc(label)}</button>`;
+  const actBtn=(label,call,icon,danger)=>`<button type="button" onclick="${call}" style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:9px;border:1px solid var(--c-border);background:var(--c-surface);color:${danger?'#A63528':'var(--c-text-2)'};font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap" onmouseover="this.style.borderColor='${danger?'#A63528':'var(--c-text)'}'" onmouseout="this.style.borderColor='var(--c-border)'">${ic(icon,'w-3.5 h-3.5')}${esc(label)}</button>`;
   const _acts=[
     _okrCanCreate()?actBtn('Add sub-objective',"App.closeModal();App._okrEdit(null,'"+o.id+"')",'plus'):'',
     _canEd?actBtn('Edit',"App.closeModal();App._okrEdit('"+o.id+"')",'edit'):'',
@@ -1693,7 +1693,7 @@ function _okrProgressPanel(o,kids,pct,st){
     const bar=(lbl,pct,col)=>`<div style="display:flex;align-items:center;gap:8px"><span style="width:88px;font-size:10.5px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.03em">${lbl}</span><div style="flex:1;height:6px;background:var(--c-border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${pct===null?0:Math.max(0,Math.min(100,pct))}%;background:${col}"></div></div><span style="width:46px;text-align:right;font-size:11.5px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span></div>`;
     const who=o.revisedBy&&uById(o.revisedBy)?fullName(uById(o.revisedBy)):'';
     return `<div style="background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:11px 13px;margin-top:12px">
-      <div style="display:flex;flex-direction:column;gap:6px">${bar('vs revised',pr,'#E0A106')}${bar('vs original',po,'#0F766E')}</div>
+      <div style="display:flex;flex-direction:column;gap:6px">${bar('vs revised',pr,'#C9A76B')}${bar('vs original',po,'#54433C')}</div>
       <div style="font-size:11px;color:var(--c-text-3);margin-top:8px">Revised${o.revisedAt?' '+fmtS(String(o.revisedAt).slice(0,10)):''}${who?' by '+esc(who):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''} · same updates feed both numbers</div>
     </div>`;})():'';
   const rollupNote=(o.rollup||o.isAnnual)?dismissNote('okr-auto-'+(o.isAnnual?'annual':'rollup'),
@@ -1720,9 +1720,9 @@ function _okrProgressPanel(o,kids,pct,st){
           <span style="font-size:13px;font-weight:800;color:var(--c-brand-ink)">${esc(_okrFmtVal(o,c.value))}</span>
           ${c.statusMark?okrStatusChip(c.statusMark,true):''}
           <span style="font-size:11px;color:var(--c-text-3)">${u?esc(fullName(u)):'—'}</span>
-          ${(c.editCount||0)>0?`<span style="font-size:9.5px;font-weight:800;background:#FDF3D9;color:#7A4E00;padding:1px 6px;border-radius:10px">edited ×${c.editCount}</span>`:''}
+          ${(c.editCount||0)>0?`<span style="font-size:9.5px;font-weight:800;background:#F8F0DE;color:#6B4E1F;padding:1px 6px;border-radius:10px">edited ×${c.editCount}</span>`:''}
           ${hasBody&&peekTxt?`<span data-ck-peek style="max-width:220px;min-width:0;font-size:11px;color:var(--c-text-3);font-style:italic;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(peekTxt)}</span>`:''}
-          ${canEditCk?`<button onclick="event.stopPropagation();App._okrCheckin('${o.id}','${c.date}')" title="Edit this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0">${ic('edit','w-3 h-3')}</button>`:''}${canEditCk?`<button onclick="event.stopPropagation();App._okrCkDel('${o.id}','${c.id}')" title="Delete this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#C41E32'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3 h-3')}</button>`:''}
+          ${canEditCk?`<button onclick="event.stopPropagation();App._okrCheckin('${o.id}','${c.date}')" title="Edit this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0">${ic('edit','w-3 h-3')}</button>`:''}${canEditCk?`<button onclick="event.stopPropagation();App._okrCkDel('${o.id}','${c.id}')" title="Delete this update (logged)" style="width:22px;height:22px;display:grid;place-items:center;border-radius:6px;color:var(--c-text-3);background:transparent;border:none;cursor:pointer;flex-shrink:0" onmouseover="this.style.color='#A63528'" onmouseout="this.style.color='var(--c-text-3)'">${ic('trash','w-3 h-3')}</button>`:''}
         </div>
         ${hasBody?`<div data-ck-body style="display:none">${commentHtml}${photosHtml}</div>`:''}
       </div>
@@ -1746,7 +1746,7 @@ function _okrProgressPanel(o,kids,pct,st){
         ${okrIsThresh(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Start</div><div style="${big}">${strt}</div></div>`}
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">Current${(o.rollup||o.isAnnual)?' · auto':''}</div><div style="${big}">${cur}</div></div>
         <div style="min-width:84px"><div style="${lab};white-space:nowrap">${(()=>{const w=_okrTargetWord(o);const W=w.charAt(0).toUpperCase()+w.slice(1);return okrHasRevision(o)?('Original '+w):W;})()}</div><div style="${big}${okrHasRevision(o)?';text-decoration:line-through;opacity:.6':''}">${tgt}</div></div>
-        ${okrHasRevision(o)?`<div style="min-width:84px"><div style="${lab};white-space:nowrap;color:#8A5F00">Revised ${_okrTargetWord(o)}</div><div style="${big};color:#8A5F00">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
+        ${okrHasRevision(o)?`<div style="min-width:84px"><div style="${lab};white-space:nowrap;color:#7C5A26">Revised ${_okrTargetWord(o)}</div><div style="${big};color:#7C5A26">${esc(_okrFmtTarget(o,o.revisedTarget))}</div></div>`:''}
         ${okrNoPct(o)?'':`<div style="min-width:84px"><div style="${lab};white-space:nowrap">Progress</div><div style="${big}">${pct===null?'—':pct+'%'}</div></div>`}${okrIsThresh(o)?`<div style="min-width:84px" title="${okrIsPaced(o)?'Threshold ÷ days in the period — the amount allowed per day; the running total is judged against this × the days passed':'Average of each reported day this period — this is what the status is judged on'}"><div style="${lab};white-space:nowrap">Daily average</div><div style="${big}">${(()=>{const p2=_okrPace(o);if(p2)return esc(_okrFmtVal(o,Math.round(p2.perDay*100)/100));const av=_okrThreshAvg(o);return av===null?'—':esc(_okrFmtVal(o,Math.round(av*100)/100));})()}</div></div>${okrIsPaced(o)?`<div style="min-width:84px" title="The budget allowed up to the day of the latest update — the running total must stay on the right side of this"><div style="${lab};white-space:nowrap">Budget so far</div><div style="${big}">${(()=>{const r=_okrReadings(o),p3=_okrPace(o);if(!p3)return '—';const jd=r.length?r[r.length-1].date:(todayISO()>p3.pe?p3.pe:(todayISO()<p3.ps?p3.ps:todayISO()));const b=_okrBudgetAt(o,jd);return b===null?'—':esc(_okrTargetSign(o)+_okrFmtVal(o,b));})()}</div></div>`:''}${okrIsPaced(o)?'':`<div style="min-width:84px" title="Updates this period that stayed on the good side of the ${esc(_okrFmtVal(o,_okrTargetEff(o)))} line"><div style="${lab};white-space:nowrap">Held the line</div><div style="${big}">${(()=>{const r=_okrReadings(o);if(!r.length)return '—';return r.filter(x=>okrThreshOKAt(o,x.value,x.date)===true).length+' / '+r.length;})()}</div></div>`}`:''}
     </div>
     <div style="display:flex;align-items:flex-end;justify-content:space-between;gap:14px 18px;flex-wrap:wrap;margin-top:13px">
@@ -1756,7 +1756,7 @@ function _okrProgressPanel(o,kids,pct,st){
     ${dirNote}
     ${markRow}
     ${cmpBars}
-    ${o.closed?`<div style="display:flex;gap:8px;align-items:center;background:#DFEAEC;border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;color:#2F4C55">${ic('lock','w-3.5 h-3.5')}<b>Closed</b>&nbsp;${o.closedAt?esc(fmtS(String(o.closedAt).slice(0,10))):''}${o.closedBy&&uById(o.closedBy)?' by '+esc(fullName(uById(o.closedBy))):''}${o.closedReason?' — “'+esc(o.closedReason)+'”':''} · kept for record, updates are frozen</div>`:''}
+    ${o.closed?`<div style="display:flex;gap:8px;align-items:center;background:#E6DED3;border-radius:10px;padding:8px 12px;margin-top:10px;font-size:12px;color:#3A312A">${ic('lock','w-3.5 h-3.5')}<b>Closed</b>&nbsp;${o.closedAt?esc(fmtS(String(o.closedAt).slice(0,10))):''}${o.closedBy&&uById(o.closedBy)?' by '+esc(fullName(uById(o.closedBy))):''}${o.closedReason?' — “'+esc(o.closedReason)+'”':''} · kept for record, updates are frozen</div>`:''}
     ${rollupNote}
     <div style="height:190px;background:var(--c-surface);border:1px solid var(--c-border);border-radius:12px;padding:10px;margin-top:12px;position:relative">
       ${okrNoPct(o)?'':`<div style="position:absolute;top:10px;right:12px;z-index:2;display:flex;align-items:baseline;gap:4px;background:var(--c-surface);padding:1px 8px;border-radius:8px;border:1px solid var(--c-border)"><span style="font-size:15px;font-weight:800;color:var(--c-text)">${pct===null?'—':pct+'%'}</span><span style="font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:var(--c-text-3)">progress</span></div>`}
@@ -1774,8 +1774,8 @@ function _okrProgressPanel(o,kids,pct,st){
 /* ── Node editor (create / edit any level) ── */
 App._okrEdit=(id,parentId)=>{
   const existing=id?okrById(id):null;
-  if(existing&&(!okrCanSee(existing)||!_okrCanEditNode(existing)))return toast('You can\u2019t edit this OKR','err');
-  if(!existing&&!_okrCanCreate())return toast('You can\'t create OKRs','err');
+  if(existing&&(!okrCanSee(existing)||!_okrCanEditNode(existing)))return toast('You can\u2019t edit this BOLT','err');
+  if(!existing&&!_okrCanCreate())return toast('You can\'t create BOLTs','err');
   _OKRED=existing?JSON.parse(JSON.stringify(existing)):{id:uid('okr'),parentId:parentId||null,title:'',description:'',departmentId:null,subDepartmentId:null,ownerId:S.uid,owners:[S.uid],metricType:'number',startValue:0,targetValue:null,unit:'',direction:'up',frequency:{type:'weekly',day:'Mon'},periodStart:null,periodEnd:null,statusMode:'auto',statusManual:null,isAnnual:false,quarterLabel:null,sort:okrChildren(parentId||null).length,createdBy:S.uid,createdAt:new Date().toISOString()};
   delete _OKRED._qRows;delete _OKRED._qEdit;delete _OKRED._ownQ;
   if(existing&&existing.isAnnual)_OKRED._qEdit=_okrBuildQEdit(existing.id); // live quarter values — edits made on the quarters themselves show up here
@@ -1906,7 +1906,7 @@ function _okrEdAnnualSection(o,L){
       <input type="date" value="${r.end||''}" onchange="App._okrEdQESet(${i},'end',this.value)" ${inp}/>
       ${_thr?'':`<input type="number" step="any" value="${r.startVal!==null&&r.startVal!==undefined?r.startVal:''}" oninput="App._okrEdQESet(${i},'startVal',this.value)" ${inp}/>`}
       <input type="number" step="any" value="${r.target!==null&&r.target!==undefined?r.target:''}" oninput="App._okrEdQESet(${i},'target',this.value)" ${inp}/>
-      <span title="Existing quarterly objective — your edits save with this form" style="display:grid;place-items:center;color:#0B6660">${ic('check','w-3.5 h-3.5')}</span>
+      <span title="Existing quarterly objective — your edits save with this form" style="display:grid;place-items:center;color:#463830">${ic('check','w-3.5 h-3.5')}</span>
     </div>`;
   return `<div style="border-top:1px dashed var(--c-border);padding-top:12px">
     <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px">
@@ -2002,7 +2002,7 @@ App._renderOKREdit=()=>{
       const list=users.slice().sort((a,b)=>{const sa=selOwn.includes(a.id)?0:1,sb2=selOwn.includes(b.id)?0:1;if(sa!==sb2)return sa-sb2;return fullName(a).localeCompare(fullName(b));});
       return `<div><label style="${L}">Owners — any of them can update & edit *</label>
         ${selOwn.length?`<div style="display:flex;gap:5px;flex-wrap:wrap;margin-bottom:8px">${selOwn.map(id=>{const u=uById(id);if(!u)return'';return`<span style="display:inline-flex;align-items:center;gap:6px;background:var(--c-brand-soft);border:1px solid var(--c-border);border-radius:20px;padding:3px 5px;font-size:11.5px;font-weight:700;color:var(--c-text)">${avatar(u,'w-4 h-4','text-[8px]')}${esc(fullName(u))}<button type="button" onclick="App._okrEdTogOwner('${id}')" title="Remove ${esc(fullName(u))}" style="width:16px;height:16px;border-radius:50%;border:none;background:var(--c-border);color:var(--c-text-2);cursor:pointer;font-size:10px;line-height:1;display:grid;place-items:center;flex-shrink:0">×</button></span>`;}).join('')}</div>`
-        :`<div style="font-size:11.5px;color:#8A5F00;background:#FEF5E0;border-radius:8px;padding:6px 10px;margin-bottom:8px">No owner yet — search and tick at least one below.</div>`}
+        :`<div style="font-size:11.5px;color:#7C5A26;background:#F9F1DF;border-radius:8px;padding:6px 10px;margin-bottom:8px">No owner yet — search and tick at least one below.</div>`}
         <div style="border:1.5px solid var(--c-border);border-radius:12px;background:var(--c-surface);overflow:hidden">
           <div style="display:flex;align-items:center;gap:7px;padding:7px 10px;border-bottom:1px solid var(--c-border);background:var(--c-surface-2);color:var(--c-text-3)">${ic('search','w-3.5 h-3.5')}<input id="okr-own-q" value="${esc(o._ownQ||'')}" oninput="App._okrEdOwnQ(this.value)" placeholder="Search by name, email or department…" style="flex:1;border:none;outline:none;background:transparent;font-size:12.5px;color:var(--c-text);min-width:0"/></div>
           <div id="okr-own-list" style="max-height:148px;overflow-y:auto;padding:4px">
@@ -2038,7 +2038,7 @@ App._renderOKREdit=()=>{
           const _s=Number(o.startValue||0),_t=(o.targetValue===null||o.targetValue===undefined)?null:Number(o.targetValue);
           const _set=(_t!==null&&isFinite(_t));
           const _plain=(txt)=>'<div style="font-size:11px;color:var(--c-text-3);line-height:1.55">'+txt+'</div>';
-          const _amber=(txt)=>'<div style="font-size:11px;line-height:1.6;color:#7A4E00;background:#FEF5E0;border:1px solid #FBE6A6;border-radius:9px;padding:8px 10px">'+txt+'</div>';
+          const _amber=(txt)=>'<div style="font-size:11px;line-height:1.6;color:#6B4E1F;background:#F9F1DF;border:1px solid #EEDEC0;border-radius:9px;padding:8px 10px">'+txt+'</div>';
           if(_d==='up')return _plain('A journey from the start value up to the target. The % is <b>how far along that climb</b> the latest update is, and the graph draws the planned pace from start to target. Beating the target reads <b>100%</b> — never more than 100% — and the chip turns <b>Achieved</b> once the period’s end date has passed (until then it stays On track).');
           if(_d==='down'){
             if(!_set)return _amber('Set a target above — the number has to come down to it.');
@@ -2049,12 +2049,12 @@ App._renderOKREdit=()=>{
           return _amber('One line, no start value. The status is judged on the <b>average of each reported day</b> this period: average <b>'+_word+' '+(_set?esc(_okrFmtVal(o,_t)):'the value')+'</b> reads <b>On track</b> while the period runs and <b>Achieved</b> once it closes; an average on the wrong side reads <b>Off track</b>, then <b>Not achieved</b>. One bad day can be pulled back by good ones — and one good day can’t hide a bad month. There is <b>no progress %</b> on this mode — a percentage would be misleading. The graph draws the line flat, with every reading dotted green or red against it.');
         })()}
       </div>
-      ${okrHasRevision(o)?`<div style="background:#FEFAEC;border:1px solid #FBE6A6;border-radius:11px;padding:10px 12px">
+      ${okrHasRevision(o)?`<div style="background:#FBF7EB;border:1px solid #EEDEC0;border-radius:11px;padding:10px 12px">
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;align-items:end">
-          <div><label style="${L};color:#7A4E00">Revised target (drives progress)</label><input type="number" step="any" value="${o.revisedTarget!==null&&o.revisedTarget!==undefined?o.revisedTarget:''}" oninput="_OKRED.revisedTarget=this.value===''?null:parseFloat(this.value)" class="ui-input rf" style="border-color:#FBE6A6"/></div>
-          <div style="font-size:11px;color:#7A4E00;line-height:1.5;padding-bottom:4px">Revised ${o.revisedAt?esc(fmtS(String(o.revisedAt).slice(0,10))):''}${o.revisedBy&&uById(o.revisedBy)?' by '+esc(fullName(uById(o.revisedBy))):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''}</div>
+          <div><label style="${L};color:#6B4E1F">Revised target (drives progress)</label><input type="number" step="any" value="${o.revisedTarget!==null&&o.revisedTarget!==undefined?o.revisedTarget:''}" oninput="_OKRED.revisedTarget=this.value===''?null:parseFloat(this.value)" class="ui-input rf" style="border-color:#EEDEC0"/></div>
+          <div style="font-size:11px;color:#6B4E1F;line-height:1.5;padding-bottom:4px">Revised ${o.revisedAt?esc(fmtS(String(o.revisedAt).slice(0,10))):''}${o.revisedBy&&uById(o.revisedBy)?' by '+esc(fullName(uById(o.revisedBy))):''}${o.revisedNote?' — “'+esc(o.revisedNote)+'”':''}</div>
         </div>
-        <div style="font-size:11px;color:#8A5F00;margin-top:6px">This number is what progress is measured against; the original stays for comparison. Clear it (or set it back to the original) to remove the revision.</div>
+        <div style="font-size:11px;color:#7C5A26;margin-top:6px">This number is what progress is measured against; the original stays for comparison. Clear it (or set it back to the original) to remove the revision.</div>
       </div>`:''}
       <div><label style="${L}">${o.metricType==='currency'?'Currency':'Unit'} ${o.metricType==='percent'?'(auto: %)':''}</label><input type="text" value="${esc(o.unit||'')}" oninput="_OKRED.unit=this.value" placeholder="${o.metricType==='currency'?'e.g. AED / $':'e.g. orders, hrs'}" class="ui-input rf" ${o.metricType==='percent'?'disabled':''}/></div>`:`<div style="font-size:12px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:9px 12px">Yes / No objective — a check-in of "Yes" counts as 100%, "No" as 0%.</div>`}
       ${o.metricType!=='yesno'?_okrEdAnnualSection(o,L):''}
@@ -2075,7 +2075,7 @@ App._renderOKREdit=()=>{
           <div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Works best when the L${lvl+1} sub-objectives measure the same thing in the same unit.</div></div>`:''}
       </div>`:''}
       ${(o.rollup&&!o.isAnnual)?`<div style="border-top:1px dashed var(--c-border);padding-top:12px"><label style="${L}">Check-in frequency</label>
-        <div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border:1px solid #FBE6A6;border-radius:9px;padding:8px 11px;line-height:1.55">
+        <div style="font-size:11.5px;color:#6B4E1F;background:#F8F0DE;border:1px solid #EEDEC0;border-radius:9px;padding:8px 11px;line-height:1.55">
           <b>No check-ins on this objective.</b> Its value is the ${esc(_okrModeLabel(o.rollupMode))} of the level below, so nobody is asked to update it: no schedule, no reminder e-mail, and it never appears as a task in My Checklists. Any schedule it had is cleared on save. Update the sub-objectives instead — this number follows them.
         </div></div>`:`<div style="border-top:1px dashed var(--c-border);padding-top:12px"><label style="${L}">Check-in frequency — ${o.isAnnual?'when is the owner asked to update each quarterly objective?':'when is the owner asked for an update?'}</label>
         <select class="ui-select rf" onchange="App._okrEdSetFreqType(this.value)">
@@ -2084,7 +2084,7 @@ App._renderOKREdit=()=>{
           <option value="custom" ${fType==='custom'?'selected':''}>Custom dates</option>
           <option value="none" ${fType==='none'?'selected':''}>No schedule (manual updates only)</option>
         </select>
-        ${fType==='weekly'?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">${WKDAYS.map(dayChip).join('')}</div><div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Every ${esc(f.day||'Mon')}, this OKR joins the owner's combined check-in list.</div>`:''}
+        ${fType==='weekly'?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:9px">${WKDAYS.map(dayChip).join('')}</div><div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Every ${esc(f.day||'Mon')}, this BOLT joins the owner's combined check-in list.</div>`:''}
         ${fType==='monthly'?`<div style="display:flex;align-items:center;gap:8px;margin-top:9px"><span style="font-size:12.5px;color:var(--c-text-2)">Day of month</span><input type="number" min="1" max="31" value="${Number(f.day)||1}" oninput="_OKRED.frequency.day=Math.max(1,Math.min(31,parseInt(this.value)||1))" class="ui-input rf" style="width:80px"/><span style="font-size:11px;color:var(--c-text-3)">shorter months use their last day</span></div>`:''}
         ${fType==='custom'?`<div style="margin-top:9px"><div style="display:flex;gap:8px"><input type="date" id="okrEdCustomDate" class="ui-input rf" style="flex:1"/><button type="button" onclick="App._okrEdAddDate()" class="ui-btn ui-btn-ghost ui-btn-sm">Add</button></div>
           ${(f.dates||[]).length?`<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">${(f.dates||[]).map((d,i)=>`<span style="display:inline-flex;align-items:center;gap:5px;font-size:11.5px;font-weight:700;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:20px;padding:3px 6px 3px 10px">${esc(fmtS(d))}<button type="button" onclick="App._okrEdRmDate(${i})" style="width:16px;height:16px;border-radius:50%;border:none;background:var(--c-border);color:var(--c-text-2);cursor:pointer;font-size:10px;line-height:1">×</button></span>`).join('')}</div>`:'<div style="font-size:11px;color:var(--c-text-3);margin-top:6px">No dates added yet.</div>'}</div>`:''}
@@ -2246,7 +2246,7 @@ App._okrSave=()=>{
     okrLog(o.id,'Quarterly objectives generated',{count:qRows.length,periods:qRows.map(r=>r.label).join(', ')});
     _OKR_EXP[o.id]=true;
   }
-  saveDB();closeModal();toast(o.isAnnual&&qRows&&qRows.length?('OKR saved — '+qRows.length+' quarterly objective'+(qRows.length===1?'':'s')+' created'):'OKR saved');rr();
+  saveDB();closeModal();toast(o.isAnnual&&qRows&&qRows.length?('BOLT saved — '+qRows.length+' quarterly objective'+(qRows.length===1?'':'s')+' created'):'BOLT saved');rr();
 };
 /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 v3.14 \u2014 CASCADE DELETE (subtree, on the server too) \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
    The old version pulled the whole subtree out of the LOCAL list but sent exactly ONE
@@ -2256,7 +2256,7 @@ App._okrSave=()=>{
    itself. Every id in the subtree is now deleted explicitly, each with its check-ins
    and its log, so deleting an L0 takes its L1s / L2s / quarters with it for good.     */
 function _okrPurgeIds(ids){
-  /* 1. Cancel queued writes to the OKR ROWS only \u2014 never to their check-ins or logs.
+  /* 1. Cancel queued writes to the BOLT ROWS only \u2014 never to their check-ins or logs.
         \u00b7 okrs: a queued _okrPush is an UPSERT. Omitting deleted_at protects the ON CONFLICT
           branch, but if the row was never on the server (created while offline, save still
           queued) the replay takes the INSERT branch, deleted_at defaults to NULL, and the
@@ -2283,7 +2283,7 @@ function _okrPurgeIds(ids){
   ids.forEach(oid=>{
     const o=okrById(oid);if(o){o.deletedAt=stamp;o.deletedBy=S.uid;}
     sbWrite({table:'okrs',op:'update',id:oid,match:{col:'id',val:oid},
-             values:{deleted_at:stamp,deleted_by:S.uid,updated_at:stamp}},{label:'OKR delete',silent:true});
+             values:{deleted_at:stamp,deleted_by:S.uid,updated_at:stamp}},{label:'BOLT delete',silent:true});
   });
 }
 /* \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550 v3.14 \u2014 DELETED OBJECTIVES (recycle bin) \u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550\u2550
@@ -2364,7 +2364,7 @@ App._renderOKRBin=()=>{
   else{
     const roots=_okrBinRoots();
     if(!roots.length)body='<div style="padding:26px 0;text-align:center"><div style="font-size:13.5px;font-weight:700;color:var(--c-text-2)">Nothing has been deleted</div><div style="font-size:12px;color:var(--c-text-3);margin-top:4px">Deleted objectives are kept here so you can bring them back.</div></div>';
-    else body=(B.truncated?'<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border:1px solid #FBE6A6;border-radius:9px;padding:8px 11px;margin-bottom:10px;line-height:1.5">Showing the <b>'+_OKRBIN_LIMIT+'</b> most recent deletions. Older ones are still in the database \u2014 erase or restore some of these to see further back.</div>':'')
+    else body=(B.truncated?'<div style="font-size:11.5px;color:#6B4E1F;background:#F8F0DE;border:1px solid #EEDEC0;border-radius:9px;padding:8px 11px;margin-bottom:10px;line-height:1.5">Showing the <b>'+_OKRBIN_LIMIT+'</b> most recent deletions. Older ones are still in the database \u2014 erase or restore some of these to see further back.</div>':'')
       +roots.map(r=>{
       const kids=_okrBinSubtree(r.id).length;
       const who=fullName(uById(r.deletedBy))||'someone';
@@ -2436,7 +2436,7 @@ App._okrBinRestore=async(id)=>{
   const stamp=new Date().toISOString();
   const oks=await Promise.all(ids.map(oid=>sbWrite(
     {table:'okrs',op:'update',id:oid,match:{col:'id',val:oid},values:{deleted_at:null,deleted_by:null,updated_at:stamp}},
-    {label:'OKR restore',silent:true})));
+    {label:'BOLT restore',silent:true})));
   // If the server refused (an RLS write rule the client can't see, a 5xx), say so instead of
   // claiming success — the reload a moment later would silently take the objective away
   // again, which reads as the restore button simply not working.
@@ -2488,9 +2488,9 @@ function _okrHardPurgeIds(ids){
     cancelPendingWrites('okr_logs',ids,'okr_id');
   }catch(e){}
   ids.forEach(oid=>{
-    sbWrite({table:'okrs',op:'delete',id:oid,match:{col:'id',val:oid}},{label:'OKR erase',silent:true});
-    sbWrite({table:'okr_checkins',op:'delete',match:{col:'okr_id',val:oid}},{label:'OKR check-ins erase',silent:true});
-    sbWrite({table:'okr_logs',op:'delete',match:{col:'okr_id',val:oid}},{label:'OKR log erase',silent:true});
+    sbWrite({table:'okrs',op:'delete',id:oid,match:{col:'id',val:oid}},{label:'BOLT erase',silent:true});
+    sbWrite({table:'okr_checkins',op:'delete',match:{col:'okr_id',val:oid}},{label:'BOLT check-ins erase',silent:true});
+    sbWrite({table:'okr_logs',op:'delete',match:{col:'okr_id',val:oid}},{label:'BOLT log erase',silent:true});
   });
 }
 /* Everything that will disappear with `o` \u2014 used to spell it out in the confirmation.
@@ -2529,7 +2529,7 @@ async function _okrBlockedByHidden(n){
 }
 App._okrDelete=async(id)=>{
   const o=okrById(id);if(!o)return;
-  if(!_okrCanDelete(o))return toast('You can\u2019t delete this OKR','err');
+  if(!_okrCanDelete(o))return toast('You can\u2019t delete this BOLT','err');
   const sc=_okrDeleteScope([o]);
   if(sc.hidden)return _okrBlockedByHidden(sc.hidden);
   const plainSubs=sc.subCount-sc.quarterCount;
@@ -2554,7 +2554,7 @@ App._okrDelete=async(id)=>{
   DB.okrLogs=(DB.okrLogs||[]).filter(l=>!ids.has(l.okrId));
   ids.forEach(x=>{_OKRSEL.delete(x);delete _OKR_EXP[x];});
   saveOkrExpanded(_OKR_EXP);
-  saveDB();toast(ids.size>1?(ids.size+' objectives deleted'):'OKR deleted','warn');rr();
+  saveDB();toast(ids.size>1?(ids.size+' objectives deleted'):'BOLT deleted','warn');rr();
 };
 /* ═══════════════ v3.13 — BULK EDIT (any field, any number of objectives) ═══════════════
    Tick objectives on the tree → "Bulk edit" → tick the FIELDS you want written. ONLY ticked
@@ -2653,7 +2653,7 @@ App._renderOKRBulk=()=>{
     <div style="font-size:11px;color:var(--c-text-3);margin-top:6px">${d.owners.length} picked${d.ownerMode==='replace'?' — these become the <b>only</b> owners on every selected objective':d.ownerMode==='add'?' — added alongside whoever already owns each objective':' — removed where present (an objective is never left with no owner)'}</div>`;
   const body=`<div style="display:flex;flex-direction:column;gap:10px">
     <div style="background:var(--c-brand-soft);border:1px solid var(--c-border);border-radius:12px;padding:10px 13px;font-size:12px;color:var(--c-text);line-height:1.6">
-      Writing to <b>${targets.length} objective${targets.length===1?'':'s'}</b>${skipped?` · <span style="color:#8A5F00">${skipped} skipped — you don't have edit rights on ${skipped===1?'it':'them'}</span>`:''}.
+      Writing to <b>${targets.length} objective${targets.length===1?'':'s'}</b>${skipped?` · <span style="color:#7C5A26">${skipped} skipped — you don't have edit rights on ${skipped===1?'it':'them'}</span>`:''}.
       <div style="font-size:11px;color:var(--c-text-3);margin-top:3px">Only the fields you tick below are written. Everything else on each objective — including its check-in history — is left untouched.</div>
       ${targets.length<=6?`<div style="font-size:11px;color:var(--c-text-2);margin-top:6px">${targets.map(o=>esc(o.title||'Untitled')).join(' · ')}</div>`:''}
     </div>
@@ -2712,9 +2712,9 @@ App._renderOKRBulk=()=>{
     ${row('lifecycle','Close or reopen','Closing freezes updates, check-ins and reminders but keeps everything on record. Owners are notified either way.',
       `<div style="display:flex;gap:6px;flex-wrap:wrap">${pill(d.lifecycle==='close','Close them',"App._okrBulkSetR('lifecycle','close')")}${pill(d.lifecycle==='reopen','Reopen them',"App._okrBulkSetR('lifecycle','reopen')")}</div>
       ${d.lifecycle==='close'?`<div style="margin-top:10px"><label style="${L}">Reason — required, kept on the record</label><textarea rows="2" oninput="App._okrBulkSet('closeReason',this.value)" placeholder="e.g. Superseded by the FY27 plan" class="ui-input" style="resize:vertical">${esc(d.closeReason||'')}</textarea></div>`:''}`)}
-    <div style="border:1.5px solid #FBCDCD;background:#FEF0F0;border-radius:12px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div style="min-width:0"><div class="fd" style="font-size:12.5px;font-weight:800;color:#991B1B">Delete these objectives</div><div style="font-size:11px;color:#B91C1C;margin-top:2px;line-height:1.5">Sub-objectives, check-in history and logs go with them — kept in Deleted objectives, so a deletion can be restored.</div></div>
-      <button type="button" onclick="App._okrBulkDelete()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;border:1.5px solid #B91C1C;background:var(--c-surface);color:#B91C1C;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0">${ic('trash','w-3.5 h-3.5')}Delete ${targets.length}</button>
+    <div style="border:1.5px solid #EFC9BE;background:#FAEDE8;border-radius:12px;padding:11px 13px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="min-width:0"><div class="fd" style="font-size:12.5px;font-weight:800;color:#7E2A1C">Delete these objectives</div><div style="font-size:11px;color:#93301F;margin-top:2px;line-height:1.5">Sub-objectives, check-in history and logs go with them — kept in Deleted objectives, so a deletion can be restored.</div></div>
+      <button type="button" onclick="App._okrBulkDelete()" style="display:inline-flex;align-items:center;gap:6px;padding:7px 13px;border-radius:9px;border:1.5px solid #93301F;background:var(--c-surface);color:#93301F;font-size:12px;font-weight:800;cursor:pointer;flex-shrink:0">${ic('trash','w-3.5 h-3.5')}Delete ${targets.length}</button>
     </div>
   </div>`;
   modalShell({title:'Bulk edit',sub:targets.length+' objective'+(targets.length===1?'':'s')+' selected — tick the fields to change',size:'max-w-2xl',key:'okr-bulk',
@@ -2814,12 +2814,12 @@ App._okrBulkApply=()=>{
       if(d.lifecycle==='close'&&!o.closed){
         o.closed=true;o.closedReason=(d.closeReason||'').trim();o.closedAt=new Date().toISOString();o.closedBy=S.uid;
         ch.push({field:'Closed',from:'open',to:o.closedReason});
-        _okrNotify(okrOwners(o),'okr_closed','🔒 OKR closed: "'+(o.title||'')+'" — '+o.closedReason,{okr_title:o.title||'',actor:fullName(me()),status:'closed',reason:o.closedReason});
+        _okrNotify(okrOwners(o),'okr_closed','🔒 BOLT closed: "'+(o.title||'')+'" — '+o.closedReason,{okr_title:o.title||'',actor:fullName(me()),status:'closed',reason:o.closedReason});
       }else if(d.lifecycle==='reopen'&&o.closed){
         const was=o.closedReason||'';
         o.closed=false;o.closedReason='';o.closedAt=null;o.closedBy=null;
         ch.push({field:'Closed',from:was,to:'reopened'});
-        _okrNotify(okrOwners(o),'okr_closed','🔓 OKR reopened: "'+(o.title||'')+'" — updates resume',{okr_title:o.title||'',actor:fullName(me()),status:'reopened',reason:was});
+        _okrNotify(okrOwners(o),'okr_closed','🔓 BOLT reopened: "'+(o.title||'')+'" — updates resume',{okr_title:o.title||'',actor:fullName(me()),status:'reopened',reason:was});
       }
     }
     if(ch.length){o.updatedAt=new Date().toISOString();okrLog(o.id,'Bulk edit',{of:targets.length,changes:ch});_okrPush(o);changed++;}
@@ -2905,7 +2905,7 @@ App._renderOKRCheckin=()=>{
   const d=_OKRCI;if(!d)return;
   const o=okrById(d.okrId);if(!o)return;
   const L='display:block;font-size:11px;font-weight:700;color:var(--c-text-2);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px';
-  const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCISetVal(${v})" style="flex:1;padding:12px;border-radius:11px;border:2px solid ${Number(d.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(d.value)===v?(v===1?'#E4F2F0':'#FEEEEF'):'var(--c-surface)'};color:${Number(d.value)===v?(v===1?'#0F7A45':'#C41E32'):'var(--c-text-2)'};font-size:14px;font-weight:800;cursor:pointer">${label}</button>`;
+  const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCISetVal(${v})" style="flex:1;padding:12px;border-radius:11px;border:2px solid ${Number(d.value)===v?(v===1?'#58996E':'#C25441'):'var(--c-border)'};background:${Number(d.value)===v?(v===1?'#EEE4D5':'#F9EBE5'):'var(--c-surface)'};color:${Number(d.value)===v?(v===1?'#346A47':'#A63528'):'var(--c-text-2)'};font-size:14px;font-weight:800;cursor:pointer">${label}</button>`;
   modalShell({title:(d.existingId?'Edit update':'Add update'),sub:(o.title||'')+' · '+_okrTargetWord(o)+' '+(o.metricType==='yesno'?'Yes':_okrFmtTarget(o,_okrTargetEff(o))),size:'max-w-md',key:'okr-ci',
     body:`<div style="display:flex;flex-direction:column;gap:14px">
       <div><label style="${L}">Date</label><input type="date" value="${d.date}" onchange="App._okrCISetDate(this.value)" class="ui-input rf"/></div>
@@ -2921,14 +2921,14 @@ App._renderOKRCheckin=()=>{
       </div>
       <div><label style="${L}">Photos</label>
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
-          ${d.photos.map((p,i)=>`<span style="position:relative;display:inline-block"><img src="${esc(p)}" alt="Attached photo" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1px solid var(--c-border)"/><button type="button" onclick="App._okrCIPhotoRm(${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:#0F3038;color:#fff;font-size:10px;cursor:pointer;line-height:1">×</button></span>`).join('')}
+          ${d.photos.map((p,i)=>`<span style="position:relative;display:inline-block"><img src="${esc(p)}" alt="Attached photo" style="width:52px;height:52px;object-fit:cover;border-radius:9px;border:1px solid var(--c-border)"/><button type="button" onclick="App._okrCIPhotoRm(${i})" style="position:absolute;top:-6px;right:-6px;width:18px;height:18px;border-radius:50%;border:none;background:#1D1712;color:#fff;font-size:10px;cursor:pointer;line-height:1">×</button></span>`).join('')}
           <label style="width:52px;height:52px;border:1.5px dashed var(--c-border);border-radius:9px;display:grid;place-items:center;color:var(--c-text-3);cursor:pointer">${ic('cam','w-4 h-4')}<input type="file" accept="image/*" multiple hidden onchange="App._okrCIPhotoAdd(this)"/></label>
         </div>
       </div>
       <div><label style="${L}">Mark status (optional)</label><div style="display:flex;gap:6px;flex-wrap:wrap">
         ${OKR_STATUSES.map(s=>{const on=d.statusMark===s;const m=OKR_ST_META[s];return`<button type="button" onclick="_OKRCI.statusMark=_OKRCI.statusMark==='${s}'?null:'${s}';App._renderOKRCheckin()" style="padding:5px 11px;border-radius:20px;border:1.5px solid ${on?m.dot:'var(--c-border)'};background:${on?m.bg:'var(--c-surface)'};color:${on?m.fg:'var(--c-text-2)'};font-size:11.5px;font-weight:700;cursor:pointer">${s}</button>`;}).join('')}
       </div><div style="font-size:11px;color:var(--c-text-3);margin-top:6px">Marking a status here also sets it on the objective (logged). Leave empty to keep the automatic status.</div></div>
-      ${d.existingId?`<div style="font-size:11.5px;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:8px 11px">You're editing an existing update — the change is recorded in the activity log.</div>`:''}
+      ${d.existingId?`<div style="font-size:11.5px;color:#6B4E1F;background:#F8F0DE;border-radius:9px;padding:8px 11px">You're editing an existing update — the change is recorded in the activity log.</div>`:''}
     </div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP(d.existingId?'Save changes':'Save update','App._okrCheckinSave()')});
 };
@@ -2984,9 +2984,9 @@ App._okrCheckinSave=()=>{
   const _oid=d.okrId;_OKRCI=null;saveDB();closeModal();toast('Update saved');rr();if(typeof _okrPMRefresh==='function')_okrPMRefresh(_oid);
 };
 
-/* ── Combined "all OKR tasks due that day" modal — the scheduled checklist ── */
+/* ── Combined "all BOLT tasks due that day" modal — the scheduled checklist ── */
 /* ══════════════════════════════════════════════════════════════════════════════
-   OKR EXTRACT — a full Excel workbook for the selected (or all visible) objectives.
+   BOLT EXTRACT — a full Excel workbook for the selected (or all visible) objectives.
    Four sheets: Objectives · Updates · Target revisions · Activity.
    Everything is drawn from what the user is allowed to see (okrVisible/okrCanSee).
    ══════════════════════════════════════════════════════════════════════════════ */
@@ -3093,14 +3093,14 @@ App._okrExport=async()=>{
     });
     X.writeFile(wb,'bridge_okrs_'+todayISO()+'.xlsx');
     toast('Exported '+list.length+' objective'+(list.length===1?'':'s')+' · '+(uRows.length-1)+' update'+(uRows.length===2?'':'s'));
-    try{log(fullName(me()),'Exported OKRs',list.length+' objectives');}catch(e){}
+    try{log(fullName(me()),'Exported BOLTs',list.length+' objectives');}catch(e){}
   }catch(e){toast(e.message||'Export failed','err');}
 };
 
 App._okrCheckinAll=(date)=>{
   const d=date||todayISO();
   const due=okrDueForUser(S.uid,d);
-  if(!due.length)return toast('No OKR check-ins scheduled for this day','warn');
+  if(!due.length)return toast('No BOLT check-ins scheduled for this day','warn');
   _OKRCIALL={date:d,items:due.map(o=>{const ex=okrCheckinFor(o.id,S.uid,d)||okrCheckinForDate(o.id,d);return{okrId:o.id,value:ex?ex.value:null,comment:ex?ex.comment:'',statusMark:ex?ex.statusMark:null,existingId:ex?ex.id:null,photos:ex?(ex.photos||[]).slice():[]};})};
   App._renderOKRCheckinAll();
 };
@@ -3110,8 +3110,8 @@ App._renderOKRCheckinAll=()=>{
   const rows=A.items.map((it,i)=>{
     const o=okrById(it.okrId);if(!o)return'';
     const exCk=it.existingId?(DB.okrCheckins||[]).find(c=>c.id===it.existingId):null;
-    const done=exCk?('<span style="font-size:10px;font-weight:800;background:#E4F2F0;color:#0B6660;padding:2px 8px;border-radius:10px">'+(exCk.userId&&exCk.userId!==S.uid?('updated by '+esc(fullName(uById(exCk.userId))||'a co-owner')+' — editing'):'already updated — editing')+'</span>'):'';
-    const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCIAllVal(${i},${v})" style="flex:1;padding:8px;border-radius:9px;border:2px solid ${Number(it.value)===v?(v===1?'#22C55E':'#EF4444'):'var(--c-border)'};background:${Number(it.value)===v?(v===1?'#E4F2F0':'#FEEEEF'):'var(--c-surface)'};color:${Number(it.value)===v?(v===1?'#0F7A45':'#C41E32'):'var(--c-text-2)'};font-size:12.5px;font-weight:800;cursor:pointer">${label}</button>`;
+    const done=exCk?('<span style="font-size:10px;font-weight:800;background:#EEE4D5;color:#463830;padding:2px 8px;border-radius:10px">'+(exCk.userId&&exCk.userId!==S.uid?('updated by '+esc(fullName(uById(exCk.userId))||'a co-owner')+' — editing'):'already updated — editing')+'</span>'):'';
+    const ynBtn=(v,label)=>`<button type="button" onclick="App._okrCIAllVal(${i},${v})" style="flex:1;padding:8px;border-radius:9px;border:2px solid ${Number(it.value)===v?(v===1?'#58996E':'#C25441'):'var(--c-border)'};background:${Number(it.value)===v?(v===1?'#EEE4D5':'#F9EBE5'):'var(--c-surface)'};color:${Number(it.value)===v?(v===1?'#346A47':'#A63528'):'var(--c-text-2)'};font-size:12.5px;font-weight:800;cursor:pointer">${label}</button>`;
     return `<div style="border:1px solid var(--c-border);border-radius:12px;padding:12px;margin-bottom:10px;background:var(--c-surface)">
       <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:8px">
         ${_okrLvlChip(okrLevel(o))}
@@ -3126,7 +3126,7 @@ App._renderOKRCheckinAll=()=>{
       <input type="text" value="${esc(it.comment||'')}" oninput="_OKRCIALL.items[${i}].comment=this.value" placeholder="Comment (optional)" class="ui-input rf"/>
     </div>`;
   }).join('');
-  modalShell({title:'OKR check-ins · '+fmtD(A.date),sub:A.items.length+' scheduled update'+(A.items.length===1?'':'s')+' — fill what you have, save once',size:'max-w-lg',key:'okr-ciall',
+  modalShell({title:'BOLT check-ins · '+fmtD(A.date),sub:A.items.length+' scheduled update'+(A.items.length===1?'':'s')+' — fill what you have, save once',size:'max-w-lg',key:'okr-ciall',
     body:`<div>${rows}</div>`,
     footer:btnG('Cancel','App.closeModal()')+btnP('Save all','App._okrCheckinAllSave()')});
 };
@@ -3146,7 +3146,7 @@ App._okrCheckinAllSave=()=>{
   _OKRCIALL=null;saveDB();closeModal();toast(n+' update'+(n===1?'':'s')+' saved');rr();
 };
 
-/* ── Virtual "OKR Check-ins" card shown inside My Checklists on due days ── */
+/* ── Virtual "BOLT Check-ins" card shown inside My Checklists on due days ── */
 function _okrClCard(due,date){
   const today=todayISO();
   // GROUP rule: a check-in by ANY owner counts for the whole group (like "any one" checklists)
@@ -3158,24 +3158,24 @@ function _okrClCard(due,date){
     const ck=okrCheckinForDate(o.id,date);
     const by=ck&&ck.userId&&ck.userId!==S.uid?uById(ck.userId):null;
     return `<div style="display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--c-text-2);padding:3px 0">
-      ${ck?`<span style="color:#0B6660;flex-shrink:0">${ic('check','w-3.5 h-3.5')}</span>`:`<span style="width:6px;height:6px;border-radius:50%;background:#E0A106;flex-shrink:0;margin:0 5px"></span>`}
+      ${ck?`<span style="color:#463830;flex-shrink:0">${ic('check','w-3.5 h-3.5')}</span>`:`<span style="width:6px;height:6px;border-radius:50%;background:#C9A76B;flex-shrink:0;margin:0 5px"></span>`}
       <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(o.title)}</span>
       ${by?`<span title="Submitted by ${esc(fullName(by))} — counts for the whole group" style="font-size:10px;color:var(--c-text-3);flex-shrink:0">by ${esc(fullName(by))}</span>`:''}
       ${ck?`<span style="font-weight:800;color:var(--c-success-ink);font-size:12px">${esc(_okrFmtVal(o,ck.value))}</span>`:''}
     </div>`;
   }).join('');
-  return `<div class="ui-card" style="padding:14px;border-left:3px solid ${allDone?'#22C55E':'#E0A106'}">
+  return `<div class="ui-card" style="padding:14px;border-left:3px solid ${allDone?'#58996E':'#C9A76B'}">
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
       <span style="width:36px;height:36px;border-radius:10px;background:var(--c-brand-soft);color:var(--c-brand-ink);display:grid;place-items:center;flex-shrink:0">${ic('chart','w-4.5 h-4.5')}</span>
       <div style="flex:1;min-width:0">
-        <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">OKR Check-ins <span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:var(--c-brand-soft);color:var(--c-brand-ink);vertical-align:middle;margin-left:4px">OKR</span></div>
-        <div style="font-size:12px;color:var(--c-text-2)">${doneN}/${due.length} updated · combined from all your scheduled OKRs${anyGroup?' · shared — any owner can submit for the group':''}</div>
+        <div class="fd" style="font-size:14px;font-weight:800;color:var(--c-text)">BOLT Check-ins <span style="font-size:10px;font-weight:800;padding:1px 7px;border-radius:20px;background:var(--c-brand-soft);color:var(--c-brand-ink);vertical-align:middle;margin-left:4px">BOLT</span></div>
+        <div style="font-size:12px;color:var(--c-text-2)">${doneN}/${due.length} updated · combined from all your scheduled BOLTs${anyGroup?' · shared — any owner can submit for the group':''}</div>
       </div>
       <span style="font-size:12px;font-weight:800;padding:3px 10px;border-radius:20px;background:${allDone?'var(--c-success-soft)':'var(--c-warn-soft)'};color:${allDone?'var(--c-success-ink)':'var(--c-warn-ink)'}">${allDone?'Done':(due.length-doneN)+' to do'}</span>
     </div>
     ${rows}${due.length>6?`<div style="font-size:11px;color:var(--c-text-3);padding:3px 0">+${due.length-6} more…</div>`:''}
     <div style="display:flex;justify-content:flex-end;margin-top:9px">
-      ${isFuture?'<span style="font-size:12px;color:#90A5AB;font-weight:600">Scheduled for this date</span>':btn(allDone?'Review / edit':'Update now',`App._okrCheckinAll('${date}')`,{variant:allDone?'ghost':'primary',size:'sm',icon:'edit'})}
+      ${isFuture?'<span style="font-size:12px;color:#A59788;font-weight:600">Scheduled for this date</span>':btn(allDone?'Review / edit':'Update now',`App._okrCheckinAll('${date}')`,{variant:allDone?'ghost':'primary',size:'sm',icon:'edit'})}
     </div>
   </div>`;
 }
@@ -3326,8 +3326,8 @@ function _okrOwnCur(o){
   const v=okrCurrentOf(o);
   return(v===null||v===undefined)?Number(o.startValue||0):v;
 }
-/* ── Quarter filter: an OKR belongs to every quarter its period OVERLAPS
-   (a 6-month OKR falls into both quarters). Uses the node's own period,
+/* ── Quarter filter: a BOLT belongs to every quarter its period OVERLAPS
+   (a 6-month BOLT falls into both quarters). Uses the node's own period,
    falling back to the span of its descendants (_okrEffPeriod). ── */
 function _okrQuarterRanges(year){return{Q1:[year+'-01-01',year+'-03-31'],Q2:[year+'-04-01',year+'-06-30'],Q3:[year+'-07-01',year+'-09-30'],Q4:[year+'-10-01',year+'-12-31']};}
 function _okrInQuarters(o,quarters,year){
@@ -3410,19 +3410,19 @@ function _drawOKRCharts(){
           const _paced=_th&&okrIsPaced(o);
           const lbl=_th?((okrDirOf(o)==='gte'?'Stay at or above ':'Stay at or below ')+_okrFmtVal(o,capV)+(_paced?' overall':''))
                        :okrIsLimit(o)?('Allowance — stay under '+_okrFmtVal(o,capV)):('Target — '+_okrFmtVal(o,capV));
-          ds.push({label:lbl,data:dates.map(()=>Number(capV)),borderColor:'#EF4444',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
-          if(_paced)ds.push({label:(okrDirOf(o)==='gte'?'Goal so far — ':'Budget so far — ')+_okrFmtVal(o,Math.round(_okrPace(o).perDay*100)/100)+' a day',data:dates.map(d=>_okrBudgetAt(o,d)),borderColor:'#E0A106',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+          ds.push({label:lbl,data:dates.map(()=>Number(capV)),borderColor:'#C25441',borderDash:_th?[6,4]:[2,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+          if(_paced)ds.push({label:(okrDirOf(o)==='gte'?'Goal so far — ':'Budget so far — ')+_okrFmtVal(o,Math.round(_okrPace(o).perDay*100)/100)+' a day',data:dates.map(d=>_okrBudgetAt(o,d)),borderColor:'#C9A76B',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
         }
       }
-      if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#8CA3AA',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
+      if(ideal&&ideal.some(v=>v!==null))ds.push({label:okrHasRevision(o)?'Original pace':(_dn?'Ideal pace — stay below':'Ideal (planned pace)'),data:ideal,borderColor:'#A09285',borderDash:[7,5],pointRadius:0,fill:false,tension:0,borderWidth:2});
       if(okrHasRevision(o)&&o.metricType!=='yesno'){
         const idealRev=dates.map(d=>_okrIdealAt(o,d,[dates[0],dates[dates.length-1]],false,Number(o.revisedTarget)));
-        if(idealRev.some(v=>v!==null))ds.push({label:'Revised pace',data:idealRev,borderColor:'#E0A106',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
+        if(idealRev.some(v=>v!==null))ds.push({label:'Revised pace',data:idealRev,borderColor:'#C9A76B',borderDash:[4,4],pointRadius:0,fill:false,tension:0,borderWidth:2});
       }
       /* On threshold objectives each reading is scored individually, so the dots carry the verdict:
          green where the line held, red where it broke. Everywhere else they stay brand orange. */
-      const _ptCol=_th?actual.map((v,i)=>{const k=okrThreshOKAt(o,v,dates[i]);return k===null?'#0F766E':(k?'#22C55E':'#EF4444');}):'#0F766E';
-      ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#0F766E',backgroundColor:'rgba(15,118,110,.12)',fill:true,tension:.3,pointRadius:_th?4:3,pointBackgroundColor:_ptCol,pointBorderColor:_ptCol,borderWidth:2});
+      const _ptCol=_th?actual.map((v,i)=>{const k=okrThreshOKAt(o,v,dates[i]);return k===null?'#54433C':(k?'#58996E':'#C25441');}):'#54433C';
+      ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#54433C',backgroundColor:'rgba(84,67,60,.12)',fill:true,tension:.3,pointRadius:_th?4:3,pointBackgroundColor:_ptCol,pointBorderColor:_ptCol,borderWidth:2});
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
       if(o.metricType!=='yesno'){
         const _act=actual.filter(v=>v!==null&&v!==undefined&&isFinite(v));
@@ -3496,7 +3496,7 @@ function _acPeopleTab(){
     _ensureHrm(u);
     const rid=u.hrm.roleProfileId||'';
     const nOv=Object.keys(u.hrm.perms||{}).length;
-    const hrTag=u.hrm.isHR?'<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:#FCE7F3;color:#A0182A" title="HR approver stage">HR</span>':'';
+    const hrTag=u.hrm.isHR?'<span style="font-size:9px;font-weight:800;padding:1px 6px;border-radius:10px;background:#F7E5DE;color:#872E1F" title="HR approver stage">HR</span>':'';
     return `<tr id="acu-${u.id}" style="${hi===u.id?'background:var(--c-brand-soft);':''}border-bottom:1px solid var(--c-border)">
       <td style="padding:11px 16px"><div style="display:flex;align-items:center;gap:11px;min-width:0">${avatar(u,'w-8 h-8','text-[11px]')}<div style="min-width:0"><div style="font-size:13px;font-weight:700;color:var(--c-text);display:flex;align-items:center;gap:6px">${esc(fullName(u))} ${hrTag}</div><div style="font-size:11px;color:var(--c-text-3)">${esc(u.department||'—')}${u.position?' · '+esc(u.position):''}</div></div></div></td>
       <td style="padding:11px 8px">${canMng
@@ -3554,8 +3554,8 @@ function _acDraft(u){
   return _ACD;
 }
 function _acTogBtn(on,label,onclick,disabled){
-  return `<button ${disabled?'disabled':''} onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#0F766E':'var(--c-border)'};background:${on?'#E4F2F0':'var(--c-surface)'};color:${on?'#0B6660':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled?'.45':'1'}">
-    <span style="width:6px;height:6px;border-radius:50%;background:${on?'#D4A72C':'#C9D9DD'};flex-shrink:0"></span>${esc(label)}</button>`;
+  return `<button ${disabled?'disabled':''} onclick="${onclick}" style="display:inline-flex;align-items:center;gap:5px;padding:4px 11px;border-radius:20px;border:1.5px solid ${on?'#54433C':'var(--c-border)'};background:${on?'#EEE4D5':'var(--c-surface)'};color:${on?'#463830':'var(--c-text-3)'};font-size:11.5px;font-weight:700;cursor:${disabled?'not-allowed':'pointer'};opacity:${disabled?'.45':'1'}">
+    <span style="width:6px;height:6px;border-radius:50%;background:${on?'#D1B68F':'#D5C9BC'};flex-shrink:0"></span>${esc(label)}</button>`;
 }
 App._acCustomize=async(uid2)=>{
   if(_ACD&&_ACD.uid!==uid2&&_ACD.dirty&&!(await confirmP({
@@ -3625,15 +3625,15 @@ App._renderACUser=()=>{
             <span style="font-size:11px;color:var(--c-text-3)">Follows role: <b style="color:var(--c-text-2)">${esc(roleActs)}</b>${a.scoped&&roleArea?` · sees ${SCOPE_LABEL[roleArea.scope||'none']}`:''}</span>
             ${canMng?`<button onclick="App._acOvAdd('${a.key}')" class="ui-btn ui-btn-ghost ui-btn-sm" style="min-height:24px;padding:2px 10px;font-size:11px">Override</button>`:''}
           </div>`;
-      return `<div style="display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center;${ov?'background:linear-gradient(90deg,rgba(15,118,110,.06),transparent);':''}">
-        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)}${ov?' <span style="font-size:9px;font-weight:800;color:#7A4E00;background:#FDF3D9;padding:1px 6px;border-radius:8px;vertical-align:middle">OVERRIDE</span>':''}</div></div>
+      return `<div style="display:grid;grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center;${ov?'background:linear-gradient(90deg,rgba(84,67,60,.06),transparent);':''}">
+        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)}${ov?' <span style="font-size:9px;font-weight:800;color:#6B4E1F;background:#F8F0DE;padding:1px 6px;border-radius:8px;vertical-align:middle">OVERRIDE</span>':''}</div></div>
         ${body}
       </div>`;
     }).join('');
     return `<div style="margin-bottom:10px"><div style="${lab};margin-bottom:2px">${esc(g)}</div>${rowsH}</div>`;
   }).join('');
   modalShell({title:'Personal settings — '+fullName(u),sub:(role?('Role: '+role.name):'No role assigned')+' · changes apply on Save',size:'max-w-3xl',key:'ac-user',
-    body:`<div>${d.dirty?'<div style="font-size:11.5px;font-weight:800;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
+    body:`<div>${d.dirty?'<div style="font-size:11.5px;font-weight:800;color:#6B4E1F;background:#F8F0DE;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
       ${personal}${docs}
       ${(()=>{const SYS=['departments','locations','documentsOrg'];const legacy=Object.keys(d.perms).filter(k=>!SYS.includes(k));return legacy.length?`<div style="font-size:11px;color:var(--c-text-3);background:var(--c-surface-2);border-radius:9px;padding:8px 11px">This person has ${legacy.length} legacy exception(s) from migration, so some areas ignore their role. <button onclick="['${'${'}legacy.join(\"','\")}'].forEach(k=>delete _ACD.perms[k]);_acMark()" style="border:none;background:none;color:var(--c-danger-ink);font-weight:800;cursor:pointer;font-size:11px;padding:0">Clear them</button> so the role decides everything. (Document-folder access is managed above and not affected.)</div>`:'';})()}
     </div>`,
@@ -3749,7 +3749,7 @@ App._renderRPEdit=()=>{
       const nOn=a.actions.filter(x=>(cur.actions||{})[x]).length;
       const hay=(a.label+' '+a.desc+' '+a.actions.map(x=>PERM_ACTION_LABEL[x]||x).join(' ')).toLowerCase();
       return `<div data-rp-row="${esc(hay)}" style="display:${(p.q&&!hay.includes(String(p.q).toLowerCase()))?'none':'grid'};grid-template-columns:minmax(140px,200px) 1fr;gap:4px 12px;padding:8px 0;border-top:1px solid var(--c-border);align-items:center">
-        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)} ${nOn?`<span style="font-size:9px;font-weight:800;color:#0B6660">${nOn} on</span>`:''}</div><div style="font-size:10px;color:var(--c-text-3);line-height:1.3">${esc(a.desc)}</div></div>
+        <div><div style="font-size:12px;font-weight:700;color:var(--c-text)">${esc(a.label)} ${nOn?`<span style="font-size:9px;font-weight:800;color:#463830">${nOn} on</span>`:''}</div><div style="font-size:10px;color:var(--c-text-3);line-height:1.3">${esc(a.desc)}</div></div>
         <div style="display:flex;flex-wrap:wrap;gap:5px;align-items:center">
           ${a.actions.map(act=>_acTogBtn(!!(cur.actions||{})[act],PERM_ACTION_LABEL[act]||act,`App._rpT('${a.key}','${act}')`,dis)).join('')}
           ${a.scoped?`<span style="font-size:9.5px;color:var(--c-text-3)">sees:</span><select ${dis?'disabled':''} onchange="App._rpScope('${a.key}',this.value)" class="ui-select" style="width:auto;font-size:11px;padding:3px 24px 3px 8px;min-height:0;height:25px">${SCOPE_ORDER.map(s=>`<option value="${s}" ${((cur.scope||'none')===s)?'selected':''}>${SCOPE_LABEL[s]}</option>`).join('')}</select>`:''}
@@ -3760,7 +3760,7 @@ App._renderRPEdit=()=>{
   }).join('');
   modalShell({title:p.isNew?'New role':('Role — '+(p.name||'Untitled')),sub:(nUsers?nUsers+' people have this role · ':'')+'toggles apply on Save',size:'max-w-3xl',key:'ac-role',
     body:`<div>
-      ${p.dirty?'<div style="font-size:11.5px;font-weight:800;color:#7A4E00;background:#FDF3D9;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
+      ${p.dirty?'<div style="font-size:11.5px;font-weight:800;color:#6B4E1F;background:#F8F0DE;border-radius:9px;padding:7px 11px;margin-bottom:12px">● Unsaved changes — press Save below</div>':''}
       <div style="display:grid;grid-template-columns:1fr 2fr;gap:10px;margin-bottom:14px">
         <div><label style="${lab}">Role name *</label><input ${dis?'disabled':''} type="text" value="${esc(p.name||'')}" oninput="_RPD.name=this.value;_RPD.dirty=true" placeholder="e.g. Branch Supervisor" class="ui-input rf" style="margin-top:5px"/></div>
         <div><label style="${lab}">Description</label><input ${dis?'disabled':''} type="text" value="${esc(p.description||'')}" oninput="_RPD.description=this.value;_RPD.dirty=true" placeholder="What is this role for?" class="ui-input rf" style="margin-top:5px"/></div>
@@ -3838,7 +3838,7 @@ function _syncRoleProfiles(){
 }
 
 
-/* ═══ v3.16 — keep OKR filter popovers on-screen on phones ═══
+/* ═══ v3.16 — keep BOLT filter popovers on-screen on phones ═══
    The multi-select dropdowns anchor left:0 to their chip; a chip in the right half
    of a phone screen pushed its 232px popover past the edge, so the tap LOOKED dead.
    After every redraw, any open popover that pokes past the right edge is flipped to
