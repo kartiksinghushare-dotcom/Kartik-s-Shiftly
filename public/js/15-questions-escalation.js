@@ -121,18 +121,6 @@ function visibleQuestions(){
 // Creator (or admin) can manage a question
 function canManageQ(q){return can('questions','manage')||q.createdBy===S.uid;}
 
-App._togQPublic=(id)=>{
-  const q=(DB.questions||[]).find(x=>x.id===id);if(!q)return;
-  if(!canManageQ(q)){toast('Only the creator can change this','warn');return;}
-  q.isPublic=q.isPublic===false?true:false;
-  toast(q.isPublic?'Question is now Public — visible to everyone with Questions access':'Question is now Private — visible only to you and assigned users','ok');
-  saveDB();rr();
-  // Sync to Supabase in background
-  sb.from('questions').update({is_public:q.isPublic}).eq('id',id).then(({error})=>{
-    if(error)console.error('togQPublic sync:',error.message);
-  }).catch(e=>console.error('togQPublic:',e));
-};
-
 function qCard(q){
     const _qdep=q.departmentId?(DB.departments||[]).find(d=>d.id===q.departmentId):null;
     const _qsub=q.subDepartmentId?(DB.departments||[]).find(d=>d.id===q.subDepartmentId):null;
@@ -224,7 +212,7 @@ function questionsPage(){
     </div>
     <!-- CSV Import / Export bar -->
     ${can('questions','import')?`<div style="display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap;align-items:center;padding:10px 14px;background:#FAF7F3;border-radius:12px;border:1.5px solid #EDE7DC">
-      <div style="flex:1;min-width:0">
+      <div style="flex:1 1 220px;min-width:0">
         <div style="font-size:12px;font-weight:700;color:#3A312A;margin-bottom:1px">Bulk import via CSV</div>
         <div style="font-size:11px;color:#A59788">Download the template, fill it in, then upload to add multiple questions at once</div>
       </div>
@@ -744,12 +732,6 @@ function _subBadges(c,sub,opts){
   const compliance='<span title="'+(flagged?flagged+' answer'+(flagged>1?'s':'')+' triggered an escalation':'No escalations — compliant')+'" style="font-size:'+fs+';font-weight:700;padding:'+pad+';border-radius:20px;background:'+compBg+';color:'+compClr+'">'+compLabel+'</span>';
   return attempt+compliance;
 }
-// Back-compat boolean wrapper (kept in case anything references the old name)
-function _subHasEscalation(c,subOrResponses){
-  if(subOrResponses&&!Array.isArray(subOrResponses))return _subEscalationCount(c,subOrResponses)>0;
-  return false;
-}
-
 // ── Escalation on submit ──
 function _processEscalations(checklistId,date,responses){
   const c=clById(checklistId);if(!c)return;
@@ -1018,6 +1000,7 @@ App._setNTab=(t)=>{S.filters.ntab=t;rr();};
 App._notifClick=(id)=>{
   const n=DB.notifications.find(x=>x.id===id);if(!n)return;
   n.read=true;_invalidateNotifCache();saveDB();
+  try{sb.from('notifications').update({read:true}).eq('id',id).then(()=>{}).catch(()=>{});}catch(e){}   // v3.26: other devices clear instantly
   const t=n.text||'';
   // Navigate first with clean filters, then set the tab
   /* v3.20 — a Workspace mention/ticket alert belongs in the Workspace. It used to match

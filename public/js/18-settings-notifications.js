@@ -8,10 +8,11 @@
 function auditPage(){return`<div class="fade">${hdr('Audit Logs','')}<div class="bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden"><div class="divide-y divide-ink-50 max-h-[70vh] overflow-y-auto">${DB.audit.map(l=>`<div class="px-4 py-3 flex items-center gap-2.5 text-sm"><span class="w-1.5 h-1.5 rounded-full bg-brand-500 shrink-0"></span><div class="flex-1 min-w-0"><span class="font-semibold">${esc(l.actor)}</span> <span class="text-ink-500">${esc(l.action.toLowerCase())}</span>${l.target?` <span class="font-medium">${esc(l.target)}</span>`:''}</div><span class="text-[11px] text-ink-300 shrink-0">${new Date(l.time).toLocaleString('en-GB',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</span></div>`).join('')||empty('audit','No logs yet','')}</div></div></div>`;}
 App._goNotifFeedback=()=>{S.route="notifications";S.search="";S.expandedCl=null;S.afOpen=null;S.tvUser=null;S.filters={ntab:"Feedback"};render();window.scrollTo(0,0);};
 
-function profilePage(){
+/* v3.23 — the Profile page became the "Profile" tab of Settings (everyone can open Settings now:
+   personal tabs for all, workspace-wide tabs for admins). */
+function _profileTab(){
   const u=me();
-  return`<div class="fade max-w-xl">
-  ${hdr('Profile','')}
+  return`<div>
   <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5 mb-4">
     <div class="flex items-center gap-4 mb-5">
       ${avatar(u,'w-14 h-14','text-xl')}
@@ -221,18 +222,6 @@ App._previewDoc=async(id)=>{
   }
 };
 
-/* v3.14 — "Reset workspace" clears only THIS browser's cached copy and reloads; nothing is
-   deleted on the server. The old inline confirm() implied it wiped the workspace itself. */
-App._resetWorkspaceCache=async()=>{
-  if(!(await confirmP({
-    title:'Reset this device',
-    body:'Clears the copy of the workspace cached in <b>this browser</b> and reloads it fresh from the server.',
-    items:['nothing is deleted on the server','other people and your other devices are unaffected','remembered filters on this device are cleared'],
-    confirmLabel:'Reset and reload',cancelLabel:'Cancel',danger:false,icon:'refresh'})))return;
-  try{localStorage.removeItem(window.LS_KEY||'shiftly_v3');}catch(e){}
-  try{if(typeof clearAllFilters==='function')clearAllFilters();}catch(e){}
-  location.reload();
-};
 App._delDoc=async(id)=>{
   const doc=(DB.documents||[]).find(x=>x.id===id);if(!doc)return;
   if(!(await confirmP({
@@ -363,11 +352,11 @@ const EMAIL_EVENTS=[
   {key:'feedback_received',label:'Feedback received',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'deadline_reminder',label:'Deadline reminder',    vars:'{{user_name}}, {{checklist_name}}, {{action_url}}'},
   {key:'escalation',       label:'Escalation raised',    vars:'{{submitter}}, {{checklist_name}}, {{question}}, {{answer}}, {{action_url}}'},
-  {key:'okr_assigned',      label:'BOLT assigned',          vars:'{{user_name}}, {{okr_title}}, {{assigner}}, {{target}}, {{schedule}}, {{period}}, {{action_url}}'},
-  {key:'okr_checkin_due',   label:'BOLT check-in due (daily)',vars:'{{user_name}}, {{count}}, {{date}}, {{okr_titles}}, {{action_url}}'},
-  {key:'okr_update_added',  label:'BOLT update added',      vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{value}}, {{comment}}, {{action_url}}'},
-  {key:'okr_target_revised',label:'BOLT target revised',    vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{old_target}}, {{new_target}}, {{reason}}, {{action_url}}'},
-  {key:'okr_closed',        label:'BOLT closed / reopened', vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{status}}, {{reason}}, {{action_url}}'},
+  {key:'okr_assigned',      label:'OKR assigned',          vars:'{{user_name}}, {{okr_title}}, {{assigner}}, {{target}}, {{schedule}}, {{period}}, {{action_url}}'},
+  {key:'okr_checkin_due',   label:'OKR check-in due (daily)',vars:'{{user_name}}, {{count}}, {{date}}, {{okr_titles}}, {{action_url}}'},
+  {key:'okr_update_added',  label:'OKR update added',      vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{value}}, {{comment}}, {{action_url}}'},
+  {key:'okr_target_revised',label:'OKR target revised',    vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{old_target}}, {{new_target}}, {{reason}}, {{action_url}}'},
+  {key:'okr_closed',        label:'OKR closed / reopened', vars:'{{user_name}}, {{okr_title}}, {{actor}}, {{status}}, {{reason}}, {{action_url}}'},
   /* Workspace. These templates already existed and were honoured by sendEmail, but were
      absent from this list, so nothing rendered an editor for them. */
   {key:'crm_automation',label:'Workspace automation (all boards)',vars:'{{user_name}}, {{rule}}, {{title}}, {{customer}}, {{board}}, {{status}}, {{priority}}, {{assignee}}, {{due_date}}, {{actor}}, {{action_url}}'},
@@ -394,11 +383,11 @@ function _defaultTemplates(){
     crm_approval:{subject:'✅ Approval needed: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" ({{customer}}) needs your approval.\n\n{{action_url}}'},
     crm_decided:{subject:'{{decision}}: {{title}}',body:'Hi {{user_name}},\n\n"{{title}}" was {{decision}} by {{actor}}.\n\n{{action_url}}'},
     crm_reminder:{subject:'Reminder: {{note}}',body:'Hi {{user_name}},\n\nYour reminder is due: {{note}}\n\nConversation: "{{title}}"\n\n{{action_url}}'},
-    okr_assigned:{subject:'🎯 New BOLT assigned: {{okr_title}}',body:'Hi {{user_name}},\n\n{{assigner}} assigned you an objective: {{okr_title}}\n\nTarget: {{target}}\nCheck-ins: {{schedule}}\nPeriod: {{period}}\n\nIf the objective has several owners, any one of you can submit an update — it counts for the whole group.\n\n{{action_url}}'},
-    okr_checkin_due:{subject:'⏰ BOLT check-in due today ({{count}})',body:'Hi {{user_name}},\n\nYou have {{count}} BOLT check-in(s) scheduled for today ({{date}}):\n\n{{okr_titles}}\n\nOpen Bridge to submit your update — if a co-owner already submitted, you\'re covered.\n\n{{action_url}}'},
+    okr_assigned:{subject:'🎯 New OKR assigned: {{okr_title}}',body:'Hi {{user_name}},\n\n{{assigner}} assigned you an objective: {{okr_title}}\n\nTarget: {{target}}\nCheck-ins: {{schedule}}\nPeriod: {{period}}\n\nIf the objective has several owners, any one of you can submit an update — it counts for the whole group.\n\n{{action_url}}'},
+    okr_checkin_due:{subject:'⏰ OKR check-in due today ({{count}})',body:'Hi {{user_name}},\n\nYou have {{count}} OKR check-in(s) scheduled for today ({{date}}):\n\n{{okr_titles}}\n\nOpen Bridge to submit your update — if a co-owner already submitted, you\'re covered.\n\n{{action_url}}'},
     okr_update_added:{subject:'📈 {{okr_title}} — updated by {{actor}}',body:'Hi {{user_name}},\n\n{{actor}} added an update on "{{okr_title}}": {{value}}\n\n{{comment}}\n\nThis counts for the whole owner group — nothing more to do for today\'s check-in.\n\n{{action_url}}'},
     okr_target_revised:{subject:'✏️ Target revised: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} revised the target on "{{okr_title}}": {{old_target}} → {{new_target}}\n\nReason: {{reason}}\n\nThe original target stays visible for comparison — the same updates feed both numbers.\n\n{{action_url}}'},
-    okr_closed:{subject:'🔒 BOLT {{status}}: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} {{status}} the objective "{{okr_title}}".\n\n{{reason}}\n\n{{action_url}}'},
+    okr_closed:{subject:'🔒 OKR {{status}}: {{okr_title}}',body:'Hi {{user_name}},\n\n{{actor}} {{status}} the objective "{{okr_title}}".\n\n{{reason}}\n\n{{action_url}}'},
   };
 }
 
@@ -407,7 +396,7 @@ function _nsDefault(){return{
   inapp_checklist_assigned:true,inapp_submission_submitted:true,
   inapp_submission_late:true,inapp_submission_approved:true,inapp_submission_rejected:true,
   inapp_approval_requested:true,inapp_approval_decided:true,
-  inapp_feedback_received:true,inapp_deadline_reminder:true,
+  inapp_feedback_received:true,inapp_deadline_reminder:true,inapp_crm_message:true,
   email_checklist_assigned:true,email_submission_submitted:false,
   email_submission_late:true,email_submission_approved:true,email_submission_rejected:true,
   email_approval_requested:true,email_approval_decided:true,
@@ -460,7 +449,7 @@ function _bodyToHtml(fromName, bodyText, actionUrl=''){
     :ctaUrl.includes('notifications')?'View Notifications'
     :ctaUrl.includes('settings')?'Open Settings'
     :ctaUrl.includes('analytics')?'View Analytics'
-    :ctaUrl.includes('okr')?'Open BOLTs'
+    :ctaUrl.includes('okr')?'Open OKRs'
     :'Open Bridge';
   return`<!DOCTYPE html><html><body style="margin:0;padding:0;background:#FAF7F1;font-family:sans-serif">
   <div style="max-width:520px;margin:32px auto;background:#fff;border-radius:16px;border:1px solid #EDE7DC;overflow:hidden">
@@ -489,6 +478,8 @@ async function sendEmail(eventType, userId, vars){
   const user = userId ? uById(userId) : null;
   if(!user?.email){console.warn('sendEmail: no email for user',userId);return;}
   if(user.emailEnabled===false) return;
+  try{var _k=({crm_mention:'mention',crm_ticket:'ticket',crm_moved:'ticket',crm_decided:'ticket',crm_created:'ticket',crm_reminder:'reminder',deadline_reminder:'reminder',escalation:'escalation',feedback_received:'feedback',checklist_assigned:'checklist',submission_submitted:'checklist',submission_late:'checklist',submission_approved:'checklist',submission_rejected:'checklist',approval_requested:'approval',approval_decided:'approval'})[eventType]||(String(eventType).indexOf('okr_')===0?'okr':'general');
+    var _np=user.notifyPrefs||{};var _c=_np.channels&&_np.channels[_k];if(_c&&_c.email===false)return;}catch(e){}
   if(!_ns) await _loadNS();
   if(!_ns.email_enabled) return;
   if(_ns['email_'+eventType]===false) return;
@@ -573,16 +564,18 @@ App._testEmail=async()=>{
 
 
 App._setSTab=(k)=>{S.filters.stab=k;rr();};
-function settingsPage(){
-  const stab=(S.filters.stab&&S.filters.stab!=='workflow')?S.filters.stab:'inapp';
-  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}<div style="padding:40px;text-align:center;color:#A59788;font-size:13px">Loading…</div></div>`;}
-  const ns=_ns;
-  // Workflow tab removed (Evarca-aligned): its 4 toggles were saved but never read by any code.
-  const TABS=[['inapp','In-App'],['email','Email'],['templates','Templates'],['data','Data']];
+function settingsPage(forceTab){
+  const admin=can('settings','view');
+  const TABS=[['profile','Profile'],['mynotif','My notifications']].concat(admin?[['inapp','In-App'],['email','Email'],['templates','Templates']]:[]);
+  let stab=forceTab||S.filters.stab||(admin?'inapp':'mynotif');
+  if(!TABS.some(t=>t[0]===stab))stab=admin?'inapp':'mynotif';
   const tabBar=`<div class="ui-tabs" style="margin-bottom:20px">${TABS.map(([k,l])=>`<button class="ui-tab${stab===k?' on':''}" onclick="App._setSTab('${k}')">${l}</button>`).join('')}</div>`;
+  if(stab==='profile')return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}${_profileTab()}</div>`;
+  if(stab==='mynotif')return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}<div>${window.BBNotify?BBNotify.settingsHTML():(typeof _bbMyNotifCard==='function'?_bbMyNotifCard():'')}</div></div>`;
+  if(!_ns){_loadNS().then(()=>rr());return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}<div style="padding:40px;text-align:center;color:#A59788;font-size:13px">Loading…</div></div>`;}
+  const ns=_ns;
 
   const inappTab=`<div class="space-y-4">
-    ${typeof _bbSndCard==='function'?_bbSndCard():''}
     <div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden">
       <div style="padding:14px 20px;background:#F5F1EB;border-bottom:1px solid #EEE8DE">
         <div style="font-size:14px;font-weight:700">In-app notifications</div>
@@ -601,14 +594,15 @@ function settingsPage(){
         ${_nsTogRow('inapp_approval_decided','Approval decided','Sent to the user when their approval is approved/rejected')}
         ${_nsTogRow('inapp_feedback_received','Feedback received','Sent to the user when their manager sends feedback')}
         <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">Workspace</div>
+        ${_nsTogRow('inapp_crm_message','Every Workspace message','Board & channel members are alerted for each message (each person can switch their own off in Profile → My notifications)')}
         ${_nsTogRow('inapp_crm_mention','Tagged in Workspace chat','When someone @mentions you in a conversation')}
         ${_nsTogRow('inapp_crm_ticket','Workspace ticket activity','Created, assigned, moved & automation alerts')}
         ${_nsTogRow('inapp_crm_reminder','Workspace reminders','Reminders scheduled by board automations (date & time)')}
-        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">BOLTs</div>
-        ${_nsTogRow('inapp_okr_assigned','BOLT assigned','Sent to every owner when an objective is assigned to them')}
-        ${_nsTogRow('inapp_okr_update_added','BOLT update added','Sent to co-owners when someone submits the group\'s check-in')}
-        ${_nsTogRow('inapp_okr_target_revised','BOLT target revised','Sent to the owners when a target is revised')}
-        ${_nsTogRow('inapp_okr_closed','BOLT closed / reopened','Sent to the owners when an objective is closed or reopened')}
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
+        ${_nsTogRow('inapp_okr_assigned','OKR assigned','Sent to every owner when an objective is assigned to them')}
+        ${_nsTogRow('inapp_okr_update_added','OKR update added','Sent to co-owners when someone submits the group\'s check-in')}
+        ${_nsTogRow('inapp_okr_target_revised','OKR target revised','Sent to the owners when a target is revised')}
+        ${_nsTogRow('inapp_okr_closed','OKR closed / reopened','Sent to the owners when an objective is closed or reopened')}
       </div>
     </div>
   </div>`;
@@ -663,12 +657,12 @@ function settingsPage(){
         ${_nsTogRow('email_crm_mention','Tagged in Workspace chat','Email when someone @mentions you')}
         ${_nsTogRow('email_crm_ticket','Workspace ticket activity','Email for created / assigned / automation alerts')}
         ${_nsTogRow('email_crm_reminder','Workspace reminders','Email for reminders scheduled by board automations')}
-        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">BOLTs</div>
-        ${_nsTogRow('email_okr_assigned','BOLT assigned','Email to every owner when an objective is assigned to them')}
-        ${_nsTogRow('email_okr_checkin_due','BOLT check-in due (daily)','Sent automatically every morning (server schedule) to owners with a check-in due that day')}
-        ${_nsTogRow('email_okr_update_added','BOLT update added','Email to co-owners when someone submits the group\'s check-in')}
-        ${_nsTogRow('email_okr_target_revised','BOLT target revised','Email to the owners when a target is revised')}
-        ${_nsTogRow('email_okr_closed','BOLT closed / reopened','Email to the owners when an objective is closed or reopened')}
+        <div style="font-size:10px;font-weight:800;color:#A8998A;letter-spacing:.06em;text-transform:uppercase;padding:14px 0 4px">OKRs</div>
+        ${_nsTogRow('email_okr_assigned','OKR assigned','Email to every owner when an objective is assigned to them')}
+        ${_nsTogRow('email_okr_checkin_due','OKR check-in due (daily)','Sent automatically every morning (server schedule) to owners with a check-in due that day')}
+        ${_nsTogRow('email_okr_update_added','OKR update added','Email to co-owners when someone submits the group\'s check-in')}
+        ${_nsTogRow('email_okr_target_revised','OKR target revised','Email to the owners when a target is revised')}
+        ${_nsTogRow('email_okr_closed','OKR closed / reopened','Email to the owners when an objective is closed or reopened')}
       </div>
     </div>
   </div>`;
@@ -740,172 +734,68 @@ function settingsPage(){
     toast('Reset to default ✓');rr();
   };
 
-  const dataTab=`<div class="space-y-4">
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Export & Reset</h3>
-      <div class="flex gap-3 flex-wrap">
-        ${btnG('Export CSV','App._exportCSV()','download')}
-        <button onclick="App._clearOperational()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #F5DCC0;color:#463830;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#F5EFDF'" onmouseout="this.style.background='#fff'">🧹 Clear data</button>
-        <button onclick="App._resetWorkspaceCache()" style="flex:1;min-width:140px;padding:10px;border-radius:12px;border:1.5px solid #EFC9BE;color:#A63528;background:#fff;font-weight:600;font-size:14px;cursor:pointer" onmouseover="this.style.background='#F9EBE5'" onmouseout="this.style.background='#fff'">Reset workspace</button>
-      </div>
-    </div>
-    <div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-5">
-      <h3 class="fd font-semibold text-sm mb-3">Workspace stats</h3>
-      <div class="grid grid-cols-4 gap-2 text-center">${[['Users',DB.users.length],['Checklists',DB.checklists.length],['Locations',DB.locations.length],['Submissions',DB.submissions.length]].map(([k,v])=>`<div class="bg-ink-50 rounded-xl p-3"><div class="fd text-xl font-bold">${v}</div><div class="text-[10px] text-ink-400 font-medium">${k}</div></div>`).join('')}</div>
-    </div>
-  </div>`;
-
-  const content=stab==='inapp'?inappTab:stab==='email'?emailTab:stab==='templates'?templatesTab:dataTab;
+  const content=stab==='inapp'?inappTab:stab==='email'?emailTab:templatesTab;
   return`<div class="fade max-w-2xl">${hdr('Settings','')}${tabBar}${content}</div>`;
 }
 
-App._exportCSV=()=>{
-  let subs=DB.submissions;if(!isAdmin())subs=subs.filter(s=>subTree(S.uid).some(u=>u.id===s.userId)||s.userId===S.uid);
-  const f=S.filters;const fArr=k=>Array.isArray(f[k])?f[k]:(f[k]?[f[k]]:[]);
-  if(fArr('users').length)subs=subs.filter(s=>fArr('users').includes(s.userId));
-  if(fArr('deps').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('deps').includes(c?.department);});
-  if(fArr('locs').length)subs=subs.filter(s=>{const c=clById(s.checklistId);return fArr('locs').some(l=>(c?.locationIds||[]).includes(l));});
-  if(fArr('stats').length)subs=subs.filter(s=>fArr('stats').includes(s.status));
-  if(f.dr1)subs=subs.filter(s=>s.date>=f.dr1);if(f.dr2)subs=subs.filter(s=>s.date<=f.dr2);
-  const summaryRows=[['#','User','Email','Phone','Department','Position','Checklist','Dept','Location(s)','Date','Status','Submitted At','Edit Count','Pending Approval','Compliance','Escalations']];
-  subs.forEach((s,i)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;if(!c&&!s.checklistDeleted)return;const clName=c?c.name:'[Deleted checklist]';const clDept=c?c.department||'':'';const clLocs=c?(c.locationIds||[]).map(id=>DB.locations.find(l=>l.id===id)?.name||'').join('; '):'';const _escN=(c&&(c.questionIds||[]).length)?_subEscalationCount(c,s):0;const _compTxt=(c&&(c.questionIds||[]).length)?(_escN>0?'Non-compliant':'Compliant'):'N/A';summaryRows.push([i+1,fullName(u),u.email||'',u.phone||'',u.department||'',u.position||'',clName,clDept,clLocs,s.date,s.status,s.submittedAt?new Date(s.submittedAt).toLocaleString('en-GB'):'',s.editCount||0,s.status==='Pending Approval'?'Yes':'No',_compTxt,_escN]);});
-  // Also export question responses as a second sheet
-  const qRows=[['Sub #','User','Email','Checklist','Date','Status','Question','Response','Comment','Escalated']];
-  subs.forEach((s,si)=>{const u=uById(s.userId),c=clById(s.checklistId);if(!u)return;(s.questionResponses||[]).forEach((qr,qi)=>{const q=(DB.questions||[]).find(x=>x.id===qr.questionId);const _esc=(c&&q&&_qrEscalates(c,q,qr))?'Yes':'';qRows.push([si+1,fullName(u),u.email||'',c?c.name:'[Deleted]',s.date,s.status,q?q.text:'Q'+(qi+1),qr.response!==null&&qr.response!==undefined?String(qr.response):'',qr.comment||'',_esc]);});});
-  const all=[...summaryRows,[],['=== QUESTION RESPONSES (one row per response) ==='],[],...qRows];
-  const csv=all.map(r=>r.map(v=>{let cell=String(v??'');
-    // Neutralize CSV formula injection: cells that begin with = + - @ (or tab/CR)
-    // are prefixed with a single quote so spreadsheet apps treat them as text.
-    if(/^[=+\-@\t\r]/.test(cell))cell="'"+cell;
-    return '"'+cell.replace(/"/g,'""')+'"';}).join(',')).join('\n');
-  const a=document.createElement('a');a.href='data:text/csv;charset=utf-8,﻿'+encodeURIComponent(csv);a.download='bridge_export_'+todayISO()+'.csv';a.click();
-  toast('Exported '+subs.length+' submissions ('+(qRows.length-1)+' question responses)');
-};
-
-
-
-/* ═══════════ SOUND ALERTS — every Bridge notification rings once ═══════════
-   Loud bell on arrival (realtime + poll), rate-limited to one ring, with
-   per-person per-type opt-outs stored on this device. */
-var _BB_SND_TYPES=[
- ['workspace_message','Workspace chat messages','A new message in any of your conversations'],
- ['crm_mention','Tagged / @mentions','Someone @mentions you anywhere in Workspace'],
- ['workspace','Workspace activity','Tickets created, assigned, moved and automation updates'],
- ['checklist','Checklists','When someone assigns a checklist to you, or removes one'],
- ['approval','Approvals','Approval requested, approved or rejected'],
- ['edit','Edit requests','Edit requests and re-submissions'],
- ['escalation','Escalations','A question or task escalates to you'],
- ['feedback','Feedback','Feedback and feedback replies'],
- ['late','Late & reminders','Overdue submissions and deadline reminders'],
- ['okr','BOLT','When a BOLT is assigned to you, checked in or revised'],
- ['general','Everything else','Any other Bridge notification']
+/* ═══════════════════════════════════════════════════════════════════════════════
+   v3.27 — NOTIFICATION KINDS & PREFERENCES
+   The database decides WHO gets a notification and writes the row (kind, conversation, count).
+   HOW it is shown (badge / sound / card / desktop pop-up / push) is decided in ONE place:
+   20-notification-center.js (window.BBNotify). This file keeps the kinds, the per-person
+   preference helpers (profiles.notify_prefs.channels[kind][channel]) and the Settings UI.
+   ═══════════════════════════════════════════════════════════════════════════════ */
+var _BB_KINDS=[
+ ['mention','Tagged in a chat','Someone @mentions you or your group in Workspace'],
+ ['chat','Every chat message','New messages on boards you belong to (grouped per chat)'],
+ ['ticket','Tickets','Created, assigned, moved, approved and automation alerts'],
+ ['okr','OKRs','Assigned, check-ins, updates, target changes'],
+ ['checklist','Checklists','Assigned, submitted, approved, rejected, late'],
+ ['approval','Approvals','Requested and decided'],
+ ['feedback','Feedback','Feedback and replies from your manager'],
+ ['reminder','Reminders & deadlines','Due reminders, overdue items, edit requests'],
+ ['escalation','Escalations','A question or task escalates to you']
 ];
-function _bbSndKey(){return 'bb_snd_prefs_'+((typeof S!=='undefined'&&S&&S.uid)||'anon');}
-function _bbSndPrefs(){try{var p=JSON.parse(localStorage.getItem(_bbSndKey())||'{}');p.types=p.types||{};if(p.master===undefined)p.master=true;return p;}catch(e){return{master:true,types:{}};}}
-function _bbSndSave(p){try{localStorage.setItem(_bbSndKey(),JSON.stringify(p));}catch(e){}}
-function _bbSndAllow(t){var p=_bbSndPrefs();if(p.master===false)return false;return p.types[t]!==false;}
-function _bbSndSet(t,on){var p=_bbSndPrefs();p.types[t]=!!on;_bbSndSave(p);}
-App._bbSndMaster=()=>{var p=_bbSndPrefs();p.master=(p.master===false);_bbSndSave(p);if(p.master)try{_crmDing(null,true);}catch(e){}render();};
-App._bbSndTogType=(t)=>{var p=_bbSndPrefs();p.types[t]=(p.types[t]===false);_bbSndSave(p);if(p.types[t]&&p.master!==false)try{_crmDing(null,true);}catch(e){}render();};
-App._bbSndOpen=()=>{window._bbSndOpen=!window._bbSndOpen;render();};
-function _bbNotifKind(n){
-  var text=(n&&n.text)||'';var link=(n&&n.link)||'';
-  if(n&&n.kind==='okr')return'okr';
+var _BB_CHANNELS=[['inbox','Inbox'],['sound','Sound'],['desktop','Desktop'],['push','Push'],['email','Email']];
+/* defaults when nothing is saved: everything on, except e-mail for plain chat */
+function _bbPrefDefault(kind,ch){return !(kind==='chat'&&ch==='email');}
+/* legacy text → kind, only for rows older than the engine (new rows carry kind from the server) */
+function _bbKindFromText(text,link){
+  text=text||'';link=link||'';
+  if(/tagged you in/i.test(text))return'mention';
   if(/OKR|BOLT|objective/i.test(text))return'okr';
-  if(/tagged you in/i.test(text))return'crm_mention';
-  if(link&&String(link).indexOf('crm:')===0)return'workspace';
-  if(text.indexOf('\u{1F3AB}')>=0||text.indexOf('\u21AA')>=0||text.indexOf('\u26A1')>=0||text.indexOf('\u{1F4AC}')>=0)return'workspace';
-  if(/^\u2705 Approval needed:/.test(text))return'workspace';
-  if(/checklist assigned|checklist removed/i.test(text))return'checklist';
+  if(link.indexOf('crm:')===0&&text.indexOf('\u{1F4AC}')>=0)return'chat';
+  if(/checklist/i.test(text))return'checklist';
   if(/escalat/i.test(text))return'escalation';
   if(/feedback|replied|reply/i.test(text))return'feedback';
   if(/approv|reject/i.test(text))return'approval';
-  if(/edit request|re-submit|resubmit/i.test(text))return'edit';
-  if(/overdue|late|reminder|deadline/i.test(text))return'late';
+  if(/overdue|late|reminder|deadline|edit request|re-?submit/i.test(text))return'reminder';
+  if(link.indexOf('crm:')===0)return'ticket';
   return'general';
 }
-function _bbRing(kind){
+function _bbNotifKind(n){if(!n)return'general';if(n.kind)return n.kind;return _bbKindFromText(n.text,n.link);}
+/* old sound-type names still used by a few callers */
+function _bbKindNorm(t){return({workspace_message:'chat',crm_mention:'mention',workspace:'ticket',late:'reminder',edit:'reminder'})[t]||t||'general';}
+/* the person's preference for one kind × channel (saved on the profile, follows them everywhere) */
+function _bbPrefOn(kind,ch){
   try{
-    if(!_bbSndPrefs().master)return;
-    if(!_bbSndAllow(kind))return;
-    var now=Date.now();if(now-(window._bbDingT||0)<1500)return;window._bbDingT=now;
-    _crmDing(null,true);
-  }catch(e){}
+    kind=_bbKindNorm(kind);var p=_bbNP();var c=p.channels&&p.channels[kind];
+    if(c&&typeof c[ch]==='boolean')return c[ch];
+    /* legacy single switches */
+    if(ch==='inbox'&&kind==='chat'&&p.chat_all===false)return false;
+    if(ch==='desktop'&&p.desktop===false)return false;
+    if(ch==='push'&&p.push===false)return false;
+    return _bbPrefDefault(kind,ch);
+  }catch(e){return true;}
 }
-window._bbSeenN=window._bbSeenN||{};
+async function _bbNPSetChannel(kind,ch,on){
+  var p=_bbNP();var channels=Object.assign({},p.channels||{});channels[kind]=Object.assign({},channels[kind]||{});channels[kind][ch]=!!on;
+  var patch={channels:channels};
+  if(kind==='chat'&&ch==='inbox')patch.chat_all=!!on;        // keep the legacy switch in step (server trigger reads both)
+  if(ch==='desktop'||ch==='push'){var all=_BB_KINDS.every(function(k){var c=channels[k[0]];return !(c&&c[ch]===false);});patch[ch]=all;}
+  await _bbNPSave(patch);
+}
 function _bbSB(){try{if(typeof sb!=='undefined'&&sb)return sb;}catch(e){}try{return window.sb||null;}catch(e){}return null;}
-function _bbOnNotifRow(row){
-  try{
-    if(!row||!row.id||!S||row.user_id!==S.uid)return;
-    if(window._bbSeenN[row.id])return;window._bbSeenN[row.id]=1;
-    var known=(DB.notifications||[]).some(function(x){return x.id===row.id;});
-    if(!known){
-      try{DB.notifications.unshift({id:row.id,userId:row.user_id,text:row.text||'',read:row.read||false,time:row.created_at,link:row.link||null});_invalidateNotifCache();}catch(e){}
-      var age=row.created_at?(Date.now()-new Date(row.created_at).getTime()):9e9;
-      if(age<120000&&!row.read)_bbRing(_bbNotifKind({text:row.text,link:row.link}));
-      try{var _ae=document.activeElement;var _typing=_ae&&/^(INPUT|TEXTAREA)$/.test(_ae.tagName);if(S.route==='notifications'){render();}else if(!_typing){render();}}catch(e){}
-    }
-  }catch(e){}
-}
-(function(){
-  if(window._bbNotifBoot)return;window._bbNotifBoot=true;
-  /* history never rings: keep marking whatever is already loaded as seen */
-  setInterval(function(){try{(DB&&DB.notifications||[]).forEach(function(n){window._bbSeenN[n.id]=1;});}catch(e){}},2000);
-  /* live: one realtime channel per signed-in user */
-  setInterval(function(){try{
-    var _s=_bbSB();
-    if(!_s||typeof S==='undefined'||!S||!S.uid||window._bbNotifRT)return;
-      window._bbNotifRT=_s.channel('bb-notif-'+S.uid)
-        .on('postgres_changes',{event:'INSERT',schema:'public',table:'notifications',filter:'user_id=eq.'+S.uid},function(p){_bbOnNotifRow(p.new||p.record||{});})
-        .subscribe();
-    }catch(e){window._bbNotifRT=null;}
-  },2500);
-  /* fallback: light refresh once a minute while the tab is visible */
-  setInterval(function(){
-    if(!S||!S.uid||document.visibilityState!=='visible')return;
-    try{if(typeof _lazyLoad==='function')_lazyLoad('notifications');}catch(e){}
-  },60000);
-  /* poll path rings too: wrap the apply step, ring only brand-new fresh rows */
-  if(typeof _applyNotifications==='function'){
-    var _oap=_applyNotifications;
-    _applyNotifications=function(notifs){
-      var prev={};try{(DB.notifications||[]).forEach(function(n){prev[n.id]=1;});}catch(e){}
-      _oap(notifs);
-      try{
-        (DB.notifications||[]).forEach(function(n){
-          if(prev[n.id]||window._bbSeenN[n.id]){window._bbSeenN[n.id]=1;return;}
-          window._bbSeenN[n.id]=1;
-          var age=n.time?(Date.now()-new Date(n.time).getTime()):9e9;
-          if(age<120000&&!n.read)_bbRing(_bbNotifKind(n));
-        });
-      }catch(e){}
-    };
-  }
-})();
-function _bbSndRow(t,label,desc){
-  var on=_bbSndAllow(t);var p=_bbSndPrefs();
-  return '<div style="display:flex;align-items:center;gap:12px;padding:10px 0;border-bottom:1px solid #F1ECE3'+(p.master===false?';opacity:.45;pointer-events:none':'')+'">'
-   +'<div style="flex:1;min-width:0"><div style="font-size:13px;font-weight:600;color:#13171B">'+label+'</div>'
-   +(desc?'<div style="font-size:11px;color:#A8998A;margin-top:1px">'+desc+'</div>':'')+'</div>'
-   +'<button class="tog'+(on?' on':'')+'" onclick="App._bbSndTogType(\''+t+'\')" aria-label="Toggle sound for '+label+'"><span></span></button></div>';
-}
-function _bbSndCard(){
-  var p=_bbSndPrefs();var open=!!window._bbSndOpen;
-  return '<div class="bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow:hidden;margin-bottom:16px">'
-   +'<div style="padding:13px 18px;background:#F5F1EB;'+(open?'border-bottom:1px solid #EEE8DE;':'')+'display:flex;align-items:center;gap:11px">'
-   +'<button onclick="App._bbSndOpen()" style="flex:1;min-width:0;display:flex;align-items:center;gap:10px;border:none;background:transparent;cursor:pointer;text-align:left;padding:0">'
-   +'<span style="font-size:17px">\u{1F514}</span>'
-   +'<span style="min-width:0"><span style="display:block;font-size:13.5px;font-weight:700;color:#13171B">Notification sounds</span>'
-   +'<span style="display:block;font-size:11.5px;color:#A59788;margin-top:1px">'+(p.master===false?'All sounds off':'Rings once per notification \u00B7 tap to choose which types')+'</span></span>'
-   +'<span style="margin-left:auto;color:#B8AA9C;transform:rotate('+(open?'90':'0')+'deg);transition:transform .15s">'+ic('chevR','w-4 h-4')+'</span></button>'
-   +'<button onclick="try{_crmDing(null,true)}catch(e){}" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex-shrink:0">Test</button>'
-   +'<button class="tog'+(p.master!==false?' on':'')+'" onclick="App._bbSndMaster()" aria-label="All notification sounds"><span></span></button>'
-   +'</div>'
-   +(open?'<div style="padding:2px 18px 10px">'+_BB_SND_TYPES.map(function(r){return _bbSndRow(r[0],r[1],r[2]);}).join('')+'</div>':'')
-   +'</div>';
-}
-window._bbSndCard=_bbSndCard;
-
 
 /* ═══════════ PRESENCE — green dot while a person's Bridge tab is open ═══════════ */
 window._bbOnline=window._bbOnline||{};
@@ -963,3 +853,136 @@ function _bbPresPaint(){try{var els=document.querySelectorAll('[data-pres]');for
   try{new MutationObserver(function(){clearTimeout(deb);deb=setTimeout(_bbEyeEnhance,120);}).observe(document.documentElement,{childList:true,subtree:true});}catch(e){}
   _bbEyeEnhance();
 })();
+
+
+/* ═══════════════════════════════════════════════════════════════════════════════
+   v3.22 — MY NOTIFICATIONS (per person) + DESKTOP notifications + WEB PUSH
+   · profiles.notify_prefs (jsonb) holds each person's own switches:
+       chat_all  — alert me on EVERY Workspace message on my boards (default ON)
+       desktop   — system notifications while Bridge is open in a tab (default ON)
+       push      — notifications while Bridge is closed, via Web Push (default ON once enabled)
+   · Desktop = the browser Notification API, fired from the same realtime row that rings the bell.
+   · Push = service worker (/sw.js) + push_subscriptions table + `send-push` edge function,
+     called by a trigger on `notifications` — so every kind of alert reaches a closed app.
+   · Native (Capacitor iOS/Android): register the device token into push_subscriptions with
+     kind 'apns'/'fcm' from the shell and the same trigger/function picks it up (sender TODO).
+   ═══════════════════════════════════════════════════════════════════════════════ */
+var _BB_VAPID_PUBLIC='BHQnIaq-75Zs5dj1k7IBupTUYqBYpHknv8XaXHqlV3ti1IkDaLgr-Pk7SuemZSoFTRx7VN8te6mvjpl3nn64nmc';
+function _bbNP(){try{var u=me();if(!u)return{};if(!u.notifyPrefs||typeof u.notifyPrefs!=='object')u.notifyPrefs={};return u.notifyPrefs;}catch(e){return{};}}
+function _bbNPOn(key){var p=_bbNP();return p[key]!==false;}
+async function _bbNPSave(patch){
+  var u=me();if(!u)return;
+  u.notifyPrefs=Object.assign({},u.notifyPrefs||{},patch||{});
+  try{saveDB();}catch(e){}
+  try{var r=await sb.from('profiles').update({notify_prefs:u.notifyPrefs}).eq('id',u.id);if(r&&r.error)throw r.error;}
+  catch(e){console.warn('[notify_prefs]',e&&e.message);toast('Saved on this device only — sync failed','warn');}
+}
+App._bbNPTogCh=async(btn,kind,ch)=>{
+  var nowOn=btn.classList.contains('off');
+  btn.classList.toggle('on',nowOn);btn.classList.toggle('off',!nowOn);btn.setAttribute('aria-checked',nowOn?'true':'false');
+  await _bbNPSetChannel(kind,ch,nowOn);
+  if(ch==='push'&&nowOn){try{await App._bbPushEnable(true);}catch(e){}}
+  if(ch==='desktop'&&nowOn){try{await App._bbDesktopEnable(true);}catch(e){}}
+};
+App._bbNPRowAll=async(kind,on)=>{for(var i=0;i<_BB_CHANNELS.length;i++){await _bbNPSetChannel(kind,_BB_CHANNELS[i][0],on);}render();};
+/* ── Desktop notifications (tab open, maybe in the background) ── */
+function _bbDesktopSupported(){return typeof window!=='undefined'&&'Notification' in window;}
+function _bbDesktopState(){if(!_bbDesktopSupported())return'unsupported';try{return Notification.permission;}catch(e){return'unsupported';}}
+App._bbDesktopEnable=async(quiet)=>{
+  if(!_bbDesktopSupported()){if(!quiet)toast('This browser can’t show desktop notifications','warn');return false;}
+  try{var p=await Notification.requestPermission();
+    if(p==='granted'){if(!quiet){toast('Desktop notifications on ✓');try{new Notification('Bridge',{body:'You’ll be notified here when something needs you.',icon:'/icons/icon-192.png',tag:'bb-test'});}catch(e){}}return true;}
+    if(!quiet)toast(p==='denied'?'Blocked in the browser — allow notifications for this site in the address-bar settings':'Not enabled','warn');
+  }catch(e){}
+  return false;
+};
+/* Show a system notification for a fresh bell row — but not for the conversation the person is
+   looking at right now (they can see it), and never twice for the same row. */
+function _bbDesktopShow(row){
+  try{
+    if(!row||!row.id)return;if(_bbDesktopState()!=='granted')return;if(!_bbPrefOn(_bbNotifKind(row),'desktop'))return;
+    window._bbDeskSeen=window._bbDeskSeen||{};var _dk=row.id+':'+(row.count||1);if(window._bbDeskSeen[_dk])return;window._bbDeskSeen[_dk]=1;
+    var link=row.link||'';
+    var viewing=false;
+    try{viewing=document.visibilityState==='visible'&&document.hasFocus()&&S.route==='crm'&&typeof CRM!=='undefined'&&CRM&&CRM.sel&&link===('crm:'+CRM.sel.convoId);}catch(e){}
+    /* v3.27: while a Bridge window is open the service worker never shows a system notification
+       (it hands the push to the app) — so this pop-up is THE one, and only in the background. */
+    if(viewing){_bbCloseSWNotif(link||row.id);return;}
+    if(document.visibilityState==='visible'&&document.hasFocus())return;
+    var text=String(row.text||'');var kind=_bbNotifKind(row);
+    var title=({mention:'You were tagged',chat:((row.count||1)>1?(row.count+' new messages'):'New message'),ticket:'Ticket',okr:'OKR',checklist:'Checklist',approval:'Approval',feedback:'Feedback',reminder:'Reminder',escalation:'Escalation'})[kind]||'Bridge';
+    var body=text.replace(/^[\p{Extended_Pictographic}\u{FE0F}\u{200D}]+\s*/u,'').slice(0,200);
+    var n=new Notification(title,{body:body,icon:'/icons/icon-192.png',badge:'/icons/icon-192.png',tag:link||row.id,renotify:true,data:{link:link,id:row.id}});
+    n.onclick=function(){try{window.focus();}catch(e){}try{n.close();}catch(e){}try{App._bbOpenLink(link,text,row.id);}catch(e){}};
+    setTimeout(function(){try{n.close();}catch(e){}},12000);
+  }catch(e){}
+}
+function _bbCloseSWNotif(tag){try{if(!('serviceWorker' in navigator))return;var go=function(){navigator.serviceWorker.getRegistration('/').then(function(r){if(!r||!r.getNotifications)return;r.getNotifications({tag:tag}).then(function(ns){ns.forEach(function(n){try{n.close();}catch(e){}});}).catch(function(){});}).catch(function(){});};go();setTimeout(go,1500);setTimeout(go,4000);}catch(e){}}
+/* Open what a notification points at (system notification click, push tap, ?nl= deep link) */
+App._bbOpenLink=(link,text,nid)=>{
+  try{if(nid){var n=(DB.notifications||[]).find(function(x){return x.id===nid;});if(n&&!n.read){n.read=true;_invalidateNotifCache();try{sb.from('notifications').update({read:true}).eq('id',nid).then(function(){}).catch(function(){});}catch(e){}}}}catch(e){}
+  if(link&&String(link).indexOf('crm:')===0&&typeof App._crmOpenFromNotification==='function'){if(App._crmOpenFromNotification(link,text||''))return;}
+  App.go('notifications');
+};
+/* ── Web Push (app closed) ── */
+function _bbPushSupported(){return typeof navigator!=='undefined'&&'serviceWorker' in navigator&&'PushManager' in window&&_bbDesktopSupported();}
+function _bbB64ToU8(b){var pad='='.repeat((4-b.length%4)%4);var s=(b+pad).replace(/-/g,'+').replace(/_/g,'/');var raw=atob(s);var out=new Uint8Array(raw.length);for(var i=0;i<raw.length;i++)out[i]=raw.charCodeAt(i);return out;}
+function _bbIsNative(){try{return !!(window.Capacitor&&window.Capacitor.isNativePlatform&&window.Capacitor.isNativePlatform());}catch(e){return false;}}
+async function _bbSWReg(){
+  if(!('serviceWorker' in navigator))return null;
+  try{var reg=await navigator.serviceWorker.register('/sw.js',{scope:'/'});return reg;}catch(e){console.warn('[sw]',e&&e.message);return null;}
+}
+async function _bbPushSaveSub(sub){
+  if(!sub||!S.uid)return;
+  var j=sub.toJSON?sub.toJSON():sub;
+  var row={user_id:S.uid,kind:'webpush',endpoint:j.endpoint,keys:j.keys||{},ua:(navigator.userAgent||'').slice(0,200),updated_at:new Date().toISOString(),last_error:null};
+  try{var r=await sb.from('push_subscriptions').upsert(row,{onConflict:'endpoint'});if(r&&r.error)throw r.error;try{localStorage.setItem('bb_push_ep_'+S.uid,j.endpoint);}catch(e){}}
+  catch(e){console.warn('[push save]',e&&e.message);}
+}
+App._bbPushEnable=async(quiet)=>{
+  if(_bbIsNative()){if(!quiet)toast('In the app, notifications are set up by the app itself','warn');return false;}
+  if(!_bbPushSupported()){if(!quiet)toast('This browser can’t receive push notifications'+(/iP(hone|ad)/.test(navigator.userAgent)?' — add Bridge to your Home Screen first':''),'warn');return false;}
+  try{
+    var ok=await App._bbDesktopEnable(true);if(!ok){if(!quiet)toast('Allow notifications first','warn');return false;}
+    var reg=await _bbSWReg();if(!reg){if(!quiet)toast('Could not start background notifications','err');return false;}
+    await navigator.serviceWorker.ready;
+    var sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:_bbB64ToU8(_BB_VAPID_PUBLIC)});
+    await _bbPushSaveSub(sub);
+    if(_bbNP().push===false)await _bbNPSave({push:true});
+    if(!quiet)toast('Push notifications on for this device ✓');
+    try{render();}catch(e){}
+    return true;
+  }catch(e){console.warn('[push]',e&&e.message);if(!quiet)toast('Push setup failed: '+((e&&e.message)||'unknown'),'err');return false;}
+};
+App._bbPushDisableHere=async()=>{
+  try{var reg=await navigator.serviceWorker.getRegistration('/');var sub=reg?await reg.pushManager.getSubscription():null;
+    if(sub){try{await sb.from('push_subscriptions').delete().eq('endpoint',sub.endpoint);}catch(e){}try{await sub.unsubscribe();}catch(e){}}
+    try{localStorage.removeItem('bb_push_ep_'+S.uid);}catch(e){}
+    toast('Push off on this device');render();}catch(e){}
+};
+/* On every boot: keep the subscription fresh (endpoints rotate) without asking anything. */
+async function _bbPushResync(){
+  if(!S.uid||_bbIsNative()||!_bbPushSupported())return;
+  if(_bbDesktopState()!=='granted'||_bbNP().push===false)return;
+  try{var reg=await _bbSWReg();if(!reg)return;var sub=await reg.pushManager.getSubscription();
+    if(!sub)sub=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:_bbB64ToU8(_BB_VAPID_PUBLIC)});
+    var ep='';try{ep=localStorage.getItem('bb_push_ep_'+S.uid)||'';}catch(e){}
+    if(sub&&sub.endpoint!==ep)await _bbPushSaveSub(sub);
+  }catch(e){}
+}
+function _bbPushHere(){try{return !!localStorage.getItem('bb_push_ep_'+(S&&S.uid));}catch(e){return false;}}
+/* v3.27: the My-notifications UI is BBNotify.settingsHTML() in 20-notification-center.js */
+/* Boot hooks: SW registration, subscription resync, deep link from a push tap */
+function _bbAfterBoot(){
+  /* v3.27: first sync is done — from here on, rows are "new"; everything before is history (badge only) */
+  window._bbFirstSyncDone=true;try{if(window.BBNotify)BBNotify.markReady();}catch(e){}
+  try{if(window.BBNotify)BBNotify.heartbeat(true);}catch(e){}
+  try{_bbPushResync();}catch(e){}
+  try{
+    var q=new URLSearchParams(window.location.search||'');var nl=q.get('nl');
+    if(nl){try{history.replaceState(null,'',window.location.pathname+window.location.hash);}catch(e){}setTimeout(function(){try{App._bbOpenLink(nl,'');}catch(e){}},400);}
+  }catch(e){}
+  try{if('serviceWorker' in navigator&&!window._bbSWMsgBound){window._bbSWMsgBound=true;navigator.serviceWorker.addEventListener('message',function(ev){var d=ev.data||{};if(d.type==='bb-open'){try{App._bbOpenLink(d.link||'','');}catch(e){}}});}}catch(e){}
+}
+window._bbAfterBoot=_bbAfterBoot;

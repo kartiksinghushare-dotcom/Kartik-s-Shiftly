@@ -1,3 +1,20 @@
+# Bridge v131 — one notification pipeline (sounds, DND, quiet hours, presence) · mobile polish
+
+`public/js/20-notification-center.js` (new), `public/js/06-crm.js`, `public/js/18-settings-notifications.js`, `public/js/01-supabase-sync.js`, `public/js/04-nav-shell.js`, `public/js/12-my-checklists.js`, `public/js/14-all-checklists.js`, `public/js/15-questions-escalation.js`, `public/js/16-hierarchy-tickets.js`, `public/sw.js`, `src/styles/main.css`, `index.html` + cache-buster `?v=131`.
+DB (additive): new `user_presence` table (own-rows RLS), `server_now()` function, the two push triggers now carry `updated_at`/`actor_id`. Edge function `send-push` redeployed (v3). Nothing deleted.
+
+**Why:** the old sound code lived in three places with three different rules — it rang on opening Bridge (queued pushes + rows re-touched by a background sync), rang twice on push-enabled devices (OS + in-app), rang in every open tab, and had one loud 5-note alarm for everything.
+
+- **One engine — `BBNotify` (20-notification-center.js).** Every path (realtime insert/update, push handed over by the service worker, poll) goes through `BBNotify.handle(row)`, which alone decides badge / sound / in-app card / desktop pop-up. Rules: "new" = newer than this session's first sync on the **server** clock (`rpc server_now`, so a wrong device clock can't ring old rows); every row rings **once per device** (key = id + count, kept 24h in localStorage — reloads and duplicate paths never re-ring); an UPDATE rings only when `count` grew; only the **focused tab** alerts (or one elected tab if none is focused); never the chat on screen; never while DND / quiet hours / device mute.
+- **Three sound families, seven tones.** The **default for all three is *Alarm* — the original loud rising triple-beep** (kept on purpose: it has to be heard on a shop floor). Softer options per family: Pop, Ding, Chime, Pulse, Bell, Knock, Silent. Tones are synthesised into tiny WAVs at runtime (no files), unlocked silently on the first tap; nothing ever plays "later". Volume slider + preview.
+- **Do Not Disturb (30 min / 1 h / 2 h / until tomorrow 8:00), quiet hours (daily window, your time-zone) and "Mute this device"** — DND & quiet hours are saved on the profile so every device and the push server honour them; a small *Paused* pill shows in the top bar.
+- **No more double alerts.** Every open Bridge tab sends a presence heartbeat (`user_presence`, 20 s, focused/visible, keepalive on leave); `send-push` skips Web Push while any device is **focused**, skips DND/quiet hours, and chat pushes now expire after 1 h (6 h before — the wake-up burst). The service worker never shows a system notification while a Bridge window is open on the device — it hands the push to the app; stale late pushes update the card silently.
+- **Settings → My notifications rebuilt, ClickUp-style and mobile-first:** Do Not Disturb · Sounds · What notifies you (per kind: Inbox / Sound / Desktop / Push / Email as tap-able chips, "All on/off") · This device (desktop permission, push, **Preview an alert** buttons). Old device-mute + matrix cards removed; the chat-header bell now toggles *Every chat message → Sound*.
+- **Data fix:** saving a checklist / approving used to re-upsert your last 50 notifications (rewrote `created_at` with `updated_at`, flipped rows read elsewhere back to unread, fired an UPDATE for every row). Replaced by `_notifFlush()` — inserts only rows this browser created and hasn't sent (ON CONFLICT DO NOTHING). Same for the background mirror.
+- **Mobile polish:** an open Workspace chat now owns the whole screen (tab bar hidden, composer on the home indicator — WhatsApp); search boxes take their own line in filter rows; selects sit 2-up; scrollable tab strips hide the scrollbar, fade at the edge and keep the active tab in view; bottom sheets capped at the visible viewport; the Questions "Bulk import" block and the Hierarchy role badge no longer collapse; in-app alert cards sit under the header.
+
+---
+
 # Bridge v98 — paced OKR panel polish: both guide lines, cleaner layout
 
 `public/js/19-okr-roles-acl.js` + cache-buster `?v=98`. No DB changes.
@@ -230,3 +247,41 @@ Everything prior still green: 13 notification, 17 access-control, 19 live/sticky
 ## Still open (your call)
 - **`optional-rls-hardening.sql`** — included, not applied. Access is still app-enforced only.
 - **Assign your people** — only 6 of 40 users have real Workspace assignments.
+
+## v3.22 — 9 Sep 2026
+
+- **BOLT → OKR** everywhere: nav, tabs, dashboard, notifications, email templates, settings, sounds. Route is `#okr` (old `#bolt` links still work).
+- **Channel vs board access fixed**: everyone with channel access is automatically a member of every board in that channel — including boards created later — for mentions, assignees, board rules and notifications. Board-only members stay limited to their board. The board-members dialog now shows "Via channel · automatic" and "Board only" separately.
+- **Notify on every message**: each new Workspace message (and thread reply) notifies every member of that board, not just tagged people. Each person can switch this off in **Profile → My notifications** (`profiles.notify_prefs.chat_all`); tags always notify. Admin master switch in Settings → In-App → "Every Workspace message". Opening a chat clears its bell notifications.
+- **Desktop notifications**: system pop-ups from the browser (Notification API) for every kind of alert while Bridge is open; suppressed for the chat you're currently reading.
+- **Push when Bridge is closed**: `public/sw.js` service worker + `push_subscriptions` table + `send-push` Edge Function, fired by a statement-level trigger on `notifications` (pg_net). VAPID keys live in `push_config` (service-role only). Works on desktop browsers, Android, and iPhone as a Home-Screen app. The Capacitor app can store an APNs/FCM token in the same table (`kind`) — the sender for those is still to be wired.
+- **Chat opens at the latest message** (robust scroll pinning after render, animations and image loads).
+- **Newest activity first**: the chat you just messaged or received a message in moves to the top of the list.
+- **WhatsApp layout** in brand colours: slimmer sidebars/tabs, WhatsApp list rows (avatar · name+time · preview with sender + ticks · unread pill · @ badge when tagged), bubbles with tails and sender name inside, light outgoing bubble, blue read ticks, quiet composer bar, WhatsApp-style @mention highlight. "New chat" is now the + button beside the filter chips.
+
+## v3.23 — 9 Sep 2026
+
+- **Workspace opens fast**: messages load from the `crm_messages_lite` view (no base64 photos — that was ~9 MB per open); a chat's photos are fetched only when it is opened, with shimmer placeholders until they land.
+- **Chat no longer jumps to the top** a second or two after opening: every repaint (bell notification, poll, realtime) now keeps the chat's scroll position, and a bell row arriving while in Workspace uses the light in-place repaint.
+- **Chat list slimmer**: 38px avatars, smaller type, tighter rows, narrower column.
+- **@mention** shown as coloured text only (no highlight box).
+- **Bell** in the chat header is a line icon (slashed when muted) instead of an emoji.
+- **Collapsed hub rail** shows each hub's initials; clicking a tile opens a menu with "All boards" and that hub's filtered views.
+- **Settings for everyone**: tabs *Profile* and *My notifications* (every-message alerts, desktop, push, sounds) for all users; *In-App / Email / Templates* stay admin-only. The old Profile page redirects here. Personal cards were removed from the admin In-App tab (no duplicates). **Data tab removed** (Export/Clear data/Reset).
+- **Dead code removed** (62 unused functions/vars across the JS files: old convert-to-ticket/approval flow, analytics page, CSV export, data-clearing, legacy nav arrays, unused OKR/ACL helpers) plus old files: `legacy/`, `.rebrand-backup/`, `public/mobile-test.html`, `optional-rls-hardening.sql`, `BUGFIXES.md`.
+
+## v3.24 — 9 Sep 2026
+
+- **@tag inside threads**: the thread reply box has its own @-picker (people, groups, Everyone).
+- **Thread alerts only for the thread**: a reply notifies the parent message's author + people who replied in that thread (+ anyone tagged) — not the whole board.
+- **Deleted messages stay visible as “🚫 Kartik deleted this message”** (WhatsApp style). Text, photos and reactions are wiped; the row keeps `deleted_at` / `deleted_by` (new columns on `crm_messages`, also in `crm_messages_lite`). The chat list shows “This message was deleted” as the preview.
+- **Multi-line messages keep their lines** (Shift+Enter for a new line; bubbles render `pre-wrap`).
+- **Login screen** copy updated for today's Bridge: “Every goal, every shift, one Bridge.” with OKRs · Workspace · Checklists.
+- Fix: restored the nav/mobile-bar constants (NAV_ADM, NAV_USR, MOB_ADM/USR/MGR, NAV_SECTION_ORDER) the dead-code pass had wrongly removed (they were only used via spread `...X`, which the checker missed) — this was the "Can't find variable: MOB_ADM" error on sign-in. Every route now render-tested for Admin / Manager / User on desktop and mobile.
+
+## v3.25 — 9 Sep 2026
+
+- **WhatsApp ticks**: clock = sending · one tick = saved · two grey = delivered to every other member's device · two blue = read by every other member. "Members" = the board's channel + board people (active, minus the sender). Delivery is stamped by each person's Bridge when the message (or its alert) reaches them (`crm_reads.last_delivered_at`, new column); reading is stamped when they open the chat (`last_seen_at`). Same ticks in the chat list preview.
+- **Chat list narrower** (23%, 232–290px; 34px avatars, smaller type).
+- Sidebar sections (Work / People / Manage) start expanded; a section you collapse stays collapsed for the session.
+- **Dashboard colours on brand** (BB Brand Guidelines p.31–32): charts and KPI tiles now use only Carbon Black #13171B, Leather Brown #54433C, Gold #D1B68F, Bronze #AF7B6D, Copper #936659, Sand Beige #D8CCC0 and Nude #E2B7A9 — Leather = on-time/achieved/resolved, Bronze = late/open/off-track, Gold = pending/in-progress/on-track, Carbon = rejected/not achieved, Sand = closed/no data/goal line/grid. The green, red, violet and teal tints are gone.

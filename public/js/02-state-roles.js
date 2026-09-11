@@ -41,7 +41,7 @@ function saveDB(){
         if(Array.isArray(r.photos))r.photos=r.photos.map(p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p);
       });
     });
-    // BOLT check-in photos: strip base64 the same way (real bytes live in Supabase; targeted writes
+    // OKR check-in photos: strip base64 the same way (real bytes live in Supabase; targeted writes
     // send them at save time — _okrCheckinRow filters '[photo]' placeholders so they're never pushed).
     (dbCopy.DB.okrCheckins||[]).forEach(c=>{
       if(Array.isArray(c.photos))c.photos=c.photos.map(p=>(typeof p==='string'&&p.startsWith('data:'))?'[photo]':p);
@@ -154,7 +154,7 @@ function restoreFilters(route){
   try{S.filters=saved?JSON.parse(JSON.stringify(saved)):{};}catch(e){S.filters={};}
 }
 function clearAllFilters(){_filtersByRoute={};_filtersUid=null;_filtersLastWritten='';S.filters={};try{localStorage.removeItem(FILTERS_KEY);}catch(e){}}
-/* Expand/collapse state of the BOLT tree rides along with the filters — losing which
+/* Expand/collapse state of the OKR tree rides along with the filters — losing which
    branches were open on every refresh is the same complaint in a different shape.
    Stamped with the user id for the same reason as the filters: the ids of branches one
    person had open must not be written back to disk by whoever signs in next. */
@@ -178,8 +178,6 @@ const me=()=>DB.users.find(u=>u.id===S.uid);
 // read "SubAdmin". Access Control itself stays separately gated by can('accessControl',…),
 // which the Administrator profile omits, so broadening isAdmin() here never leaks it.
 const _rpid=u=>(u&&u.hrm&&u.hrm.roleProfileId)||null;
-// Super Admin only (the top profile, incl. Access Control). Legacy 'Admin' as fallback.
-const isSuperAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return id?id==='superadmin':u.role==='Admin';};
 // Full org-wide admin = Super Admin OR Administrator profile. 'Admin' displays as "Super
 // Admin"; 'SubAdmin' displays as "Admin" (manager powers + the All Checklists tab).
 const isAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return id?(id==='superadmin'||id==='admin'):(u.role==='Admin'||u.role==='SubAdmin');};
@@ -187,26 +185,6 @@ const isSubAdmin=()=>{const u=me();if(!u)return false;const id=_rpid(u);return i
 // (legacy roleLabel removed — the UI shows Access Control role profiles everywhere now)
 const hasDocAccess=()=>{const u=me();if(!u)return false;if(isAdmin())return true;const da=u.docAccess||{};return Object.values(da.departments||{}).some(p=>p.view)||Object.values(da.locations||{}).some(p=>p.view);};
 function subTree(uid,_seen=new Set()){if(_seen.has(uid))return[];_seen.add(uid);const direct=DB.users.filter(u=>u.managerId===uid&&u.id!==uid);return direct.flatMap(u=>[u,...subTree(u.id,_seen)]);}
-// ── Date-aware manager lookup (uses managerHistory; falls back to current managerId) ──
-function _mgrOfOn(u,date){
-  const h=u?.managerHistory;
-  if(Array.isArray(h)&&h.length){
-    let hit;for(const p of h){if((p.from||'0001-01-01')<=date&&(!p.to||date<p.to))hit=p;}
-    if(hit!==undefined)return hit.managerId||null;
-  }
-  return u?.managerId||null;
-}
-// Was user uid2 under mgrId (directly or via chain) on a given date?
-function _underOn(uid2,mgrId,date){
-  let cur=uById(uid2);let g=0;
-  while(cur&&g++<12){
-    const m=_mgrOfOn(cur,date);
-    if(!m)return false;
-    if(m===mgrId)return true;
-    cur=uById(m);
-  }
-  return false;
-}
 const isMgr=()=>DB.users.some(u=>u.managerId===S.uid&&u.id!==S.uid)&&!isAdmin();
 function visU(){if(isAdmin())return DB.users;return[me(),...subTree(S.uid)].filter(Boolean);}
 function isDesc(a,b){return subTree(b).some(u=>u.id===a);}

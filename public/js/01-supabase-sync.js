@@ -9,7 +9,7 @@ const SB_ANON='eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJl
 const sb=supabase.createClient(SB_URL,SB_ANON,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
 function _unesc(s){if(!s)return s;return String(s).replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&#39;/g,"'");}
 const _mQrow=q=>({id:q.id,text:q.text||'',type:q.type||'answer',options:q.options||[],photo:q.photo||false,approval:q.approval||false,comment:q.comment||false,isPublic:q.is_public!==false,createdBy:q.created_by||null,createdAt:q.created_at,departmentId:q.department_id||null,subDepartmentId:q.sub_department_id||null});
-function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],hrm:(p.hrm&&typeof p.hrm==='object')?p.hrm:null,password:'***'}));}
+function _mU(r){return(r||[]).map(p=>({id:p.id,firstName:_unesc(p.first_name)||'',lastName:_unesc(p.last_name)||'',email:p.email||'',phone:_unesc(p.phone)||'',position:_unesc(p.position)||'',department:_unesc(p.department)||'',role:p.role||'User',status:p.status||'Active',managerId:p.manager_id||null,managerHistory:p.manager_history||[],rules:p.rules||{past:true,future:true,edit:true},approval:p.approval_settings||{past:false,future:false,edited:false},docAccess:p.doc_access||{departments:{},locations:{}},questionsAccess:p.questions_access||false,emailEnabled:p.email_enabled!==false,cities:Array.isArray(p.cities)?p.cities:[],hrm:(p.hrm&&typeof p.hrm==='object')?p.hrm:null,notifyPrefs:(p.notify_prefs&&typeof p.notify_prefs==='object')?p.notify_prefs:{},password:'***'}));}
 function _mC(r){return(r||[]).map(c=>({id:c.id,name:c.name||'',description:c.description||'',department:c.department||'',subDepartment:c.sub_department||'',frequency:c.frequency||'Daily',schedule:c.schedule||'',selectedDays:c.selected_days||[],selectedDates:(c.selected_dates||[]).map(x=>x==='L'?'L':Number(x)),customDates:c.custom_dates||[],startDate:c.start_date||'',endDate:c.end_date||'',locationIds:c.location_ids||[],assignees:c.assignees||[],tasks:c.tasks||[],questionIds:c.question_ids||[],questionConfigs:(()=>{const raw=c.question_configs||{};const fixed={};Object.keys(raw).forEach(k=>{const clean=k.startsWith('"')&&k.endsWith('"')?JSON.parse(k):k;fixed[clean]=raw[k];});return fixed;})(),scheduleTime:c.schedule_time||null,status:c.status||'Active',anyOne:c.any_one||false,createdBy:c.created_by||null}));}
 function _mDraft(r){return{id:r.id,checklistId:r.checklist_id,userId:r.user_id,date:r.date,questionResponses:r.question_responses||[],tasks:r.tasks||[],updatedAt:r.updated_at||null};}
 function _mS(r){return(r||[]).map(s=>({id:s.id,checklistId:s.checklist_id,userId:s.user_id,date:s.date,status:s.status||'Pending',submittedAt:s.submitted_at||null,tasks:s.tasks||[],questionResponses:s.question_responses||[],editCount:s.edit_count||0,editHistory:s.edit_history||[],checklistDeleted:s.checklist_deleted||false}));}
@@ -41,8 +41,30 @@ function _applyApprovals(appr){
 }
 function _applyNotifications(notifs){
   const _uid=S.uid;
-  DB.notifications=(notifs||[]).filter(n=>n.user_id===_uid).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.created_at,link:n.link||null}));
+  /* v3.27: a row that came from the server is persisted — _notifFlush must never re-send it.
+     Keep rows this browser created for OTHER people until they are flushed (they used to be lost on refresh). */
+  window._notifPersisted=window._notifPersisted||{};
+  (notifs||[]).forEach(n=>{if(n&&n.id)window._notifPersisted[n.id]=1;});
+  const pendingOthers=(DB.notifications||[]).filter(n=>n&&n.userId&&n.userId!==_uid&&!window._notifPersisted[n.id]);
+  DB.notifications=pendingOthers.concat((notifs||[]).filter(n=>n.user_id===_uid).map(n=>({id:n.id,userId:n.user_id,text:n.text||'',read:n.read||false,time:n.updated_at||n.created_at,created:n.created_at,link:n.link||null,kind:n.kind||null,count:n.count||1,conversationId:n.conversation_id||null})));
 }
+/* v3.27 — persist ONLY notification rows this browser created and has not sent yet (INSERT … ON CONFLICT DO NOTHING).
+   The old whole-table upsert re-sent every row: it flipped rows read on another device back to unread, rewrote
+   created_at with updated_at, and fired a realtime UPDATE for every row (= phantom sounds). */
+function _notifFlush(){
+  try{
+    window._notifPersisted=window._notifPersisted||{};
+    const rows=(DB.notifications||[]).filter(n=>n&&n.id&&n.userId&&!window._notifPersisted[n.id]).slice(0,100)
+      .map(n=>({id:n.id,user_id:n.userId,text:n.text||'',read:n.read||false,created_at:n.created||n.time||new Date().toISOString(),link:n.link||null,kind:n.kind||null}));
+    if(!rows.length)return Promise.resolve({skipped:true});
+    rows.forEach(r=>{window._notifPersisted[r.id]=1;});   // optimistic: never double-send
+    return sb.from('notifications').upsert(rows,{onConflict:'id',ignoreDuplicates:true}).then(r=>{
+      if(r&&r.error){rows.forEach(x=>{delete window._notifPersisted[x.id];});console.warn('[notif flush]',r.error.message);}
+      return r;
+    });
+  }catch(e){return Promise.resolve({error:e});}
+}
+window._notifFlush=_notifFlush;
 function _applyFeedback(feedbackRows){
   if(!feedbackRows){DB.feedback=DB.feedback||[];return;}
   const {_uid,_isAdmin,_isSubAdmin,_isMgr,_teamIds}=_roleCtx();
@@ -72,7 +94,7 @@ function _applyTickets(rows){
   // Keep any local-only tickets (just created, or older than the 30-day window) that the
   // server query didn't return — never drop them (but never re-add a deleted one).
   const fromSB=new Set(allTk.map(t=>t.id));
-  /* Same protection the tickets path uses, reused for BOLTs: a server snapshot must never
+  /* Same protection the tickets path uses, reused for OKRs: a server snapshot must never
      clobber a row whose local change is still sitting in the sync queue. */
   const localOnly=(DB.tickets||[]).filter(t=>!fromSB.has(t.id)&&!_delTk.has(t.id));
   // ── v2 FIX: never let a server snapshot clobber a ticket that still has queued local
@@ -89,7 +111,7 @@ let _tabLoading={};
 /* ── PORTED: sync bar + tab-loading helpers (Safe Backup) ── */
 function _anyLoading(){try{return Object.values(_tabLoading||{}).some(Boolean);}catch(e){return false;}}
 function _syncBar(on){try{let b=document.getElementById('syncbar');if(!b){if(!on)return;b=document.createElement('div');b.id='syncbar';document.body.appendChild(b);}b.classList.toggle('on',!!on);}catch(e){}}
-/* ── Roll-up-safe aggregates under BOLT row-level security ────────────────────
+/* ── Roll-up-safe aggregates under OKR row-level security ────────────────────
    RLS now hides objectives outside the user's scope. A roll-up or annual PARENT
    still has to total its children, so bridge_okr_rollup_facts() returns numbers
    only — no title, owner, department, comment or check-in author — for the
@@ -141,7 +163,7 @@ async function _loadOkrShadows(){
     if(so.length&&typeof rr==='function'&&S&&S.route==='okr')rr();   // redraw once totals can be computed
   }catch(e){console.warn('[okr rollup facts]',e&&e.message);}
 }
-/* v3.14 — locally-deleted BOLT overlay.
+/* v3.14 — locally-deleted OKR overlay.
    A cascade delete removes a whole subtree. If any of those delete requests does not reach
    the server (expired token, offline, a transient failure) the server still holds the rows,
    and the next pull would hand them straight back — the "I deleted it and it came back"
@@ -375,7 +397,7 @@ async function loadFromSB(){
     DB.users.forEach(u=>{if(!u.questionsAccess&&_savedQAccess[u.id])u.questionsAccess=true;});
   }
 
-  // ── PORTED (Safe Backup): BOLT data + role profiles + role migration ──
+  // ── PORTED (Safe Backup): OKR data + role profiles + role migration ──
   DB.users.forEach(u=>_ensureHrm(u));
   {const _gone=await _okrServerDeletedIds();_okrReconcileDeleted(_gone);
    DB.okrs=_okrDropDeleted('okrs',_keepPending('okrs',_mOKR(okrRows),DB.okrs,_gone));}
@@ -463,7 +485,7 @@ async function _sync(){try{
     _mirror('submissions',DB.submissions.map(s=>({id:s.id,checklist_id:s.checklistId,user_id:s.userId,date:s.date,status:s.status,submitted_at:s.submittedAt||null,edit_count:s.editCount||0,edit_history:s.editHistory||[]}))),
     _mirror('approvals',DB.approvals.map(a=>({id:a.id,type:a.type||'Submission',requester_id:a.requesterId,checklist_id:a.checklistId||null,date:a.date||null,status:a.status,note:a.note||'',is_resubmit:a.isResubmit||false,used_at:a.usedAt||null}))),
     _mirror('audit_logs',DB.audit.slice(0,200).map(l=>({id:l.id,actor:l.actor,action:l.action,target:l.target||''}))),
-    _mirror('notifications',DB.notifications.map(n=>({id:n.id,user_id:n.userId,text:n.text,read:n.read||false,created_at:n.time||new Date().toISOString(),link:n.link||null}))),
+    _notifFlush(),   // v3.27: insert-only — see _notifFlush
     _mirror('feedback',(DB.feedback||[]).map(fb=>({id:fb.id,checklist_id:fb.checklistId||null,user_id:fb.userId,manager_id:fb.managerId,date:fb.date||null,title:fb.title||null,type:fb.type||'General',text:fb.text||'',priority:fb.priority||'Low',task_name:fb.taskName||null,level:fb.level||'direct',status:fb.status||'Sent',acknowledged:fb.acknowledged||false,acknowledged_at:fb.acknowledgedAt||null,reply:fb.reply||null,replied_at:fb.repliedAt||null,replies:fb.replies||[],created_at:fb.createdAt||new Date().toISOString()}))),
     _mirror('doc_folders',(DB.folders||[]).map(f=>({id:f.id,name:f.name,parent_id:f.parentId||null,type:f.type,scope:f.scope,created_by:f.createdBy||null,created_at:f.createdAt}))),
     _mirror('documents',(DB.documents||[]).map(d=>({id:d.id,name:d.name,folder_id:d.folderId||null,type:d.type,scope:d.scope,url:d.url,storage_path:d.storagePath||null,file_type:d.fileType||null,file_size:d.fileSize||null,uploaded_by:d.uploadedBy||null,uploader_name:d.uploaderName||null,uploaded_at:d.uploadedAt}))),

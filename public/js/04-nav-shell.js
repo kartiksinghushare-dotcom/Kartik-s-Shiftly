@@ -10,14 +10,10 @@ const NAV_MGR=[['dashboard','grid','Dashboard'],['mychecklists','check','My Chec
 const MOB_ADM=['dashboard','mychecklists','tickets','notifications','more'];
 const MOB_USR=['mychecklists','tickets','notifications','more'];
 const MOB_MGR=['dashboard','mychecklists','tickets','notifications','more'];
-/* ── NAV v3 (Evarca-aligned): perms-driven master list + HUBS.
-   A hub is ONE sidebar entry whose member pages show a pill sub-tab strip.
-   Routes are unchanged — deep links, notifications and ⌘K keep working. ── */
-const _isMgrRole=()=>{const r=(typeof _roleOf==='function')?_roleOf(me()):null;return !!r&&r.id==='manager';};
 const NAV_ALL=[
   ['hub:dash','grid','Dashboard',()=>!!_hubHome('dash')],
   ['mychecklists','check','My Checklists',()=>true],
-  ['okr','flag','BOLT',()=>can('okr','view')],
+  ['okr','flag','OKR',()=>can('okr','view')],
   ['crm','msg','Workspace',()=>can('crm','view')],
   ['hub:inbox','bell','Inbox',()=>true],
 
@@ -28,6 +24,7 @@ const NAV_ALL=[
   ['hub:people','users','People',()=>!!_hubHome('people')],
 
   ['hub:admin','shield','Administration',()=>!!_hubHome('admin')],
+  ['settings','cog','Settings',()=>!can('settings','view')],   // v3.23: non-admins get their personal Settings (profile + my notifications)
 ];
 /* ───── HUBS: one sidebar entry, sub-tab strip on every member route ───── */
 const HUB_DEF={
@@ -65,8 +62,8 @@ const NAV_SECTION_OF={
   'hub:people':'People',
   'hub:admin':'Manage',
 };
-const NAV_SECTION_ORDER=['Work','People','Manage'];
 const NAV_SECTION_ICON={Time:'clock',Work:'list',People:'users',Manage:'cog'};
+const NAV_SECTION_ORDER=['Work','People','Manage'];
 function navSectionsFor(){
   const flat=navFor();
   const daily=[],sections={};
@@ -85,8 +82,7 @@ App.toggleNavSec=(name)=>{
   S._navCollapsed=S._navCollapsed||{};
   const {sections}=navSectionsFor();
   const sec=sections.find(x=>x.label===name);
-  const hasActive=sec?sec.items.some(it=>it[0]===S.route):false;
-  const cur=(name in S._navCollapsed)?!!S._navCollapsed[name]:!hasActive;
+  const cur=(name in S._navCollapsed)?!!S._navCollapsed[name]:false;   // v3.25: sections start EXPANDED
   S._navCollapsed[name]=!cur;
   render();
 };
@@ -100,7 +96,7 @@ App.go=(r)=>{if(r&&String(r).slice(0,4)==='hub:')r=_hubHome(String(r).slice(4))|
   restoreFilters(r);
   if(r!=='teamview')S.tvUser=null;
   // Update URL hash so deep-links work; pushState so browser Back/Forward walk in-app history.
-  var _hr=({okr:'bolt',crm:'workspace'})[r]||r;
+  var _hr=({crm:'workspace'})[r]||r;
   if(location.hash!=='#'+_hr){ if(history.pushState)history.pushState(null,'','#'+_hr); else if(history.replaceState)history.replaceState(null,'','#'+_hr); }
   render();window.scrollTo(0,0);
   // Lazy-load only the data this tab needs (nothing loads on a timer anymore).
@@ -112,7 +108,7 @@ window.addEventListener('hashchange',()=>{
   var r=(location.hash||'').replace(/^#/,'').trim();r=({bolt:'okr',workspace:'crm'})[r]||r;
   if(r&&r!==S.route&&typeof App.go==='function')App.go(r);
 });
-App._lazyLoad=_lazyLoad;App._lazyLoadDate=_lazyLoadDate;
+App._lazyLoadDate=_lazyLoadDate;
 
 /* ===== RENDER ===== */
 let _lastUserAction=0; // timestamp of last submit/approve/etc — prevents loadFromSB overwriting fresh state
@@ -121,14 +117,31 @@ function render(){if(!S.uid){$('#app').innerHTML=loginView();return;}
   // Preserve the sidebar's own scroll position across a full re-render (clicking a lower nav
   // item used to jump the sidebar back to the top).
   const _sb=document.querySelector('.sidebar');const _sy=_sb?_sb.scrollTop:0;
+  // v3.23: and the Workspace chat's scroll (a repaint from anywhere — a bell notification, a
+  // poll — used to throw the open chat back to its first message 1-2 s after opening).
+  const _ks=(typeof _crmKeepScroll==='function')?_crmKeepScroll():null;
   $('#app').innerHTML=shell(pageContent());
-  const _sb2=document.querySelector('.sidebar');if(_sb2&&_sy)_sb2.scrollTop=_sy;}
+  const _sb2=document.querySelector('.sidebar');if(_sb2&&_sy)_sb2.scrollTop=_sy;
+  if(_ks)_ks();
+  try{if(window.BBNotify)BBNotify._paintDnd();}catch(e){}
+  try{_bbTabsFix();}catch(e){}}
+/* v3.27 — mobile tab strips: keep the active tab in view and show a fade while more tabs are off-screen */
+function _bbTabsFix(){
+  if(window.innerWidth>767)return;
+  document.querySelectorAll('.ui-tabs').forEach(function(t){
+    var can=t.scrollWidth>t.clientWidth+4;t.classList.toggle('bb-can-scroll',can);
+    if(!can)return;
+    var on=t.querySelector('.ui-tab.on');if(on&&!t._bbScrolled){t._bbScrolled=true;try{var r=on.getBoundingClientRect(),tr=t.getBoundingClientRect();if(r.right>tr.right||r.left<tr.left)t.scrollLeft+= (r.left-tr.left)-12;}catch(e){}}
+    var upd=function(){t.classList.toggle('bb-at-end',t.scrollLeft+t.clientWidth>=t.scrollWidth-4);};upd();
+    if(!t._bbScrollBound){t._bbScrollBound=true;t.addEventListener('scroll',upd,{passive:true});}
+  });
+}
 function rr(){_invalidateNotifCache();
   // v3.14: persist the CURRENT tab's filters on every redraw. Saving only when leaving a
   // tab meant the tab you were actually sitting on was never written, so a refresh lost
   // exactly the filters you had just set. Also covers the few places that assign S.route
   // directly instead of going through App.go(). Cheap — it no-ops unless something changed.
-  try{saveFilters(S.route);}catch(e){}const _y=window.scrollY||document.documentElement.scrollTop||0;const c=$('#content');if(c)c.innerHTML=pageContent();window.scrollTo(0,_y);requestAnimationFrame(()=>window.scrollTo(0,_y));}
+  try{saveFilters(S.route);}catch(e){}const _y=window.scrollY||document.documentElement.scrollTop||0;const _ks=(typeof _crmKeepScroll==='function')?_crmKeepScroll():null;const c=$('#content');if(c)c.innerHTML=pageContent();if(_ks)_ks();window.scrollTo(0,_y);try{_bbTabsFix();}catch(e){}requestAnimationFrame(()=>window.scrollTo(0,_y));}
 App.rr=rr;
 // UI-1: live-search helper — rr() rebuilds #content and destroys the typing <input>, dropping
 // focus/caret. Re-render, then restore focus + selection on the search input by id.
@@ -159,8 +172,8 @@ function shell(content){
     // T1: honor the user's explicit collapse/expand. Only fall back to "auto-expand the
     // section with the active route" when the user hasn't toggled it yet — otherwise a
     // section containing the current page could never be collapsed.
-    const hasActive=sec.items.some(it=>it[0]===S.route);
-    const collapsed=(sec.label in S._navCollapsed)?!!S._navCollapsed[sec.label]:!hasActive;
+    // v3.25: every section starts EXPANDED; a section the person collapses stays collapsed for the session.
+    const collapsed=(sec.label in S._navCollapsed)?!!S._navCollapsed[sec.label]:false;
     const show=!collapsed;
     return`<div class="nav-sec${show?'':' collapsed'}">
       <button class="nav-sec-hdr" onclick="App.toggleNavSec('${sec.label}')"><span class="nav-ico" style="width:14px;height:14px;color:rgba(237,230,220,.4)">${ic(sec.icon,'w-3.5 h-3.5')}</span><span style="flex:1;text-align:left">${sec.label}</span><span class="nav-chev">${ic('chevD','w-3.5 h-3.5')}</span></button>
@@ -197,7 +210,7 @@ function shell(content){
           <div class="nav-brand" style="width:24px;height:24px;font-size:11px">B</div>
           <span class="fd" style="font-weight:600;font-size:12.5px;letter-spacing:.28em;text-transform:uppercase;color:var(--c-ink)">Bridge</span>
         </div>
-        <div style="flex:1"></div><button onclick="App._cmdk()" class="hidden md:flex" style="${S.route==='crm'?'display:none !important;':''}align-items:center;gap:8px;width:240px;padding:8px 12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-3);font-size:12.5px;font-weight:500;cursor:text;box-shadow:inset 0 1px 2px rgba(35,28,22,.04)">${ic('search','w-4 h-4')}<span style="flex:1;text-align:left">Search anything…</span><span style="font-size:10px;font-weight:800;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:6px;padding:1px 6px;color:var(--c-text-3)">⌘K</span></button>
+        <div style="flex:1"></div><button data-bb-dnd hidden class="bb-dnd-pill" onclick="App.go('settings');S.filters.stab='mynotif';rr()" title="Notifications paused">${ic('clock','w-3.5 h-3.5')}<span class="hidden sm:inline">Paused</span></button><button onclick="App._cmdk()" class="hidden md:flex" style="${S.route==='crm'?'display:none !important;':''}align-items:center;gap:8px;width:240px;padding:8px 12px;border-radius:12px;border:1px solid var(--c-border);background:var(--c-surface);color:var(--c-text-3);font-size:12.5px;font-weight:500;cursor:text;box-shadow:inset 0 1px 2px rgba(35,28,22,.04)">${ic('search','w-4 h-4')}<span style="flex:1;text-align:left">Search anything…</span><span style="font-size:10px;font-weight:800;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:6px;padding:1px 6px;color:var(--c-text-3)">⌘K</span></button>
         <button onclick="App.go('notifications')" class="md:hidden" aria-label="Notifications" style="position:relative;width:38px;height:38px;border-radius:10px;border:none;background:transparent;color:var(--c-text);display:grid;place-items:center;cursor:pointer">${ic('bell','w-5 h-5')}${(()=>{const n=_notifCount();return n?`<span style="position:absolute;top:5px;right:5px">${countBadge(n,'danger')}</span>`:'';})()}</button>
         <button onclick="App.go('profile')" class="md:hidden" aria-label="Profile">${avatar(u,'w-8 h-8','text-[11px]')}</button>
       </div>

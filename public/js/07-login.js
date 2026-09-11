@@ -9,11 +9,13 @@ function loginView(){return`<div class="min-h-screen flex" style="background:var
     <div style="position:absolute;right:-120px;top:-120px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,rgba(209,182,143,.28),transparent 70%);filter:blur(40px)"></div>
     <div style="position:absolute;left:-80px;bottom:-100px;width:360px;height:360px;border-radius:50%;background:radial-gradient(circle,rgba(209,182,143,.18),transparent 70%);filter:blur(50px)"></div>
     <div class="relative" style="display:flex;flex-direction:column;gap:6px"><span class="fd" style="font-size:21px;font-weight:600;letter-spacing:.42em;color:#fff">BRIDGE</span><span style="font-size:10.5px;font-weight:600;letter-spacing:.34em;color:#D1B68F">BY BLOOMINGBOX</span></div>
-    <div class="relative"><h1 class="fd" style="font-size:33px;font-weight:500;line-height:1.32;letter-spacing:.07em">EVERY SHIFT,<br>EVERY CHECK,<br><span style="color:#D1B68F">ACCOUNTED FOR.</span></h1><div style="width:56px;height:1px;background:#D1B68F;margin-top:22px"></div><p style="color:rgba(255,255,255,.6);margin-top:20px;line-height:1.7;font-size:14px;max-width:380px;font-weight:300">Enterprise checklists with question-based responses, escalation routing, location tracking, and real-time approvals.</p>
-      <div style="display:flex;gap:24px;margin-top:34px">
-        <div><div class="fd" style="font-size:13px;font-weight:600;letter-spacing:.18em;color:#D1B68F">CHECKLISTS</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:300">every shift covered</div></div>
+    <div class="relative"><h1 class="fd" style="font-size:33px;font-weight:500;line-height:1.32;letter-spacing:.07em">EVERY GOAL,<br>EVERY SHIFT,<br><span style="color:#D1B68F">ONE BRIDGE.</span></h1><div style="width:56px;height:1px;background:#D1B68F;margin-top:22px"></div><p style="color:rgba(255,255,255,.6);margin-top:20px;line-height:1.7;font-size:14px;max-width:400px;font-weight:300">OKRs with scheduled check-ins, team Workspace chat and ticket boards, shift checklists with escalation and approvals — everything BloomingBox runs on, in one place.</p>
+      <div style="display:flex;gap:22px;margin-top:34px;flex-wrap:wrap">
+        <div><div class="fd" style="font-size:13px;font-weight:600;letter-spacing:.18em;color:#D1B68F">OKRs</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:300">targets &amp; check-ins</div></div>
         <div style="width:1px;background:rgba(209,182,143,.25)"></div>
-        <div><div class="fd" style="font-size:13px;font-weight:600;letter-spacing:.18em;color:#D1B68F">APPROVALS</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:300">one unified inbox</div></div>
+        <div><div class="fd" style="font-size:13px;font-weight:600;letter-spacing:.18em;color:#D1B68F">WORKSPACE</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:300">chat &amp; tickets</div></div>
+        <div style="width:1px;background:rgba(209,182,143,.25)"></div>
+        <div><div class="fd" style="font-size:13px;font-weight:600;letter-spacing:.18em;color:#D1B68F">CHECKLISTS</div><div style="font-size:12px;color:rgba(255,255,255,.45);margin-top:4px;font-weight:300">every shift covered</div></div>
       </div></div>
     <div style="font-size:11px;letter-spacing:.22em;color:rgba(255,255,255,.35)">© 2026 BLOOMINGBOX</div>
   </div>
@@ -59,7 +61,7 @@ App.login=async()=>{
     const{data:profile}=await sb.from('profiles').select('*').eq('id',data.user.id).single();
     if(!profile){await sb.auth.signOut();S.uid=null;render();throw new Error('Profile not found');}
     if(profile.status==='Inactive'){await sb.auth.signOut();S.uid=null;render();throw new Error('Account inactive — contact admin');}
-    const u={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,managerHistory:profile.manager_history||[],rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,emailEnabled:profile.email_enabled!==false,cities:Array.isArray(profile.cities)?profile.cities:[],hrm:(profile.hrm&&typeof profile.hrm==='object')?profile.hrm:null,password:'***'};
+    const u={id:profile.id,firstName:_unesc(profile.first_name)||'',lastName:_unesc(profile.last_name)||'',email:profile.email||'',phone:_unesc(profile.phone)||'',position:_unesc(profile.position)||'',department:_unesc(profile.department)||'',role:profile.role||'User',status:profile.status,managerId:profile.manager_id||null,managerHistory:profile.manager_history||[],rules:profile.rules||{past:true,future:true,edit:true},approval:profile.approval_settings||{past:false,future:false,edited:false},docAccess:profile.doc_access||{departments:{},locations:{}},questionsAccess:profile.questions_access||false,emailEnabled:profile.email_enabled!==false,cities:Array.isArray(profile.cities)?profile.cities:[],hrm:(profile.hrm&&typeof profile.hrm==='object')?profile.hrm:null,notifyPrefs:(profile.notify_prefs&&typeof profile.notify_prefs==='object')?profile.notify_prefs:{},password:'***'};
     const idx=DB.users.findIndex(x=>x.id===u.id);
     if(idx>-1)DB.users[idx]=u;else DB.users.push(u);
     S.uid=u.id;
@@ -68,7 +70,7 @@ App.login=async()=>{
     try{restoreFilters(S.route);if(typeof App._okrReloadExpanded==='function')App._okrReloadExpanded();}catch(e){}
     saveDB();render();
     // Load full data in background — don't block UI
-    loadFromSB().then(()=>{saveDB();if(Date.now()-_lastUserAction>3000)render();}).catch(()=>{});
+    loadFromSB().then(()=>{saveDB();if(Date.now()-_lastUserAction>3000)render();try{if(typeof _bbAfterBoot==='function')_bbAfterBoot();}catch(e){}}).catch(()=>{});
   }catch(err){
     const msg=err.message.includes('Invalid')||err.message.includes('credentials')||err.message.includes('invalid_grant')
       ?'Incorrect email or password':err.message;
