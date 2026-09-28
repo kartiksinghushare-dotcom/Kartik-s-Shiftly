@@ -1298,3 +1298,310 @@ header.topbar,.topbar{-webkit-backdrop-filter:blur(18px) saturate(150%)}
 }
 /* the tab strip fade is decided by JS (scrollWidth vs clientWidth); harmless on desktop */
 .ui-tabs.bb-can-scroll{position:relative}
+
+/* ═══════════ v132 — My Day · Attendance · Profile · Direct messages ═══════════ */
+.leaflet-container{font-family:inherit;border-radius:inherit}
+.leaflet-container .leaflet-control-zoom a{color:var(--c-text)}
+#modal .leaflet-container{z-index:1}
+.att-row .ui-btn-sm{min-width:0}
+@media(max-width:767px){
+  #content .att-row{grid-template-columns:52px 1fr auto!important;gap:8px!important}
+  #content .att-trow{grid-template-columns:1fr auto!important}
+  #content .att-inbox-row{grid-template-columns:auto 1fr!important}
+  #content .att-inbox-row .att-inbox-actions{grid-column:1/-1;justify-content:flex-end}
+  #content .prof-kv{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:10px 12px!important}
+  #modal [style*="grid-template-columns:repeat(2,minmax(0,1fr))"]{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #att-btn{flex:1 1 auto}
+}
+.att-cell{text-align:left;border-radius:10px;padding:6px 7px;min-height:58px;cursor:pointer;font-family:inherit;transition:box-shadow .12s,transform .12s}
+.att-cell:not([disabled]):hover{box-shadow:var(--sh-sm);transform:translateY(-1px)}
+.att-cell[disabled]{cursor:default}
+@media(max-width:767px){#content .att-cal{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:3px!important}#content .att-cell{padding:4px 4px!important;min-height:50px!important;min-width:0}#content .att-cell div{font-size:9.5px!important}}
+/* v132.4 — page header on phones: title on its own line, actions become a full-width row of equal buttons */
+@media(max-width:767px){
+  #content .bb-hdr{flex-direction:column;align-items:stretch;gap:10px;margin-bottom:14px}
+  #content .bb-hdr>div:first-child{flex:0 0 auto!important}
+  #content .bb-hdr-actions>.ui-btn,#content .bb-hdr-actions>button{max-width:100%}
+  #content .bb-hdr-actions{width:100%;flex-wrap:wrap}
+  #content .bb-hdr-actions>.ui-btn,#content .bb-hdr-actions>button{flex:1 1 calc(50% - 4px);min-width:0;justify-content:center}
+  #content .bb-hdr-actions:empty{display:none}
+}
+
+/* ════════════ v132.6 — phone alignment pass ════════════ */
+@media(max-width:767px){
+  /* KPI tiles: 3 tiles sit in one row; odd leftovers stretch across instead of dangling */
+  #content .bb-kpis:has(>:nth-child(3):last-child){grid-template-columns:repeat(3,1fr)!important;gap:6px!important}
+  #content .bb-kpis:has(>:nth-child(3):last-child)>*{padding:10px 8px!important}
+  #content .bb-kpis:has(>:nth-child(3):last-child) .fd{font-size:17px!important}
+  #content .bb-kpis>*:nth-child(odd):last-child:not(:first-child):not(:nth-child(3)){grid-column:1/-1}
+  #content .bb-kpis .stat-card-click>div:first-child span[style*="place-items:center"]{display:none!important} /* icon squares go; label stays */
+  #content .bb-kpis .stat-card-click>div:first-child{margin-bottom:6px!important}
+  #content .bb-kpis .stat-card-click>div:first-child span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  /* calendar cells: keep the hours, drop the in/out times on phones */
+  #content .att-cell .att-cell-times{display:none!important}
+  /* small 3-up stat cells inside cards (Team page) stay 3-up */
+  #content [style*="grid-template-columns:repeat(3,1fr)"][style*="text-align:center"]{grid-template-columns:repeat(3,1fr)!important}
+  /* Profile hero: avatar, then name block, then a full-width action row */
+  #content .prof-head{flex-direction:column!important;align-items:flex-start!important;gap:10px!important}
+  #content .prof-head>div:nth-child(2){min-width:0!important;width:100%;padding-bottom:0!important}
+  #content .prof-head h1{font-size:19px!important;letter-spacing:-.2px!important;text-transform:none!important}
+  #content .prof-head-actions{width:100%;padding-bottom:0!important;flex-wrap:nowrap!important;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none}
+  #content .prof-head-actions::-webkit-scrollbar{display:none}
+  #content .prof-head-actions>.ui-btn{flex:1 0 auto;justify-content:center}
+  /* Alerts tabs: one scrolling row instead of a ragged wrap */
+  #content .bb-ntabs{flex-wrap:nowrap!important;padding-bottom:2px}
+  #content .bb-ntabs button{padding:7px 12px!important;font-size:13px!important}
+  /* Access Control → People: table becomes stacked cards */
+  #content .ac-people{min-width:0!important;width:100%!important}
+  #content .ac-people thead{display:none}
+  #content .ac-people,#content .ac-people tbody,#content .ac-people tr,#content .ac-people td{display:block;width:100%;min-width:0;white-space:normal!important}
+  #content .ac-people tr{padding:10px 12px 12px}
+  #content .ac-people td{padding:4px 0!important;text-align:left!important}
+  #content .ac-people td .ui-select{width:100%!important}
+  #content .ac-people td:last-child{display:flex;gap:6px;flex-wrap:wrap;padding-top:8px!important}
+  #content .ac-people td:last-child .ui-btn{flex:1 1 auto;justify-content:center}
+  /* Filter rows: search box takes the full first line, selects share the second */
+  #content .ui-card>div[style*="flex-wrap:wrap"]>input.ui-input{flex:1 1 100%!important;min-width:0!important}
+  #content .ui-card>div[style*="flex-wrap:wrap"]>select.ui-select{flex:1 1 40%!important;width:auto!important;min-width:0!important}
+  /* Range dropdown + label on Attendance */
+  #content .att-range{align-items:center}
+  /* Avatars in list rows never squash */
+  #content .att-trow>div:first-child>div:first-child,#content .prof-kv{min-width:0}
+  #content .prof-kv a,#content .prof-kv [style*="font-weight:700"]{overflow-wrap:anywhere}
+  /* Role editor: area name on its own line, its toggles in a wrapping row underneath */
+  #modal [data-rp-row]{grid-template-columns:1fr!important;gap:6px!important}
+  /* Card head titles + actions align in one line and wrap gracefully */
+  #content .ui-card-head{flex-wrap:wrap;gap:6px 10px;row-gap:6px}
+}
+
+/* ═══ v133 — attendance: phone-first layout ═══ */
+.att-tiles-more{display:none}
+@media(max-width:767px){
+  /* My Day clock card: one big button, secondary actions in a row underneath */
+  #content .att-clock-row{flex-direction:column;align-items:stretch!important;gap:10px!important}
+  #content .att-clock-actions{display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+  #content .att-clock-actions #att-btn{grid-column:1/-1;min-height:50px;font-size:15px;justify-content:center}
+  #content .att-clock-actions .ui-btn{justify-content:center;min-width:0}
+  #content .att-clock-actions .ui-btn:only-child{grid-column:1/-1}
+  /* range picker fills the line; custom dates side by side */
+  #content .att-range>select{flex:1 1 100%;width:100%!important}
+  #content .att-range>div{width:100%;display:grid!important;grid-template-columns:1fr auto 1fr;align-items:center}
+  #content .att-range>div input{width:100%!important;min-width:0}
+  /* KPI tiles: six visible, the rest behind “More…” */
+  #content .att-kpis .att-tile-more{display:none}
+  #content .att-kpis.open .att-tile-more{display:block}
+  #content .att-kpis .att-tiles-more{display:block;grid-column:1/-1;background:none;border:none;color:var(--c-brand);font-weight:700;font-size:12px;padding:4px 0;cursor:pointer;text-align:center}
+  #content .att-kpis .att-tile{padding:8px 10px!important}
+  #content .att-kpis .att-tile .fd{font-size:17px!important}
+  /* manager inbox: text first, full-width action row */
+  #content .att-inbox-row{grid-template-columns:auto 1fr!important;gap:8px 10px!important}
+  #content .att-inbox-row .att-inbox-actions{grid-column:1/-1;display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+  #content .att-inbox-row .att-inbox-actions .ui-btn{justify-content:center;min-height:42px}
+  #content .att-inbox-row .att-inbox-actions .ui-btn:only-child{grid-column:1/-1}
+  /* reports: cards instead of wide tables */
+  #content .att-rep-wrap{overflow:visible!important}
+  #content .att-rep,#content .att-rep tbody,#content .att-rep tr,#content .att-rep td{display:block;width:100%}
+  #content .att-rep thead{display:none}
+  #content .att-rep tr{border:1px solid var(--c-border);border-radius:12px;padding:8px 10px;margin:8px 0;background:var(--c-surface)}
+  #content .att-rep td{border:none!important;padding:3px 0!important;white-space:normal!important;display:flex;gap:8px;align-items:baseline;font-size:12.5px}
+  #content .att-rep td::before{content:attr(data-label);flex:0 0 38%;font-size:10px;font-weight:800;text-transform:uppercase;letter-spacing:.05em;color:var(--c-text-3)}
+  #content .att-rep td:empty{display:none}
+  #content .att-rep td.att-rep-empty{display:block;text-align:center}
+  #content .att-rep td.att-rep-empty::before{content:none}
+  #content .att-rep-pills .ui-btn{flex:0 0 auto;white-space:nowrap}
+  /* settings: label on top, control full width */
+  #content .att-set-row{flex-direction:column;align-items:stretch!important;gap:8px!important}
+  #content .att-set-ctl{display:flex;justify-content:flex-start}
+  #content .att-set-ctl .ui-select,#content .att-set-ctl input[type=time],#content .att-set-ctl input[type=date]{width:100%!important}
+  #content .att-set-ctl .att-num{width:100%}
+  #content .att-set-ctl .att-num input{flex:1;width:auto!important}
+  /* request type picker: three equal buttons */
+  #modal .att-req-pick{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+  #modal .att-req-pick .ui-btn{padding:8px 6px;font-size:12.5px}
+  /* holiday rows: remove button stays on the right */
+  #content .att-nowrap{flex-wrap:nowrap!important}
+  #content .att-cell>div{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;min-width:0}
+}
+
+/* ═══ v133b — phone polish across pages ═══ */
+@media(max-width:767px){
+  /* clock card: the clock button always spans; when Request… is the only other button it spans too */
+  #content .att-clock-actions #att-btn{order:-1}
+  #content .att-clock-actions .ui-btn:not(#att-btn):first-child:nth-last-child(2){grid-column:1/-1}
+  /* team KPIs: three per row, compact */
+  #content .att-team-kpis{grid-template-columns:repeat(3,1fr)!important;gap:6px!important}
+  #content .att-team-kpis>div{padding:8px 8px!important}
+  #content .att-team-kpis .fd{font-size:17px!important}
+  /* settings: number + toggle stay on one line */
+  #content .att-num-tog{width:100%}
+  #content .att-num-tog .att-num{flex:1}
+  /* questions: text wraps, chips + Edit on their own line */
+  #content .q-row{flex-wrap:wrap!important}
+  #content .q-row .q-text{white-space:normal!important;flex:1 1 60%!important}
+  #content .q-row .q-actions{flex:1 1 100%;justify-content:flex-end;padding-left:26px}
+  /* OKR: check-ins panel stacks, button full width */
+  #content .okr-due{flex-direction:column;align-items:stretch!important}
+  #content .okr-due>span{display:none!important}
+  #content .okr-due>.ui-btn{justify-content:center;width:100%}
+  /* hierarchy: hint that the tree scrolls sideways */
+  #content .oc{min-width:max-content}
+}
+
+/* ═══ v133c — toggles & bottom nav on phones ═══ */
+/* The bottom nav must not depend on the Tailwind CDN having loaded (fixed/bottom-0 came from utility classes only). */
+@media(max-width:767px){
+  #bottom-nav,.mob-nav{position:fixed!important;bottom:0!important;left:0!important;right:0!important;z-index:30!important}
+  /* Toggles: a proper 44×26 pill with a round knob — the generic "#content button{min-height:34px}" rule was
+     stretching them into 32×34 blocks with the knob stuck in the corner. */
+  #content .tog,#modal .tog,.tog{width:44px!important;height:26px!important;min-height:26px!important;max-height:26px!important;padding:0!important;border-radius:13px!important;flex:0 0 44px!important}
+  #content .tog span,#modal .tog span,.tog span{width:22px!important;height:22px!important;top:2px!important;left:2px!important}
+  #content .tog.on span,#modal .tog.on span,.tog.on span{transform:translateX(18px)!important}
+}
+@media(min-width:768px){#bottom-nav,.mob-nav{display:none!important}}
+@media(max-width:767px){
+  /* chat search bars sit in flex COLUMNS — the generic "div with a Search input grows" rule must not stretch them */
+  #content .crm-fs div.crm-lsearch,#content .crm-fs div.crm-msearch,#content .crm-lsearch,#content .crm-msearch{flex:0 0 auto!important;width:100%!important}
+  #content .crm-fs .crm-lsearch input,#content .crm-fs .crm-msearch input{flex:1 1 auto!important;width:auto!important}
+}
+
+/* ═══ v133e — iOS Safari: no page-shifting ═══
+   1. Safari zooms the whole page when a form control with text smaller than 16px gets focus, and the page stays
+      shifted afterwards — every input / textarea / select is 16px on phones (only the person pinching should zoom).
+   2. Nothing may scroll the page sideways. */
+@media(max-width:767px){
+  input,textarea,select,#content select,#content .ui-select,#content input,#content textarea,#modal input,#modal select,#modal textarea,.crm-fs input,.crm-fs textarea,.crm-fs select{font-size:16px!important}
+  html,body{overflow-x:hidden!important;max-width:100vw;overscroll-behavior-x:none}
+  #app,#main-wrap,#content{max-width:100vw;overflow-x:clip}
+}
+
+/* ═══ v136 — phone polish: Templates + Access Control are one size smaller, notification "This device" rows stack ═══
+   Text controls stay 16px (anything smaller makes iOS Safari zoom the page on focus) but lose the extra height/padding;
+   every label, name, badge and button around them steps down. */
+@media(max-width:767px){
+  #content .ns-tpl .ns-tpl-intro{font-size:12px!important;line-height:1.5}
+  #content .ns-tpl code{font-size:10.5px!important;padding:1px 6px!important}
+  #content .ns-tpl button[onclick*="tplKey"]{padding:10px 12px!important}
+  #content .ns-tpl button[onclick*="tplKey"] div div:first-child{font-size:12.5px!important}
+  #content .ns-tpl button[onclick*="tplKey"] div div:nth-child(2){font-size:10px!important;line-height:1.35}
+  #content .ns-tpl label{font-size:10.5px!important}
+  #content .ns-tpl input,#content .ns-tpl textarea{padding:6px 10px!important;min-height:36px!important;border-radius:9px!important}
+  #content .ns-tpl textarea{line-height:1.45!important}
+  #content .ns-tpl button[onclick*="_resetTpl"],#content .ns-tpl button[onclick*="_saveTpl"]{font-size:12px!important;padding:8px 10px!important}
+  #content .ac-page{font-size:13px}
+  #content .ac-page .ui-input,#content .ac-page .ui-select,#content .ac-page select,#content .ac-page input[type="text"],#content .ac-page input[type="search"]{min-height:36px!important;padding:5px 10px!important;border-radius:9px!important}
+  #content .ac-page .ui-btn,#content .ac-page button{font-size:11px!important;min-height:32px!important;padding-top:5px!important;padding-bottom:5px!important}
+  #content .ac-page .ui-tab{font-size:12.5px!important}
+  #content .ac-page [style*="font-size:13"]:not(input):not(select):not(button):not(textarea){font-size:12px!important}
+  #content .ac-page [style*="font-size:14"]:not(input):not(select):not(button):not(textarea),#content .ac-page [style*="font-size:15"]:not(input):not(select):not(button):not(textarea),#content .ac-page [style*="font-size:16"]:not(input):not(select):not(button):not(textarea){font-size:13px!important}
+  #content .ac-page [style*="font-size:12"]:not(input):not(select):not(button):not(textarea){font-size:11.5px!important}
+  #content .ac-page .bb-hdr h1{font-size:20px!important}
+  #content .ac-page .bb-hdr p{font-size:12px!important}
+  #content .ac-page svg{width:14px;height:14px}
+  #content .ac-page .ui-tab svg{width:14px;height:14px}
+}
+@media(max-width:767px){
+  /* v136 — phone ticket ROWS: the pinned Ticket column + compact cells set in 06-crm.js win over the v3.15 min-widths */
+  #content .crm-fs .crm-scroll.crm-mobtable > table{min-width:0!important;width:100%!important;table-layout:fixed}
+  #content .crm-fs .crm-scroll.crm-mobtable > table th,#content .crm-fs .crm-scroll.crm-mobtable > table td{min-width:0!important;box-sizing:border-box}
+  #content .crm-fs .crm-scroll.crm-mobtable > table th:first-child,#content .crm-fs .crm-scroll.crm-mobtable > table td:first-child{min-width:0!important;width:auto!important;max-width:none!important}
+  #content .crm-fs .crm-scroll.crm-mobtable > table th:last-child,#content .crm-fs .crm-scroll.crm-mobtable > table td:last-child{width:40px!important;min-width:40px!important;max-width:40px!important}
+  #content .crm-fs .crm-mobtable button{min-height:32px!important}
+  /* the board-tab strip: tabs scroll, the board actions stay pinned on the right instead of covering the last tab */
+  #content .crm-tabsrow>div:last-child{position:sticky;right:0;background:#fff;box-shadow:-8px 0 8px -4px rgba(255,255,255,.95)}
+  #content .crm-tabsrow>button{flex-shrink:0!important}
+}
+
+/* ═══════════ v159/v160 — Leave module (.lv-*) ═══════════ */
+.lv-hero .lv-hero-btn{background:#D1B68F!important;background-image:none!important;color:#13171B!important;border:none!important;min-width:130px;justify-content:center;box-shadow:0 6px 18px -8px rgba(209,182,143,.6)}
+.lv-hero .lv-hero-btn:hover{filter:brightness(1.05)}
+.lv-tcard:hover{border-color:var(--c-border-2)}
+.lv-page .ui-card{box-shadow:var(--sh-sm)}
+.lv-cal-cell{position:relative;min-height:78px;border:1px solid var(--c-border);border-radius:10px;background:var(--c-surface);padding:6px;text-align:left;cursor:default;display:flex;flex-direction:column;gap:4px;min-width:0;font:inherit}
+.lv-cal-cell.has{cursor:pointer}
+.lv-cal-cell.has:hover{border-color:var(--c-border-2);box-shadow:var(--sh-sm)}
+.lv-cal-cell.today{border-color:var(--c-brand)}
+.lv-cal-cell.lv-cal-empty{border:none;background:transparent}
+.lv-cal-top{display:flex;align-items:center;justify-content:space-between;gap:4px}
+.lv-cal-num{font-size:12px;font-weight:700;color:var(--c-text);width:22px;height:22px;border-radius:50%;display:grid;place-items:center}
+.lv-cal-n{font-size:10px;font-weight:800;color:var(--c-text-2);background:var(--c-surface-2);border-radius:20px;padding:1px 6px}
+.lv-cal-hol{font-size:10px;font-weight:700;color:#7F6533;line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.lv-cal-faces{display:flex;align-items:center;gap:2px;flex-wrap:wrap;margin-top:auto}
+.lv-face{display:inline-flex;border:2px solid;border-radius:50%;padding:1px;background:var(--c-surface)}
+.lv-cal-more{font-size:10px;font-weight:800;color:var(--c-text-3)}
+.lv-cal-dots{display:none;gap:3px;align-items:center;margin-top:auto;flex-wrap:wrap}
+.lv-dot{width:7px;height:7px;border-radius:50%;display:inline-block}
+.lv-tcard{transition:border-color .15s,box-shadow .15s}
+.lv-tcard.on{box-shadow:var(--sh-sm)}
+.lv-row:hover{background:var(--c-surface-2)}
+.lv-inbox-row{touch-action:pan-y;will-change:transform}
+.lv-swipe-hint{display:none}
+.lv-adm-item:hover{background:var(--c-surface)!important}
+@media(min-width:768px){.lv-adm-nav{flex-direction:column;overflow:visible!important;gap:2px!important}.lv-adm-item{width:100%;text-align:left}
+  #content .att-kpis{grid-template-columns:repeat(5,minmax(0,1fr))!important}
+  #content .att-team-kpis{grid-template-columns:repeat(6,minmax(0,1fr))!important}
+  #content .lv-tcards{grid-template-columns:repeat(4,minmax(0,1fr))!important}
+  #content .lv-calkpis{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+.lv-list-card{display:none}
+.lv-baltable td button{min-height:28px}
+.lv-bal-mobile{display:none}
+.lv-filters{display:grid;grid-template-columns:minmax(160px,1.4fr) minmax(140px,1fr) minmax(140px,1fr);gap:8px;margin-bottom:10px}
+.lv-filters .ui-input,.lv-filters .ui-select{width:100%;padding:8px 12px;min-height:40px}
+.lv-range .ui-select,.lv-range input{min-height:38px}
+@media(max-width:767px){
+  #content .lv-adm{grid-template-columns:minmax(0,1fr)!important;gap:10px!important}
+  #content .lv-adm-side{position:static!important;min-width:0;overflow:hidden}
+  #content .lv-adm-nav{flex-direction:row!important;gap:6px!important;overflow-x:auto;padding:4px 2px!important;background:var(--c-surface-2);border:1px solid var(--c-border);border-radius:14px}
+  #content .lv-adm-item{padding:8px 12px!important;font-size:12.5px!important}
+  #content .lv-adm-item svg{display:none}
+  #content .lv-tcards{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+  #content .lv-hero{padding:16px!important}
+  #content .lv-hero-row{gap:12px!important}
+  #content .lv-hero-next{width:100%;min-width:0!important}
+  #content .lv-hero-btn{width:100%}
+  #content .lv-calfilters{width:100%}
+  #content .lv-calfilters input#lv-q{flex:1 1 100%;width:100%!important}
+  #content .lv-calfilters .ui-select{flex:1 1 55%}
+  #content .lv-calfilters .ui-btn{flex:1 1 40%;justify-content:center}
+  #content .lv-calnav>div:first-child{width:100%;justify-content:space-between}
+  #content .lv-bals{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}
+  #content .lv-month-grid{grid-template-columns:repeat(7,1fr)!important}
+  #content .lv-cal7{grid-template-columns:repeat(7,minmax(0,1fr))!important;gap:3px!important}
+  #content .lv-cal-cell{min-height:56px;padding:4px;border-radius:8px;gap:2px}
+  #content .lv-cal-num{font-size:11px;width:20px;height:20px}
+  #content .lv-cal-faces,#content .lv-cal-hol{display:none}
+  #content .lv-cal-dots{display:flex}
+  #content .lv-cal-n{font-size:9px;padding:0 5px}
+  #content .lv-calkpis{grid-template-columns:repeat(3,minmax(0,1fr))!important;gap:6px!important}
+  #content .lv-calkpis>div{padding:8px 8px!important}
+  #content .lv-calkpis .fd{font-size:17px!important}
+  #content .lv-bals .lv-bal{padding:9px 10px!important}
+  #content .lv-bals .lv-bal .fd{font-size:19px!important}
+  #content .lv-year{grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:12px 10px!important}
+  #content .lv-grid-card{display:none}
+  #content .lv-list-card{display:block}
+  #content .lv-inbox-row{grid-template-columns:auto 1fr!important;gap:8px 10px!important}
+  #content .lv-inbox-row .lv-inbox-actions{grid-column:1/-1;display:grid!important;grid-template-columns:1fr 1fr;gap:8px!important}
+  #content .lv-inbox-main{flex-wrap:nowrap!important;align-items:flex-start!important}
+  #content .lv-inbox-main>span,#content .lv-inbox-main>div:first-child{flex-shrink:0}
+  #content .lv-inbox-row>input[type=checkbox]{align-self:flex-start;margin-top:8px}
+  #content .lv-inbox-row .lv-inbox-actions .ui-btn{justify-content:center;min-height:42px}
+  #content .lv-swipe-hint{display:block}
+  #content .lv-filters{grid-template-columns:1fr 1fr!important;gap:6px!important}
+  #content .lv-filters .lv-f-search{grid-column:1/-1}
+  #content .lv-bal-desk{display:none}
+  #content .lv-bal-mobile{display:block}
+  #content .lv-range{gap:6px!important}
+  #content .lv-range .lv-range-sel{width:100%!important;min-width:0!important}
+  #content .lv-range .lv-range-dates{width:100%;display:grid!important;grid-template-columns:1fr auto 1fr;align-items:center}
+  #content .lv-range .lv-range-dates input{width:100%!important}
+  #content .lv-range>span,#content .lv-range>label{width:100%}
+  #content .lv-actions .ui-btn{min-height:38px}
+  #content .lv-type-row{grid-template-columns:auto 1fr!important}
+  #content .lv-type-row>div:last-child{grid-column:1/-1;justify-content:flex-end}
+  #content .lv-ent-ids input{width:100%!important}
+  #content .lv-half .ui-btn{flex:1 1 auto;justify-content:center}
+  #content .lv-typepick{margin:0 -4px;padding:0 4px 4px}
+  .lt-level{grid-template-columns:auto 1fr!important}
+  .lt-level>button{grid-column:1/-1;justify-self:end}
+  #content .bb-hdr .bb-hdr-actions .ui-btn{min-height:40px}
+}

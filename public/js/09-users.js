@@ -32,6 +32,8 @@ App._uSelTog=(id)=>{const s=_uSel();const i=s.indexOf(id);if(i>-1)s.splice(i,1);
 App._uSelAll=()=>{const s=_uSel();const all=_U_LIST.length&&_U_LIST.every(id=>s.includes(id));S.filters.uSel=all?[]:_U_LIST.slice();rr();};
 App._uSelClear=()=>{S.filters.uSel=[];rr();};
 
+/* v132 — may the viewer open this person's full profile page? */
+function _uCanProf(u){try{return typeof _profPerm==='function'&&_profPerm(u).view;}catch(e){return false;}}
 function usersPage(){
   let list=visU();const q=S.search.toLowerCase();
   if(q)list=list.filter(u=>fullName(u).toLowerCase().includes(q)||u.email.toLowerCase().includes(q));
@@ -56,19 +58,20 @@ function usersPage(){
     can('employees','create')?btn('Bulk upload','App._usersImport()',{variant:'ghost',icon:'upload'}):'',
     can('employees','create')?btnP('Add user','App.editUser()','plus'):''
   ].join('');
-  return`<div class="fade">${hdr('Users',visU().length+' people',headActions)}
+  return`<div class="fade">${hdr('Users',(S.search||S.filters.dep||S.filters.stat)?list.length+' of '+visU().length+' people':visU().length+' people',headActions)}
   <div class="flex gap-2 mb-4 flex-wrap">
     <div class="relative flex-1 min-w-[160px]"><span class="absolute left-3 top-1/2 -translate-y-1/2 text-ink-300">${ic('search','w-4 h-4')}</span><input id="u-search" oninput="S.search=this.value;App._searchRR('u-search')" value="${esc(S.search)}" placeholder="Search by name or email…" class="w-full bg-white border border-ink-200 rounded-xl pl-9 pr-3 py-2.5 text-sm rf"/></div>
     <select onchange="S.filters.dep=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">All depts</option>${topDepts().map(d=>`<option ${S.filters.dep===d.name?'selected':''}>${esc(d.name)}</option>`).join('')}</select>
     <select onchange="S.filters.stat=this.value;rr()" class="bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">Any status</option><option ${S.filters.stat==='Active'?'selected':''}>Active</option><option ${S.filters.stat==='Inactive'?'selected':''}>Inactive</option></select>
+    ${(S.search||S.filters.dep||S.filters.stat)?`<button onclick="S.search='';S.filters.dep='';S.filters.stat='';rr()" class="ui-btn ui-btn-ghost ui-btn-sm">Clear filters</button>`:''}
   </div>
   ${bulkBar}
-  <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft overflow-hidden">
+  <div class="hidden md:block bg-white rounded-2xl border border-ink-100 shadow-soft" style="overflow-x:auto">
     <table class="w-full text-sm"><thead><tr class="text-[10px] text-ink-400 uppercase tracking-wide border-b border-ink-100 text-left">${canBulk?`<th class="px-4 py-3" style="width:34px">${cbx(allSel,'App._uSelAll()','Select all shown')}</th>`:''}<th class="px-5 py-3 font-semibold">Name</th><th class="px-5 py-3 font-semibold">Department</th><th class="px-5 py-3 font-semibold">Role</th><th class="px-5 py-3 font-semibold">Reports to</th><th class="px-5 py-3 font-semibold">Status</th><th class="px-5 py-3"></th></tr></thead>
-    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const on=sel.includes(u.id);return`<tr class="hover:bg-ink-50/50"${on?' style="background:#F0F4EE"':''}>${canBulk?`<td class="px-4 py-3">${cbx(on,`App._uSelTog('${u.id}')`)}</td>`:''}<td class="px-5 py-3"><div class="flex items-center gap-3">${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${_uRoleChip(u)}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${(can('employees','edit')||can('employees','resetPassword')||can('employees','deactivate')||can('employees','delete'))?`${can('employees','edit')?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F4F0EA'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button>`:''}${can('employees','resetPassword')?`<button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F4F0EA'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>`:''}${can('employees','deactivate')?_disableBtn(u):''}${(!_uIsSuperAdmin(u)&&can('employees','delete'))?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F9EBE5';this.style.color='#A63528'" onmouseout="this.style.background='transparent';this.style.color='#A59788'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
+    <tbody class="divide-y divide-ink-50">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const on=sel.includes(u.id);return`<tr class="hover:bg-ink-50/50"${on?' style="background:#F0F4EE"':''}>${canBulk?`<td class="px-4 py-3">${cbx(on,`App._uSelTog('${u.id}')`)}</td>`:''}<td class="px-5 py-3"><div class="flex items-center gap-3" ${_uCanProf(u)?`style="cursor:pointer" onclick="App.openProfile('${u.id}')" title="Open profile"`:''}>${avatar(u,'w-9 h-9','text-xs')}<div><div class="font-semibold">${esc(fullName(u))}${u.employeeId?` <span class="text-xs text-ink-300">#${esc(u.employeeId)}</span>`:''}</div><div class="text-xs text-ink-400">${esc(u.email)}</div></div></div></td><td class="px-5 py-3">${esc(u.department)}<div class="text-xs text-ink-400">${esc(u.position)}</div></td><td class="px-5 py-3">${_uRoleChip(u)}</td><td class="px-5 py-3 text-sm">${mgr?esc(fullName(mgr)):'<span class="text-ink-300">—</span>'}</td><td class="px-5 py-3">${chip(u.status)}</td><td class="px-5 py-3"><div class="flex gap-1 justify-end">${_uCanProf(u)?`<button onclick="App.openProfile('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F4F0EA'" onmouseout="this.style.background='transparent'" title="Open profile">${ic('user','w-4 h-4')}</button>`:''}${(can('employees','edit')||can('employees','resetPassword')||can('employees','deactivate')||can('employees','delete'))?`${can('employees','edit')?`<button onclick="App.editUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F4F0EA'" onmouseout="this.style.background='transparent'">${ic('edit','w-4 h-4')}</button>`:''}${can('employees','resetPassword')?`<button onclick="App.resetPw('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F4F0EA'" onmouseout="this.style.background='transparent'" title="Reset password">${ic('key','w-4 h-4')}</button>`:''}${can('employees','deactivate')?_disableBtn(u):''}${(!_uIsSuperAdmin(u)&&can('employees','delete'))?`<button onclick="App.delUser('${u.id}')" style="width:32px;height:32px;display:grid;place-items:center;border-radius:8px;color:#A59788;background:transparent;border:none;cursor:pointer" onmouseover="this.style.background='#F9EBE5';this.style.color='#A63528'" onmouseout="this.style.background='transparent';this.style.color='#A59788'">${ic('trash','w-4 h-4')}</button>`:''}`:'<span class="text-ink-200">—</span>'}</div></td></tr>`;}).join('')}</tbody></table>
     ${list.length?'':empty('users','No users','')}
   </div>
-  <div class="md:hidden space-y-2">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const on=sel.includes(u.id);return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4" style="${can('employees','edit')?'cursor:pointer;':''}${on?'border-color:#13171B':''}"${can('employees','edit')?` onclick="App.editUser('${u.id}')"`:''}>
+  <div class="md:hidden space-y-2">${list.map(u=>{const mgr=u.managerId?uById(u.managerId):null;const on=sel.includes(u.id);return`<div class="bg-white rounded-2xl border border-ink-100 shadow-soft p-4" style="${(_uCanProf(u)||can('employees','edit'))?'cursor:pointer;':''}${on?'border-color:#13171B':''}"${_uCanProf(u)?` onclick="App.openProfile('${u.id}')"`:(can('employees','edit')?` onclick="App.editUser('${u.id}')"`:'')}>
     <div class="flex items-center gap-3">${canBulk?`<span onclick="event.stopPropagation()">${cbx(on,`App._uSelTog('${u.id}')`)}</span>`:''}${avatar(u,'w-10 h-10','text-sm')}<div class="min-w-0 flex-1"><div class="font-semibold truncate">${esc(fullName(u))}</div><div class="text-xs text-ink-400">${esc(u.position)} · ${esc(u.department)}</div><div style="margin-top:3px">${_uRoleChip(u)}</div></div>${chip(u.status)}</div>
     ${mgr?`<div class="text-xs text-ink-400 mt-2.5 pt-2.5 border-t border-ink-50">Reports to <strong>${esc(fullName(mgr))}</strong></div>`:''}</div>`;}).join('')}</div>
 </div>`;}
@@ -184,7 +187,7 @@ App.editUser=(id=null)=>{
     <div class="grid grid-cols-2 gap-3">${selF('Status','u-status',['Active','Inactive'],u?.status||'Active')}<div><label for="u-mgr" class="block text-xs font-semibold text-ink-500 mb-1">Reports to</label><select id="u-mgr" class="w-full bg-white border border-ink-200 rounded-xl px-3 py-2.5 text-sm rf"><option value="">— None —</option>${mgrOpts.map(m=>`<option value="${m.id}"${u?.managerId===m.id?' selected':''}>${esc(fullName(m))}</option>`).join('')}</select></div></div>
     ${!u?fld('Password','u-pw','','password','Set a password'):''}
     <div class="bg-ink-50 rounded-2xl p-4"><p class="text-[10px] font-bold text-ink-400 uppercase tracking-wide mb-2">Notifications</p>${mkTog('u-emailnotif',u?.emailEnabled??true,'Receive email notifications')}</div>
-    <div style="font-size:11.5px;color:var(--c-text-3);background:var(--c-surface-2);border:1px dashed var(--c-border-2);border-radius:10px;padding:9px 12px">🛡️ Role, tab access, document permissions and submission rules are managed in <b>Access Control</b>.</div>
+    <div style="font-size:11.5px;color:var(--c-text-3);background:var(--c-surface-2);border:1px dashed var(--c-border-2);border-radius:10px;padding:9px 12px">🛡️ Role, tab access, document permissions and submission rules are managed in <b>Access Control</b>. HR details, documents and the WFH switch live on the profile.${id?` <button onclick="App.closeModal();App.openProfile('${id}')" style="font-weight:700;color:var(--c-brand);background:none;border:none;cursor:pointer;padding:0">Open full profile →</button>`:''}</div>
   </div>
   <div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #EDE7DC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button id="save-user-btn" onclick="if(this.disabled)return;this.disabled=true;this.textContent=this.textContent==='Save'?'Saving…':'Creating…';App.saveUser('${id||''}').catch(()=>{}).finally(()=>{const b=document.getElementById('save-user-btn');if(b){b.disabled=false;b.textContent='${u?'Save':'Create'}';}})" style="flex:1;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${u?'Save':'Create'}</button></div>
   </div>`,'max-w-2xl');
@@ -318,6 +321,7 @@ App.togUser=(id)=>{
   const u=uById(id);if(!u)return;
   const enabling=u.status!=='Active';
   u.status=enabling?'Active':'Inactive';
+  log(fullName(me()),enabling?'Enabled user':'Disabled user',fullName(u));
   saveDB();render();
   toast(fullName(u)+' '+(enabling?'enabled ✓':'disabled'),enabling?'ok':'warn');
   sb.from('profiles').update({status:u.status}).eq('id',id).then(()=>{}).catch(e=>console.warn('togUser:',e));
@@ -329,8 +333,7 @@ App.delUser=async(id)=>{
   // ── Guard: a user who is still assigned to checklists must not be deleted. ──
   const _asgCls=(DB.checklists||[]).filter(c=>(c.assignees||[]).includes(id));
   if(_asgCls.length){
-    const _names=_asgCls.slice(0,4).map(c=>'• '+(c.name||'Untitled')).join('\n')+(_asgCls.length>4?'\n• +'+(_asgCls.length-4)+' more':'');
-    alert("Can't delete "+name+" — they're still assigned to "+_asgCls.length+' checklist'+(_asgCls.length>1?'s':'')+':\n'+_names+".\n\nUnassign them from those checklists first, or use Disable to keep their data.");
+    await infoP({title:"Can't delete "+name,body:"They're still assigned to <b>"+_asgCls.length+' checklist'+(_asgCls.length>1?'s':'')+'</b>. Unassign them first, or use Disable to keep their data.',items:_asgCls.slice(0,4).map(c=>esc(c.name||'Untitled')).concat(_asgCls.length>4?['+'+(_asgCls.length-4)+' more']:[])});
     return;
   }
   if(!(await confirmP({
@@ -382,12 +385,12 @@ function _loadXLSX(){
     document.head.appendChild(s);
   });
 }
-const _U_TPL_HEADERS=['First name*','Last name*','Email*','Password','Phone','Position','Department','Reports to (email)','Status (Active/Inactive)','Role','Email notifications (On/Off)'];
+const _U_TPL_HEADERS=['First name*','Last name*','Email*','Password','Phone','Position','Department','Reports to (email)','Status (Active/Inactive)','Role','Email notifications (On/Off)','Employee ID','Joining date (YYYY-MM-DD)','Date of birth (YYYY-MM-DD)','Gender','Nationality','Work location','Shift start (HH:MM)','Shift end (HH:MM)','Off days (e.g. Fri,Sat)','Must clock in (Yes/No)','Can work from home (Yes/No)','Emergency contact name','Emergency contact phone','Emergency contact relationship'];
 App._usersTemplate=async()=>{
   try{
     const X=await _loadXLSX();
     const wb=X.utils.book_new();
-    const ws=X.utils.aoa_to_sheet([_U_TPL_HEADERS,['Aisha','Khan','aisha@company.com','','+971 50 000 0000','Sales Executive',(topDepts()[0]||{}).name||'','','Active','Basic Employee','On']]);
+    const ws=X.utils.aoa_to_sheet([_U_TPL_HEADERS,['Aisha','Khan','aisha@company.com','','+971 50 000 0000','Sales Executive',(topDepts()[0]||{}).name||'','','Active','Basic Employee','On','EMP-001','2026-01-15','1995-06-20','Female','Indian',((DB.locations||[])[0]||{}).name||'','09:00','18:00','Sun','Yes','No','Omar Khan','+971 50 111 1111','Spouse']]);
     ws['!cols']=_U_TPL_HEADERS.map(h=>({wch:Math.max(16,h.length+2)}));
     X.utils.book_append_sheet(wb,ws,'Users');
     const roles=Object.values(DB.roleProfiles||{}).map(r=>r.name);
@@ -400,6 +403,9 @@ App._usersTemplate=async()=>{
       ...roles.map(r=>['     - '+r]),
       ['• Reports to: the manager\'s email — an existing user, or a user on an EARLIER row of this same file.'],
       ['• Status: Active or Inactive (blank = Active). Email notifications: On or Off (blank = On).'],
+      ['• Dates as YYYY-MM-DD. Times as HH:MM (24h). Off days: comma-separated Mon…Sun. Work location must match a location name:'],
+      ...(DB.locations||[]).filter(l=>l.status!=='Inactive').map(l=>['     - '+l.name]),
+      ['• Must clock in: Yes/No (blank = Yes). Can work from home: Yes/No (blank = No).'],
       ['• Rows with errors (missing name/email, duplicate or existing email…) are skipped and reported — the rest import fine.']];
     X.utils.book_append_sheet(wb,X.utils.aoa_to_sheet(help),'Help');
     X.writeFile(wb,'bridge_users_template.xlsx');
@@ -410,11 +416,13 @@ App._usersExport=async()=>{
   if(!can('employees','view'))return toast('You don\'t have permission to view users','err');
   try{
     const X=await _loadXLSX();
-    const rows=[['First name','Last name','Email','Phone','Position','Department','Reports to','Status','Role','Email notifications']];
+    const rows=[['First name','Last name','Email','Phone','Position','Department','Reports to','Status','Role','Email notifications','Employee ID','Joining date','Date of birth','Gender','Nationality','Work location','Shift start','Shift end','Off days','Must clock in','Can work from home','Emergency contact name','Emergency contact phone','Emergency contact relationship']];
+    const sens=can('employees','viewSensitive')||isAdmin();
     visU().filter(Boolean).forEach(u=>{
       const mgr=u.managerId?uById(u.managerId):null;
       const rp=(DB.roleProfiles||{})[u.hrm?.roleProfileId];
-      rows.push([u.firstName||'',u.lastName||'',u.email||'',u.phone||'',u.position||'',u.department||'',mgr?(mgr.email||fullName(mgr)):'',u.status||'',rp?rp.name:'',u.emailEnabled===false?'Off':'On']);
+      const ws=u.workSchedule||{},dt=u.details||{},em=dt.emergency||{},loc=u.locationId?locById(u.locationId):null;
+      rows.push([u.firstName||'',u.lastName||'',u.email||'',u.phone||'',u.position||'',u.department||'',mgr?(mgr.email||fullName(mgr)):'',u.status||'',rp?rp.name:'',u.emailEnabled===false?'Off':'On',u.employeeId||'',u.joiningDate||'',sens?(u.birthDate||''):'',dt.gender||'',dt.nationality||'',loc?loc.name:'',ws.in||'',ws.out||'',(ws.offDays||[]).join(','),u.attendanceRequired===false?'No':'Yes',u.wfhAllowed?'Yes':'No',sens?(em.name||''):'',sens?(em.phone||''):'',sens?(em.relation||''):'']);
     });
     const wb=X.utils.book_new();
     const ws=X.utils.aoa_to_sheet(rows);
@@ -463,20 +471,22 @@ App._uImpFile=async(input)=>{
 };
 function _uImpNorm(h){return String(h||'').toLowerCase().replace(/\(.*?\)/g,'').replace(/[^a-z]/g,'');}
 function _uImpGenPw(){const A='abcdefghjkmnpqrstuvwxyzABCDEFGHJKMNPQRSTUVWXYZ23456789';let p='';for(let i=0;i<10;i++)p+=A[Math.floor(Math.random()*A.length)];return p;}
+function _uImpDate(v){if(v==null||v==='')return '';if(typeof v==='number'&&isFinite(v)){const d=new Date(Math.round((v-25569)*864e5));return isNaN(d)?'':d.toISOString().slice(0,10);}const s=String(v).trim();let m=s.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);if(m)return m[1]+'-'+m[2].padStart(2,'0')+'-'+m[3].padStart(2,'0');m=s.match(/^(\d{1,2})[\/.-](\d{1,2})[\/.-](\d{4})$/);if(m)return m[3]+'-'+m[2].padStart(2,'0')+'-'+m[1].padStart(2,'0');const d=new Date(s);return isNaN(d)?'':d.toISOString().slice(0,10);}
+function _uImpTime(v){if(v==null||v==='')return '';if(typeof v==='number'&&isFinite(v)){const mins=Math.round((v%1)*1440);return String(Math.floor(mins/60)).padStart(2,'0')+':'+String(mins%60).padStart(2,'0');}const m=String(v).trim().match(/^(\d{1,2}):(\d{2})/);return m?(m[1].padStart(2,'0')+':'+m[2]):'';}
 function _uImpParse(aoa){
   const body=document.getElementById('uimp-body');
   const rows=(aoa||[]).filter(r=>Array.isArray(r)&&r.some(c=>String(c||'').trim()!==''));
   if(rows.length<2){toast('The file has no data rows','err');if(body)body.innerHTML=_uImpPickHTML();return;}
   const H=rows[0].map(_uImpNorm);
   const col={};
-  [['firstname','fn'],['lastname','ln'],['email','email'],['password','pw'],['phone','phone'],['position','pos'],['department','dep'],['reportsto','mgr'],['status','status'],['role','role'],['emailnotifications','notif']].forEach(([k,key])=>{col[key]=H.findIndex(h=>h===k||h.indexOf(k)===0);});
+  [['firstname','fn'],['lastname','ln'],['email','email'],['password','pw'],['phone','phone'],['position','pos'],['department','dep'],['reportsto','mgr'],['status','status'],['role','role'],['emailnotifications','notif'],['employeeid','eid'],['joiningdate','join'],['dateofbirth','dob'],['gender','gender'],['nationality','nat'],['worklocation','loc'],['shiftstart','sin'],['shiftend','sout'],['offdays','off'],['mustclockin','req'],['canworkfromhome','wfh'],['emergencycontactname','emn'],['emergencycontactphone','emp'],['emergencycontactrelationship','emr']].forEach(([k,key])=>{col[key]=H.findIndex(h=>h===k||h.indexOf(k)===0);});
   if(col.fn<0||col.ln<0||col.email<0){toast('Missing required columns — keep the template\'s First name, Last name and Email headers','err');if(body)body.innerHTML=_uImpPickHTML();return;}
   const seen=new Set();
   const canRole=can('accessControl','manage');
   let roleWarned=false;
   const parsed=rows.slice(1).map((r,i)=>{
     const g=k=>col[k]>=0?String(r[col[k]]||'').trim():'';
-    const row={line:i+2,fn:g('fn'),ln:g('ln'),email:g('email').toLowerCase(),pw:g('pw'),phone:g('phone'),pos:g('pos'),dep:g('dep'),mgr:g('mgr').toLowerCase(),status:g('status'),role:g('role'),notif:g('notif'),roleId:null,errs:[],warns:[]};
+    const row={line:i+2,fn:g('fn'),ln:g('ln'),email:g('email').toLowerCase(),pw:g('pw'),phone:g('phone'),pos:g('pos'),dep:g('dep'),mgr:g('mgr').toLowerCase(),status:g('status'),role:g('role'),notif:g('notif'),eid:g('eid'),join:_uImpDate(r[col.join]),dob:_uImpDate(r[col.dob]),gender:g('gender'),nat:g('nat'),loc:g('loc'),sin:_uImpTime(r[col.sin]),sout:_uImpTime(r[col.sout]),off:g('off'),req:g('req'),wfh:g('wfh'),emn:g('emn'),emp:g('emp'),emr:g('emr'),roleId:null,errs:[],warns:[]};
     if(!row.fn||!row.ln)row.errs.push('name missing');
     if(!row.email)row.errs.push('email missing');
     else if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(row.email))row.errs.push('invalid email');
@@ -489,6 +499,12 @@ function _uImpParse(aoa){
       if(d)row.dep=d.name;else{row.warns.push('unknown department “'+row.dep+'” — left empty');row.dep='';}
     }
     row.status=/^inactive$/i.test(row.status)?'Inactive':'Active';
+    if(col.join>=0&&String(r[col.join]||'').trim()&&!row.join)row.warns.push('joining date not understood — use YYYY-MM-DD');
+    if(col.dob>=0&&String(r[col.dob]||'').trim()&&!row.dob)row.warns.push('date of birth not understood — use YYYY-MM-DD');
+    row.locId=null;if(row.loc){const L=(DB.locations||[]).find(x=>String(x.name).toLowerCase()===row.loc.toLowerCase());if(L)row.locId=L.id;else row.warns.push('unknown location “'+row.loc+'” — left empty');}
+    row.offDays=row.off?row.off.split(/[,;\/ ]+/).map(x=>x.trim().slice(0,3)).map(x=>x.charAt(0).toUpperCase()+x.slice(1).toLowerCase()).filter(x=>WKDAYS.includes(x)):null;
+    row.attReq=!/^(no|false|0|off)$/i.test(row.req||'');
+    row.wfhOk=/^(yes|true|1|on)$/i.test(row.wfh||'');
     row.emailEnabled=!/^(off|no|false|0)$/i.test(row.notif||'');
     if(row.role){
       const rp=Object.values(DB.roleProfiles||{}).find(x=>String(x.name).toLowerCase()===row.role.toLowerCase());
@@ -587,7 +603,11 @@ App._uImpRun=async()=>{
             if(canRole&&r.roleId&&DB.roleProfiles[r.roleId]){nu.hrm.roleProfileId=r.roleId;nu.hrm.permsV3=1;nu.hrm.isHR=false;}
             else{_permsV3Migrate();}
           }catch(e){}
-          sb.from('profiles').update({doc_access:pd.doc_access,questions_access:false,email_enabled:r.emailEnabled,hrm:nu.hrm||null}).eq('id',newId).then(()=>{}).catch(()=>{});
+          const extra={doc_access:pd.doc_access,questions_access:false,email_enabled:r.emailEnabled,hrm:nu.hrm||null,employee_id:r.eid||null,joining_date:r.join||null,birth_date:r.dob||null,location_id:r.locId||null,attendance_required:r.attReq!==false,wfh_allowed:!!r.wfhOk,
+            work_schedule:{in:r.sin||'09:00',out:r.sout||'18:00',offDays:r.offDays||['Sun']},
+            details:{gender:r.gender||'',nationality:r.nat||'',emergency:{name:r.emn||'',phone:r.emp||'',relation:r.emr||''}}};
+          Object.assign(nu,{employeeId:r.eid||'',joiningDate:r.join||null,birthDate:r.dob||null,locationId:r.locId||null,attendanceRequired:extra.attendance_required,wfhAllowed:extra.wfh_allowed,workSchedule:extra.work_schedule,details:extra.details});
+          sb.from('profiles').update(extra).eq('id',newId).then(()=>{}).catch(()=>{});
           results.push({r:r,ok:true});
         }
       }

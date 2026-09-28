@@ -5,12 +5,15 @@
    ============================================================ */
 /* ===== AVATARS ===== */
 const PAL=['bg-rose-100 text-rose-700','bg-amber-100 text-amber-700','bg-emerald-100 text-emerald-700','bg-sky-100 text-sky-700','bg-violet-100 text-violet-700','bg-orange-100 text-orange-700','bg-teal-100 text-teal-700'];
-const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-ink-200 rounded-full grid place-items-center '+tx+' shrink-0">?</div>';const _dot=u.id?`<span class="bb-dot${(window._bbOnline&&window._bbOnline[u.id])?' on':''}" data-pres="${u.id}"></span>`:'';return`<div class="${sz} ${PAL[((u.firstName||'?').charCodeAt(0)+(u.lastName||'?').charCodeAt(0))%PAL.length]} rounded-full grid place-items-center font-semibold ${tx} shrink-0 fd" style="position:relative">${esc(initials(u))}${_dot}</div>`;}
+const avatar=(u,sz='w-9 h-9',tx='text-xs')=>{if(!u)return'<div class="'+sz+' bg-ink-200 rounded-full grid place-items-center '+tx+' shrink-0">?</div>';const _dot=u.id?`<span class="bb-dot${(window._bbOnline&&window._bbOnline[u.id])?' on':''}" data-pres="${u.id}"></span>`:'';
+  /* v132 — a real photo when the person uploaded one (profiles.avatar_url); initials otherwise. */
+  if(u.avatarUrl)return`<div class="${sz} rounded-full shrink-0" style="position:relative;overflow:visible"><img src="${esc(u.avatarUrl)}" alt="${esc(fullName(u))}" style="width:100%;height:100%;border-radius:50%;object-fit:cover;display:block;background:var(--c-surface-2)" onerror="this.style.display='none'"/>${_dot}</div>`;
+  return`<div class="${sz} ${PAL[((u.firstName||'?').charCodeAt(0)+(u.lastName||'?').charCodeAt(0))%PAL.length]} rounded-full grid place-items-center font-semibold ${tx} shrink-0 fd" style="position:relative">${esc(initials(u))}${_dot}</div>`;}
 
 /* ═══════════ SHARED UI — token-driven design system (Evarca-aligned) ═══════════
    ONE button helper btn() with variants; btnP/btnG kept as thin aliases so every
    existing call site keeps working. New code can call btn() directly. */
-const hdr=(t,s,a='')=>`<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap"><div style="min-width:0"><h1 class="fd" style="font-size:var(--fs-h1);font-weight:600;letter-spacing:-.4px;line-height:1.15;color:var(--c-text)">${esc(t)}</h1>${s?`<p style="font-size:14px;color:var(--c-text-2);margin-top:4px">${esc(s)}</p>`:''}</div><div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${a}</div></div>`;
+const hdr=(t,s,a='')=>`<div class="bb-hdr" style="display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:22px;flex-wrap:wrap"><div style="min-width:0;flex:1 1 220px"><h1 class="fd" style="font-size:var(--fs-h1);font-weight:600;letter-spacing:-.4px;line-height:1.15;color:var(--c-text)">${esc(t)}</h1>${s?`<p style="font-size:14px;color:var(--c-text-2);margin-top:4px">${esc(s)}</p>`:''}</div><div class="bb-hdr-actions" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-start">${a}</div></div>`;
 function btn(label,onclick,opts={}){
   const v=opts.variant||'primary',sz=opts.size||'md',i=opts.icon||'';
   const dis=opts.disabled?' aria-disabled="true"':'';
@@ -103,6 +106,9 @@ const App={};window.App=App;App.closeModal=closeModal;
 
    Callers must be `async`. The promise resolves false on Cancel, on the X, on a
    backdrop click and on Escape — the safe answer is always "don't do it".        */
+/* infoP — an on-brand replacement for alert(): one OK button, same dialog. Native alert() can be
+   silenced for good by the browser's "prevent this page from creating additional dialogs" tick. */
+function infoP(o){o=Object.assign({danger:false,icon:'alert',confirmLabel:'OK',cancelLabel:''},o||{});return confirmP(o);}
 function confirmP(o){
   o=o||{};
   return new Promise(res=>{
@@ -123,7 +129,7 @@ function confirmP(o){
           <div style="font-size:13px;color:var(--c-text-2);line-height:1.6">${o.body||''}</div>
           ${list}${note}
         </div></div>`,
-      footer:`<button onclick="App._confirmEnd(0)" class="ui-btn ui-btn-ghost ui-btn-md">${esc(o.cancelLabel||'Cancel')}</button>`+
+      footer:(o.cancelLabel===''?'':`<button onclick="App._confirmEnd(0)" class="ui-btn ui-btn-ghost ui-btn-md">${esc(o.cancelLabel||'Cancel')}</button>`)+
              `<button onclick="App._confirmEnd(1)" class="ui-btn ${danger?'ui-btn-danger':'ui-btn-primary'} ui-btn-md">${esc(o.confirmLabel||'Delete')}</button>`});
     // Escape means "no" too (backdrop and X already route through closeModal).
     // The listener is detached by _confirmSettle on EVERY exit, not just the Escape one —

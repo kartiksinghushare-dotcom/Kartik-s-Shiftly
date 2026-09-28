@@ -1,3 +1,321 @@
+# Bridge v162 — date ranges everywhere, mobile balances, alignment + three fixes (cache-buster `?v=162`)
+
+**Changed** `index.html` · `21-attendance.js` · `27-leaves.js` · `28-leaves-admin.js` · `src/styles/main.css`.
+
+- **Date range on every page**: one shared picker (This month · Last month · This quarter · This year · Last year · Last 7 days · Next 30 / 90 days · Custom dates) on Approvals (filter + "decided by you" in range), Balances (balances as of the last day of the range) and every Report (requests, liability, balance). Calendar keeps its month arrows, My leave its year arrows.
+- **Balances on phones** is now one compact card per person (name, department, tick box, adjust button, and a 2-column grid of type balances with "booked" underneath) instead of a stretched table; the table stays on desktop.
+- **Filters aligned**: search full width, departments / locations side by side, range picker full width, actions (Select all · CSV) on their own row; the same grid on desktop.
+- **Fixes from your notes**: (1) picking a leave type in Apply no longer throws the type strip back to the start — it stays where you scrolled and keeps the chosen type in view; (2) **My Day clock-in button** appeared only after a refresh — the card waited for the attendance settings and nothing repainted when they arrived; it now repaints as soon as they load; (3) attendance stat tiles sit in even rows of 5 on desktop (team tiles 6), leave type cards in rows of 4, calendar tiles in 3 — no more orphan tiles on a second row.
+- Approvals rows on phones no longer wrap the avatar above the name.
+
+---
+
+# Bridge v161 — real month calendar, simpler wording, security sweep (cache-buster `?v=161`)
+
+**Changed** `index.html` · `18-settings-notifications.js` · `27-leaves.js` · `28-leaves-admin.js` · `src/styles/main.css` · `supabase/migrations/2026-09-21_v160_leave_calendar_guard.sql` (grants section added; applied live).
+
+- **Calendar is now a proper month calendar** (Mon–Sun grid) for everyone. Each day shows how many people are off and their faces (dots on phones), holidays are marked, today is highlighted. **Tap any day** → a sheet listing who is off, the leave type, the dates, how many days, when they are back, and their department; tap a person for details. "Off today", "Off this month" and "Waiting for approval" tiles above; department filter; "Apply for this day" from the sheet.
+- **Simpler words** everywhere: *Earned · Booked · Available* (was Accrued), "You earn 2.17 days at the end of every month", "waiting for approval", "with Maya Lead", tab renamed *Approvals*, "All done — nothing to approve".
+- **Emails**: added *withdrawn / cancelled → approver* (off by default) and *balance adjusted → person* templates and switches, on top of request → approver and decision → person.
+- **Security**: leave-type colour / icon / key are sanitised before they reach the page; leave functions can no longer be called anonymously; the accrual job is only reachable through a permission-checked "Run now" (`bridge_leave_run_now`); guard triggers are not callable as RPC. Supabase security advisor re-run — the remaining warnings are pre-existing (older functions, leaked-password protection is an Auth dashboard toggle worth turning on).
+
+---
+
+# Bridge v160 — Leave module: company calendar, comp-off claims, bulk edits, exports, hardened approvals (cache-buster `?v=160`)
+
+**Changed** `index.html` · `02-state-roles.js` · `21-attendance.js` · `24-attendance-hrms.js` · `27-leaves.js` · `28-leaves-admin.js` · `src/styles/main.css` · new `supabase/migrations/2026-09-21_v160_leave_calendar_guard.sql` (applied live).
+
+- **Everyone sees who is off.** Leaves → *Calendar* is now open to every user: month grid on desktop, "who's off" day list on phones, each entry showing the person, the leave type and the dates ("Maya · Annual · 21–22 Sept"), holidays, an "Off today … until" strip, department filter and "Only people off". My Day shows the same "Off today" strip for everyone. The data comes from a new `bridge_leave_calendar()` function that exposes only *who / when / what type* — never the reason, the attachment or balances; those stay scope-restricted. Tapping someone outside your scope opens a light card (name, type, dates, back-on date).
+- **My leave redesigned**: a dark hero with the annual balance, "next leave" (or "on leave until"), and Apply; type cards with icons; the detail card; requests; year calendar. Apply no longer reopens with stale past dates.
+- **Comp off**: *Claim comp off for a day I worked* (rest day / public holiday without a clock-in) raises the attendance comp-off request; approval now notifies the person that the credit is in their balance and when it expires; comp-off booking uses the Compensatory-off type as before.
+- **Bulk edit**: Balances → tick people → *Adjust N selected* posts the same opening balance / adjustment / encashment to every ledger in one go (each entry audited with your name).
+- **Exports** on every tab: My leave (requests + ledger), Calendar (month, who is off), Requests (inbox), plus the existing Balances and Reports CSVs.
+- **Attendance ↔ Leaves**: the clock card says "You're on annual leave today" (no clock-in expected, tells you to cancel the leave first if plans changed); the attendance calendar and day detail show the leave type name; Team view already shows *On leave*.
+- **Security (server side)**: approvers can now only move a request along its own flow — one level at a time, Approved only at the final level, Rejected with their own name — and cannot touch the person, type, dates, days, reason, attachment or flow (People with *Adjust* keep the audited correction path). `leave_settings` can only be written by leave managers. All enforced by Postgres triggers, not just the UI.
+- Requests inbox rows: coloured type chip, cleaner meta line; balance table shrinks to fit; admin side menu is a proper vertical menu on desktop and a pill strip on phones.
+
+---
+
+# Bridge v159 — Leave module (HRMS Phase 1) (cache-buster `?v=159`)
+
+**New files** `public/js/27-leaves.js` · `public/js/28-leaves-admin.js` · `supabase/migrations/2026-09-21_v159_leaves.sql` (already applied to the live project, additive only).
+**Changed** `index.html` · `02-state-roles.js` · `04-nav-shell.js` · `06-crm.js` · `18-settings-notifications.js` · `19-okr-roles-acl.js` · `20-notification-center.js` · `21-attendance.js` · `22-profile.js` · `99-boot.js` · `src/styles/main.css` · `supabase/functions/send-push/index.ts` (one line: kind label — redeploy optional).
+
+## Decisions built in (21 Sep 2026)
+- **Person = profile.** No separate employments table (Q1: no). Band, probation, employment status, compensation and balances all hang off `profiles` / their own tables keyed by `profiles.id`.
+- **UAE Labour Law defaults** (Federal Decree-Law 33/2021 + Cabinet Resolution 1/2022), every one of them a switch in Administration → Leaves: annual 30 calendar days statutory floor vs the 22 / 26 working-day policy bands (the higher wins); sick 90 days per service year after probation, 15 full / 30 half / 45 unpaid, certificate from 2 days, reported within 3 days; maternity 60 (45 + 15 half) + 45 unpaid; parental 5 working days; bereavement 5 / 3; study 10 working days after 2 years; Hajj 30 unpaid once (company policy); unpaid leave by agreement (annual-exhausted rule OFF, per law — switch); accrual **does not** continue during unpaid leave (switch); carry-forward capped at 5 days and never more than half the entitlement, expiring 31 Mar; exit settlement at basic wage.
+- **Notice**: tiered — 7 days for 1+ days, 30 days for 6+ (Q8). Managers / People can override with a reason.
+- **Approval default** (Q4): annual ≤ 5 days → reporting manager; 6+ days or an advance beyond 10 days negative → manager → Head of People; every flow editable per type.
+- Leave year 1 Jan – 31 Dec (Q6); half days on for annual and comp-off only (Q7); HR role = People Admin, Admin = configure + approve but no compensation, super admin = everything (Q9); statutory placeholders for the other types are editable (Q10).
+- Attendance rules stay under Administration → Attendance; Leaves links to them (Q5 — "properly structured, simple").
+
+## What people get
+- **Leaves** (desktop: Time section; phone: More sheet). *My leave*: a card per type (available at a glance), then **Accrued · Booked · Available** for the selected type — never one number — pay bands for sick, comp-off credits with expiry, the law note, my requests with a status timeline, and a 12-month calendar (leave by colour, pending striped, holidays, rest days).
+- **Apply** = bottom sheet on phones / dialog on desktop: type chips → dates → live mini-calendar showing exactly which days are used ("N working days will be used · available after: X") → half day → reason → camera / file attachment → every rule message inline (eligibility, notice, backdating, overlap, attachment, balance, advance) → Submit only when clean.
+- **Team**: month grid (desktop) / "who's off" day list (phone), off-today / pending / off-this-month tiles, search, apply on behalf (logged).
+- **Requests** inbox: only what waits for *you* (toggle: all in my scope), balance before → after on every row, SLA badge, bulk approve / reject, **swipe right = approve, left = reject** on phones, detail sheet with the approval timeline and balance impact.
+- **Balances** (People / HoD / Finance): person × type, filters, point-in-time date, projection to 31 Dec, tap a number for the append-only ledger, **Adjust** (opening balance from Keka, corrections, encashment), CSV.
+- **Reports**: leave balance (accrued / taken / booked / pending / available / projected / same date last year / carried), requests & SLA, liability (days × daily rate — amounts only for compensation viewers), **year-end** (projected balances vs cap, per-person decision, simulate, run → posts carry-forward / forfeiture / encashment to every ledger), document expiry.
+- **My Day**: annual-leave tile, "Leave requests waiting for you" tile, "You're on leave until…" banner, "Off today" strip for managers.
+- **Profile → Work**: probation chip, employment status (active / notice / exited — leave rules read it), annual-leave band; **Compensation card** (Head of People + super admin only, enforced by RLS — nobody else even gets the row). **Profile → Leave** tab for people in scope.
+- **Attendance**: an approved leave day now classifies as ON_LEAVE (never Absent, no clock-in expected) through the `leaveCovering()` hook that was reserved in v133.
+- **Notifications** (in-app / push / email, per-person toggles, templates): request → approver, level approved, decided, withdrawn / cancelled, balance adjusted, SLA nudge, "starts tomorrow".
+
+## Administration → Leaves (super admin / Head of People / People Admin)
+Overview (master switch, accrual start, **Run accruals now**, entity, people missing a joining date) · Leave types (add / edit / switch off; per type: pay treatment & bands, entitlement, unit, eligibility, dates & backdating, notice tiers, attachments, half days, sandwich, approval levels with conditions, year-end) · Accrual & balances · Year-end · Approvals & SLA · Holidays (shared with attendance) · Roles · Audit (actor · before → after for every change).
+
+## Data & server
+`leave_types` · `leave_requests` (state machine, approval flow snapshot, balance snapshot) · `leave_ledger` (append-only, 4 dp, UPDATE/DELETE blocked by trigger; accrual / taken / opening_balance / adjustment / carry_forward / forfeiture / encashment / correction / comp_off) · `leave_config_audit` · `compensation` · private storage bucket `leave-docs`. `bridge_leave_perm(action, target)` mirrors Access Control in Postgres for all of them; requesters can only withdraw / cancel-before-start their own rows; approve / adjust / pay are never possible on your own row. Hourly pg_cron job `bridge-leave-tick`: monthly accrual (prorated joiners, unpaid days excluded, statutory floor, idempotent), **taken** postings once a leave ends, SLA nudges, "starts tomorrow", carried-day expiry. Runs only while the module is switched on.
+
+## New built-in roles
+**Head of People** (everything incl. compensation) · **People Admin** (everything except compensation) · **Finance** (balances, liability, export). Built-ins re-seeded (v18); custom roles get a one-time leave floor derived from their attendance rights.
+
+## Go-live checklist
+1. Administration → Leaves → Overview: check the accrual start date (default 1 Jan 2026), then switch the module **on**.
+2. Set joining dates and probation ends on profiles (Overview lists who is missing one).
+3. Balances → Adjust → *Opening balance* for each person's Keka figure (as of the cut-over date) — or leave it to the automatic accrual from the start date.
+4. Assign Head of People / People Admin / Finance in Access Control (HR keeps working as People Admin).
+5. Later phases unchanged: payroll input file, Keka import, employee numbers, KSA entity, location → entity tagging.
+
+---
+
+# Bridge v158 — ticket chat = channel chat (cache-buster `?v=158`)
+
+- **Ticket conversations now render exactly like channel chats**: only *your* messages sit on the right; colleagues are on the left with their name and avatar (before, every staff message was pushed to the right as "mine", with no names).
+- Phones: the TICKET chip is dropped from the chat header so the ticket title has room; the type still shows behind (i).
+- Long-press bar, swipe-reply, ⋯ menu, voice notes, files, forward, stickers — all already shared with channels; verified on a ticket.
+
+---
+
+# Bridge v157 — App Store readiness (cache-buster `?v=157`)
+
+- **Public legal pages** at `/legal/privacy.html`, `/legal/terms.html`, `/legal/support.html` (BloomingBox Gifts LLC, UAE law, device permissions, retention, deletion).
+- **Privacy · Terms · Support links** on the sign-in page and in the More menu.
+- **More → Delete my account**: type DELETE → request saved in `account_deletion_requests`, admins notified in-app + by email, the person is signed out. No data is deleted automatically.
+- **App icons** in `public/icons/` (App Store 1024, apple-touch 180, PWA 192/512/maskable, favicon); `index.html` points at them.
+- `capacitor.config.json` (com.bloomingbox.bridge → bridge.bloomingbox.com) and `APPSTORE.md` with the listing text, privacy questionnaire, Info.plist strings and the steps left for you.
+- Migration: `supabase/migrations/2026-09-21_v157_account_deletion.sql` (already applied).
+
+---
+
+# Bridge v156 — forgot password tells you when the email is unknown (cache-buster `?v=156`)
+
+- **Unknown email → "No Bridge account uses this email"**; inactive account → "contact your admin"; only a real, active account gets the reset email.
+- The check runs on the server (`pw_reset_lookup(email)`, security definer) and is **rate-limited to 5 tries per email per 15 minutes** (`pw_reset_attempts` table, no direct access) so the screen cannot be used to harvest addresses.
+- Migration: `supabase/migrations/2026-09-16_v156_pw_reset_lookup.sql` (already applied).
+
+---
+
+# Bridge v155 — Forgot password (cache-buster `?v=155`)
+
+- **"Forgot password?" on the sign-in page** → enter your email → Bridge emails a reset link (Supabase auth email). The confirmation reads the same whether or not the address exists.
+- **Opening the link shows "Choose a new password"** (new + confirm, min 6 chars); saving signs you in straight away.
+- **The link is honoured for 10 minutes only**: new SQL function `pw_reset_window_ok()` checks `auth.users.recovery_sent_at`; an older link (or an already-used one) shows "This link has expired" with a button to request a new one.
+- Migration: `supabase/migrations/2026-09-16_v155_pw_reset_window.sql` (already applied to the project).
+
+---
+
+# Bridge v154 — rename Ticket / Assignee / Status by clicking the header (cache-buster `?v=154`)
+
+- **Click the Ticket, Assignee or Status header name** on desktop → a small Rename box, saved for that board only.
+- In the Columns popup the name fields now **save as you type** (and Enter closes the keyboard), so a rename sticks even if you close the popup right away.
+
+---
+
+# Bridge v153 — drag Assignee / Status straight in the table header (cache-buster `?v=153`)
+
+- **Assignee and Status now have a ⋮⋮ grip in the table header** — drag them left or right among the other columns, exactly like custom columns. (Before, only the Columns manager could move them.)
+- Header drag saves the same per-board `colOrder` the Columns manager uses, so the two never disagree.
+
+---
+
+# Bridge v152 — new chat asks for one thing (cache-buster `?v=152`)
+
+- **New conversation has a single "Chat name" field** — the Customer / Order ID and Subject boxes are gone; the name you type becomes the chat title.
+
+---
+
+# Bridge v151 — cleaner ticket grid (cache-buster `?v=151`)
+
+- **No Customer field on the quick-add row** — just the title plus the board columns.
+- **Thin vertical lines between columns**, a firmer header rule and uppercase column labels for a more professional grid.
+- **Date/time clear (×) is a small round button** that appears on hover/focus (always visible on phones and in the add row), with a subtle highlight; the picker sits in a single bordered field.
+
+---
+
+# Bridge v150 — Profile from the menu is always yours (cache-buster `?v=150`)
+
+- **More → Profile always opens your own profile.** The profile you last viewed under People is no longer remembered when you change tabs (`profUid` is transient), and the menu route clears it after navigation.
+
+---
+
+# Bridge v149 — columns: every name editable, built-ins movable · view → chat opens at newest (cache-buster `?v=149`)
+
+- **Every column name is editable per board** in the Columns manager — first column, Assignee, Status and every custom column (type them in place). Names show in the table header and the ticket details.
+- **Assignee and Status can be dragged** among the custom columns; the order is saved per board (`colOrder`) and applies to the table, the new-ticket row and desktop drag.
+- **Switching from a filtered view back to a chat opens at the latest message** (it used to paint at the top).
+- **Phones — ticket table fits the screen**: the name column takes the remaining width and ellipsises, Status and (i) always visible, no sideways scroll.
+
+---
+
+# Bridge v148 — drag to reorder columns (cache-buster `?v=148`)
+
+- Columns manager: grab the ⋮⋮ handle and drag a column up or down — works with a finger on phones and a mouse on desktop; the other rows slide out of the way and the order saves on release. (Arrows removed; header drag on desktop unchanged.)
+
+---
+
+# Bridge v147 — profile fix · columns manager · ticket (i) on phones · board switcher (cache-buster `?v=147`)
+
+- **More → Profile opens your own profile** (it used to reopen the last person you looked at).
+- **Columns manager** (ticket board toolbar → Columns): rename the first column per board (“Ticket” → anything), reorder custom columns with ▲▼ (works on phones; drag still works on desktop), rename/edit/delete each, add new.
+- **Unread on tickets**: a ticket with messages you haven't seen shows a badge next to its name and a tinted row in the table.
+- **Phones — ticket table shows only name + status**; the (i) at the end opens a sheet with every field (assignee, status, columns, activity), “Open the ticket chat” and Delete.
+- **Ticket details on phones close with one ×** (there were two).
+- **Workspace opens on the Chat board** of the hub by default; on phones the tab strip shows only the current board and ⋯ lists every board to switch to (with unread counts), then the board actions.
+
+---
+
+# Bridge v146 — smoother chat on phones (cache-buster `?v=146`)
+
+- **Only the newest 80 messages are rendered** when a chat opens; “Show earlier messages (n)” loads 120 more at a time, and a jump from a quote / pin / star / search pulls in what it needs automatically. Long chats no longer put thousands of nodes on screen.
+- Dropped the blur effect on the sticky date pills and the `:has()` selectors that Safari re-evaluated on every change; the page lock uses a plain class instead; one lighter observer instead of two; GPU-composited message list; shorter bubble animations.
+
+---
+
+# Bridge v145 — ticket tables on phones, smaller (cache-buster `?v=145`)
+
+- Dropdowns, text and date cells in ticket tables are ~20% smaller on phones (drawn scaled so Safari still doesn't zoom when you tap one), header row tighter, and the New ticket / Column / Statuses / Filter toolbar is a compact single row that swipes sideways.
+
+---
+
+# Bridge v144 — 1 s hold · true single tap on rows (cache-buster `?v=144`)
+
+- Hold to open the message bar is now **1 second**.
+- **Single tap on channel / chat rows.** Remaining cause of the double tap: CSS hover reveals (the trash icon on chat rows, board rows, hub rows). On iOS a hover that shows something turns the first tap into a hover. All hover reveals now exist only on devices with a real pointer, and are force-hidden on touch screens.
+
+---
+
+# Bridge v143 — keyboard, Messages list (cache-buster `?v=143`)
+
+- **Composer stays above the keyboard** on phones: the workspace now really follows the visible viewport (the earlier rule was being overridden by the page-level layout rule), the list scrolls to the latest message when the keyboard opens, and the safe-area padding drops while the keyboard is up.
+- **Messages (1-to-1) list**: the “Search people…” box was growing to fill the screen and pushing the people to the bottom — fixed; the list starts right under the search box.
+- 1-to-1 chats no longer print the other person's name inside every bubble (it's in the header, like WhatsApp).
+
+---
+
+# Bridge v142 — message options: ⋯ on desktop, 2 s hold on phones (cache-buster `?v=142`)
+
+- **Desktop**: every bubble gets a small ⋯ in its top-right corner on hover; clicking it opens the bar (emojis · reply · thread · forward · ⋯). The bar no longer opens on hover, sits above the bubble instead of over the sender's name, and closes on any click outside.
+- **Phones**: nothing opens on a tap; hold a message for 2 s to get the bar.
+- **Channels drawer**: the hub row no longer sprouts edit / delete icons on a tap (those were hover reveals; hover reveals now exist only on devices with a real pointer). Tap the chevron to expand, the name to open.
+
+---
+
+# Bridge v141 — single-tap navigation on phones · 2 s hold for the message bar (cache-buster `?v=141`)
+
+- **One tap, not two.** iOS treats any element with an inline hover handler as "hover first, tap second" — that is why hub rows, board rows, chat rows and many buttons needed a double tap. On touch screens those hover handlers are now stripped as the page renders.
+- **Message bar only on a 2-second hold.** A tap used to leave the bubble in iOS's sticky :hover state, which showed the bar while scrolling or on a plain touch. The bar now appears only after a 2 s hold (`CRM_LONG_PRESS_MS`), never from a tap.
+- **Phone drawer**: expanding / collapsing a hub keeps the drawer open instead of closing it on every tap.
+- **Security**: `chat-media` files — anyone signed in can read and upload; only the uploader can replace or delete a file (was: any signed-in user).
+
+---
+
+# Bridge v140 — Workspace opens at the newest message · phone viewport locked (cache-buster `?v=140`)
+
+- **Workspace tab → chat opens at the latest message** and is marked read. It used to paint the chat at the top (31 Aug…) when you came in from the tab / bottom nav; only tapping a chat scrolled down.
+- **Phones: the page never moves.** The workspace is fitted to the visible viewport (keyboard open or closed) and the document itself is locked while the Workspace is open — no bounce, no sideways drift, composer stays above the keyboard.
+
+---
+
+# Bridge v139 — Workspace on phones, follow-ups (cache-buster `?v=139`)
+
+- **Opens on the newest activity** — Workspace lands on the board (or Messages) with the most recent message, never on a board remembered from an earlier day; a notification deep link still wins.
+- **Swipe-to-reply no longer moves the page** — the message list can't scroll sideways and the swipe is a vertical-pan-only gesture area.
+- **Chat info / Contact info sheet** is pinned edge-to-edge at the bottom on phones (no off-centre card).
+- Long press on a message (1.5 s) shows the floating bar from v138.
+
+---
+
+# Bridge v138 — Workspace on phones, simplified (cache-buster `?v=138`)
+
+- **Long press a message (1.5 s)** shows the floating bar on the bubble — quick emojis, Reply, Thread, Forward, ⋯ — the same bar as desktop hover. **Swipe right = quoted reply** (WhatsApp); the thread only opens from the thread icon. ⋯ opens the sheet with copy, star, pin, message info, edit, delete.
+- **Board tab strip**: one ⋯ button on phones (members, rename, delete, remove-from-view) instead of three buttons squeezed next to the tabs, so every board tab is reachable.
+- **Chat list**: no trash button on every row and no duplicate “+” chip (the New chat button stays); long press / swipe left a row for pin, mute, mark unread, archive, chat info, delete.
+- **Thread panel** fills the whole screen inside a chat (the main composer no longer peeks out underneath).
+- Bubbles no longer trigger the iOS text-selection callout during a long press.
+
+---
+
+# Bridge v137 — Workspace chat: WhatsApp parity (cache-buster `?v=137`)
+
+`public/js/25-chat-plus.js` (new) · `06-crm.js`, `23-dm.js`, `01-supabase-sync.js`, `index.html`.
+DB (additive, **already applied**): `crm_messages` gains `reply_to`, `forwarded`, `attachments`, `sticker`, `link_preview`, `pinned_at`, `pinned_by` (and `crm_messages_lite` carries them) · new tables `crm_stars`, `crm_convo_prefs` (own rows only) · `profiles.last_seen_at` (kept fresh by a trigger on the presence heartbeat) · private storage bucket `chat-media` (signed links, 50 MB) · both notification fan-out triggers now skip muted chats and describe voice notes / files / stickers · new edge function `link-preview`. Record: `supabase/migrations/2026-09-15_v137_chat_plus.sql`, `supabase/functions/link-preview/index.ts`.
+
+- **Voice notes** — the send button becomes a mic when the box is empty; tap to record (red dot + timer, bin to cancel, ➤ to send). Inline player with waveform, seek, 1×/1.5×/2×; one note plays at a time.
+- **Any file** — the paperclip takes photos, PDFs, Excel, Word, videos, anything up to 50 MB (drag-and-drop and paste on desktop). Files show as a card (type badge, name, size, download); videos play inline; photos stay inline as before. Files live in a private bucket and open through short-lived signed links.
+- **Quoted replies** — Reply quotes the message inside the bubble (sender + snippet / photo thumbnail); tapping the quote scrolls to the original and flashes it. Swipe right on a phone to reply. “Reply in thread” is still there for side conversations. Replying tags the person you replied to.
+- **Forward** — any message, to several chats or people at once (search + tick), photos / files / voice notes travel with it, marked “Forwarded”.
+- **Edit for 15 minutes**, delete for everyone (attachments are removed from storage too).
+- **Message info** — on your own messages: who read it (with time), who it was delivered to, who hasn’t got it yet.
+- **Last seen** — direct-message header shows “Online” or “Last seen today at 14:05”; group header shows members and how many are online; typing indicator unchanged.
+- **Pin** (per chat, everyone sees it) — a pinned bar under the header; tap to jump, tap again to cycle when there are several, list icon shows them all. **Star** (per person) — ★ on the bubble, “Starred messages” from Chat info.
+- **Link previews** — the first link in a message gets a card (site, title, description, image), fetched once server-side so nobody’s browser touches the page.
+- **Message actions** — desktop: hover bar (react, reply, thread, forward, ⋯ for copy / star / pin / info / edit / delete). Phone: long press opens a bottom sheet with the emoji row and the same actions.
+- **Emoji + stickers** — the picker has an Emoji page (all categories + recent) and a Stickers page (six packs) that sends a large sticker.
+- **Chat info** — tap the chat name: members with online / last seen, Media · Files · Links tabs, Mute (8 h / 1 week / always — @tags still get through), Pinned, Starred, Search, pin chat to top, archive, leave board. Contact info for direct messages.
+- **Chat list** — long press (or swipe left, or right-click) a row: pin to top, mute, mark as unread, archive, chat info. Pinned chats stay on top, muted chats show a bell-off icon and a grey badge, archived chats sit under an “Archived” filter.
+
+---
+
+# Bridge v133 — Attendance, HRMS Phase 1 (spec §7, §9, §11, §12): no timer clock-outs · requests · comp off · holidays · dated work patterns · reports
+
+`public/js/24-attendance-hrms.js` (new) · `21-attendance.js`, `22-profile.js`, `19-okr-roles-acl.js`, `18-settings-notifications.js`, `index.html` + cache-buster `?v=135`.
+DB (additive, **already applied to the live project**): new tables `public_holidays`, `attendance_requests` · `attendance` gains `history` (jsonb), `queued`, `rm_notified_at` · `bridge_attendance_tick()` rewritten (same cron job, same guard). Records: `supabase/migrations/2026-09-14_v133_attendance_hrms.sql`, `…_attendance_tick.sql`. Nothing deleted.
+
+- **Forgotten clock-outs are never closed on a timer** (spec §9.2). New rule `open_shift_mode` (Administration → Attendance): **Flag to manager** (default, now live) keeps the shift open — the next morning the person and their manager are told, the manager closes it under **Attendance → Requests** with the time they actually left and how they know; the open punch stays in the record and the hours don't count until then. Still open after `log_buffer_days` → escalated to the manager and the manager's manager. **Auto clock-out** at a set time remains available as the alternative mode.
+- **Day engine (`classify_day`, spec §0.2).** Every person-day is classified public holiday → rest day → on leave (hook for the leave module) → scheduled working day. Statuses: Not in yet · Present · Late · Remote · WFH · On duty · On leave · Rest day · Holiday · Absent · Open shift · Half day · Exempt. Flags per day: late, left early, half day, hours short, overtime (raw hours, capped per day / week as flags — never paid here), absent, open shift, synced late, corrected, rest-day work.
+- **Public holidays** (Administration → Attendance): dated, per location or all locations, multi-day. Nobody is expected to clock in; reminders skip them; working one raises comp-off.
+- **Work pattern per person, dated** (profile → Work → Schedule): worker **category** (office / warehouse geofenced · remote / consultant manual clock-in without a geofence), shift start / end, rest days, and **"change applies from"** — earlier days keep the pattern that was live then. Managers with the new Attendance → **Set schedule** can change their own team's; HR still edits everything.
+- **Requests** (My Day → Request…, or from a calendar day): **Fix a punch** (regularisation; monthly cap + window; the original punch is kept in `history`, never overwritten), **Partial day** (late arrival / early leave; monthly cap; approved = not flagged), **On duty** (off-site work; approved = counted as worked, no geofence, never absent — and it suppresses geofence clock-out once the mobile app has background location). **Comp off** is raised **automatically** by a clock-in on a rest day or holiday, with the real hours filled in at clock-out.
+- **Manager inbox** (Attendance → **Requests**, with a badge and a My Day tile): every pending request and open shift for people in scope, approve / reject one or in bulk with a note; the person is told in-app + email. New permission **Approve** (Team Lead/Manager and HR have it; custom roles that could Edit get it once).
+- **Grace with a monthly quota**: after `grace_instances_per_month` grace arrivals, arrivals inside the grace window count as late. **WFH quota** per month on the self-serve button. **Half day / absent / hours-short** thresholds and **overtime caps** are settings, not code.
+- **Offline punches**: a clock-in / out that can't reach the server is kept on the device with its true time, marked **synced late** when it lands, and visible to the manager (↻).
+- **Notifications** — new events + templates + toggles: request → approver, request decided, open shift → manager (server, next morning, with email), missed clock-in → manager (server, same day, push; only while clock-in reminders are on), long-day "still clocked in?" after `clockout_reminder_hours`. Document-expiry ladder is now 90 / 60 / 30 / 7 / 0 days.
+- **Database-level permissions on the attendance tables** (`supabase/migrations/2026-09-14_v133_attendance_rls.sql`): `attendance`, `attendance_requests`, `wfh_days` and `public_holidays` now enforce Access Control in Postgres via `bridge_att_perm(action, target)` (per-user override → role → legacy rules, same order as `can()`): people see only rows their scope allows, can insert punches only for themselves, can only *close* their own open session (a trigger refuses moving a clock-in, reopening or rewriting history), can only withdraw their own requests; approving, correcting, deleting and holidays need the matching permission for that person. Verified as an employee, a manager and an admin inside a rolled-back transaction. Other tables keep the old open model.
+- **Review fixes**: night shifts (clock-out earlier than clock-in rolls to the next day everywhere; an overnight session is not flagged as an open shift until it is older than a day or has run 12 h+); the reject / bulk-decision note dialog; a scheduled future category change no longer applies early; regularisation keeps the existing clock-out when only the clock-in is corrected; user-supplied times are escaped in the inbox; the server job's reminder windows no longer wrap at midnight for late shifts; one live comp-off request per person-day is enforced by a unique index; bulk-selection ticks are not remembered across reloads; `att:team:<date>:<person>` alerts open that person.
+- **Phone pass across the app (v133c)**: every page, tab and popup was rendered at 390px with real data and checked for overflow. Bottom nav is now positioned by our own CSS (it used to rely on Tailwind's `fixed bottom-0` from the CDN — if that script loaded late or not at all, the bar sat at the end of the page with the address bar under it). Toggles are a proper 44×26 pill on phones (a generic 34px button rule was squashing them). Clock card: one big Clock in/out, Request… / WFH underneath; team KPIs 3-up; questions rows wrap; OKR check-in panel stacks; manager inbox and reports stack into cards; settings rows put the control under the label; tables never scroll the page.
+- **v133d — five fixes from testing.** (1) Attendance range: "Today / Last 7 days / This month…" are recomputed from today on every open — the remembered filter used to freeze the dates on the day they were chosen. (2) Public holidays apply to **several locations** at once (tick boxes; "All locations" still available); grouped in the list, removed as one. (3) **Time zones per person**: everyone follows the time zone of their work location (Locations → Geofence → Time zone); the workspace setting is only the default for people with no location. Clock-in dates, late/early flags, shift maths, manual corrections, open-shift closing, reports and the server reminders all use the person's own zone — a Dubai manager sees a Riyadh colleague's times in Riyadh time. (4) Workspace on phones: the emoji / reply / ticket / delete bar opens on a **long press** (0.8 s, `CRM_LONG_PRESS_MS`) — a tap never pops it. (5) **WhatsApp-style search**: a magnifier in the chat header opens "Search in this chat" with n-of-m, up/down and highlighted matches; on phones the chat-list search is a full-width bar (magnifier in the top bar) and results show the matching message under each chat — tap it to jump to that message.
+- **v133e** — Workspace opens on the newest chats (it remembers the hub/board but no longer re-opens the conversation you had open days ago); ticket boards on phones are one card per ticket (title opens it, status and assignee editable in place, extra columns underneath) instead of a 600px-wide table; iOS Safari no longer zooms/shifts the page when you tap a field (every field is 16px on phones — Safari auto-zooms anything smaller) and the page can never scroll sideways.
+- **v136 — phone polish (cache-buster `?v=136`).** "Remove from view" never wraps (shorter "Remove" on phones); ticket boards on phones are back to **rows** — one ticket per line, the Ticket column pinned on the left while the other columns swipe sideways (the card layout from v133e is gone); a set **date / time can be cleared** again (× beside the value, in the table, the ticket panel and the new-ticket form — Safari's picker has no clear of its own); the **New message** people search keeps the keyboard and caret while typing (only the result list refreshes); Settings → My notifications → **This device** stacks the status text under each row on phones; **Templates** and **Access Control** use smaller text and tighter controls on phones (fields stay 16px so Safari doesn't zoom); the board-tab strip's action buttons no longer cover the last tab.
+- **Reports** (Attendance → Reports, any range, CSV): **Verification / exceptions** (everything to resolve before payroll: open shifts, absences, half days, short hours, late, early, OT over cap, pending requests — with the unresolved count), **Absentee**, **Summary per person**, **Comp off**, **Requests & SLA** (3-day SLA highlighted). The main **Export CSV** now carries day type, shift, scheduled vs worked, shortage, overtime and every flag.
+
+---
+
+# Bridge v132 — geofenced clock in / out · My Day for everyone · Attendance tab · full profiles with documents · direct messages · detailed permissions
+
+`public/js/21-attendance.js`, `public/js/22-profile.js`, `public/js/23-dm.js` (new) · `06-crm.js`, `04-nav-shell.js`, `01-supabase-sync.js`, `03-ui-kit.js`, `09-users.js`, `10-departments-locations.js`, `15-questions-escalation.js`, `18-settings-notifications.js`, `19-okr-roles-acl.js`, `20-notification-center.js`, `99-boot.js`, `07-login.js`, `src/styles/main.css`, `index.html` + cache-buster `?v=132`.
+DB (additive, **already applied to the live project**): `locations` gains lat / lng / radius_m / geofence_enabled / timezone · `profiles` gains avatar_url, employee_id, joining_date, birth_date, wfh_allowed, attendance_required, location_id, work_schedule, details · new tables `attendance`, `wfh_days`, `profile_documents` · `crm_conversations.kind` + `dm_members` · buckets `avatars` (public) and `profile-docs` (private) · trigger `crm_messages_fan_out_dm` · server job `bridge-attendance-tick` (every 5 min) · `send-push` redeployed (v4). Record: `supabase/migrations/2026-09-11_v132_attendance_profile_dm.sql`.
+
+- **My Day is the home for everyone.** Greeting, the clock card, today's checklists, OKR check-ins due, unread direct messages, alerts, approvals and open tickets — every tile opens the thing behind it. The old company-charts dashboard is the **Overview** pill next to it (still gated by Analytics → View). Mobile bottom bar: My Day · Checklists · Workspace · Notifications · More.
+- **Clock in / clock out with a geofence.** Locations → open a location → **Geofence** tab: drag a pin on a map (or "My current location" / address search), set the radius (30 m – 2 km) and switch it on. People can clock in **only inside an active geofence** — outside, the button explains how far they are from the nearest office. Clock-out also needs the fence (switchable in Attendance → Settings). Weak GPS is rejected with a clear message instead of guessing. Every entry records where and how far.
+- **Forgot to clock out?** A server job clocks the person out automatically at the end of the day (default 23:59 local, configurable) and tells them. It also sends **clock-in reminders** (N min after shift start, for people who must clock in) and **clock-out reminders** (N min after shift end) — in-app, push and email, all per the person's own preferences.
+- **Work from home.** A per-person switch on the profile (Work tab) decides who may WFH. Allowed people get a **Work from home** button on My Day; a WFH day clocks in without the geofence, is tagged in reports, and the manager is told (in-app + email, both switchable).
+- **Attendance tab** (My Day hub): **My attendance** (month summary: days, hours, average, WFH, late arrivals, auto clock-outs, absences; day-by-day list) · **Team** (whose attendance you see follows Access Control → Attendance "sees"; live status per person today, month totals, tap a person for their month) · **Settings** (auto clock-out time, geofence for clock-out, GPS tolerance, late grace, reminders, WFH notice, tracking start date). Managers with Attendance → Edit can **add / edit / delete** entries with a required reason (the person is told; audit-logged). **Export CSV** per month.
+- **Real profiles.** A full profile page (own via the sidebar avatar; others from Users → name / person icon): photo upload (resized client-side, `avatars` bucket), personal details (phone, birth date, gender, nationality, address, languages, about), **emergency contact**, employment (employee ID, joining date + tenure, position, department, work location, type, probation / contract end), **schedule** (shift times, off days, must-clock-in, WFH allowed), team (reports to / direct reports), **Documents** (passport, visa, Emirates ID, contract… with category, **expiry date**, notes — private bucket, signed URLs, 30 / 7 / 0-day expiry alerts to the person and their manager), the person's attendance month, and Security (password). Users directory shows employee IDs and opens profiles.
+- **Direct messages in Workspace.** A **Messages** section above the hubs: private one-to-one chats with anyone active — same bubbles, photos, reactions, threads, ticks, typing and realtime as board chats; only the two people can ever read a DM (no role, not even Super Admin, sees others' DMs). Start one from **+**, a profile, or the Users list. Notifications are created by the database (kind `dm`, grouped like chat) with push; email per message is off by default. Unread DMs count in the Workspace badge and the My Day tile.
+- **Permissions, in detail.** New areas: **Attendance** (view · clock in/out · edit · delete · export · manage — with "sees"), **My profile (own)** (edit own details · change photo · emergency contact · upload / delete documents), **Direct messages** (view · send · delete). **Users** gains Open profile · Sensitive details · Edit HR details · Allow/block WFH. **Personal documents** = other people's documents (with "sees"). Built-in roles re-seeded (v15); custom roles automatically get the everyday floor (clock in, own profile, DMs) and keep everything else. Access Control: **Preview** per person (exactly what the app enforces — pages they can open + every action), **All on / All off per group**, live "n of m permissions on" counter, **start a new role from a template**, and an **instant push** — when someone's role or overrides change, their open session refetches and re-renders within seconds (kind `access`).
+- **Notifications** — new kinds registered everywhere (inbox · sound · desktop · push · email chips in My notifications; own tone family for Attendance; DMs ring like mentions): `dm`, `attendance`, `people`, `access`. New email events + editable templates + workspace toggles: attendance reminders, WFH day, attendance edited, direct message, people events. Alerts page gains **Attendance** and **People** tabs; deep links `att:…`, `profile:…`, `home` open the right screen from a tap.
+- **v132.7 — refresh must never sign you out.** Root cause found and fixed: Settings → My notifications crashed with “Can't find variable: esc_” once the “Why did it ring?” log had entries (a helper was defined in one block of the notification centre and used in another). Because Bridge reopens the last tab on refresh, anyone who had been on Settings was thrown to the login page, and the Administration tab looked dead. If one loader or the first paint fails after the profile is loaded, Bridge now keeps your session, shows what failed and lands on My Day (before, any hiccup showed “Connection error” and dropped you on the login page). Error toasts now carry the real message, script errors surface as a toast instead of failing silently, and the script version was bumped (v=133) so browsers that cached a mix of old and new files pick up a consistent build.
+- **v132.6 — phone alignment pass.** Attendance → Team → a person: the “Back to team” button now sits in the person row (← Team · avatar · name · Profile) above the range dropdown instead of floating beside the tabs. Every page was walked at phone width and tidied: three-tile rows (My Day, Tickets, Team cards) sit in one line, odd leftover KPI tiles stretch across instead of dangling, KPI icons give way to the label so nothing wraps; the profile hero stacks avatar → name → a full-width action row; Alerts tabs scroll in one row instead of a ragged wrap; Access Control → People turns into stacked cards with a full-width role picker; the role editor puts each area's toggles under its name; filter rows put the search box on its own line; calendar cells keep the hours and drop the in/out times; page headers no longer leave a blank gap above their buttons.
+- **v132.5 — bulk users template + export carry the profile fields; Team status follows the range.** The Users **bulk-upload template, its Help sheet and the Users export** now include Employee ID, joining date, date of birth, gender, nationality, work location (by name), shift start/end, off days, “must clock in”, “can work from home” and the emergency contact (birth date and emergency contact export only for people allowed to see HR details); the importer reads all of them (dates as YYYY-MM-DD, DD/MM/YYYY or Excel dates; unknown locations are flagged before import). Attendance → Team lost its separate “Status on” date picker — the status column simply shows the last day of the range chosen in the dropdown (today for This month / 30 / 90 days), and an alert link for a given day opens the Team tab set to that day. Fixed: the “Rules” button on the Attendance page was missing because of an operator-precedence slip, and page headers left a 220px blank gap on phones.
+- **v132.4 — attendance rules tightened + mobile headers.** Calendar only (list view removed). **Manual attendance is HR-only**: adding, editing or deleting a session needs Attendance → Edit/Delete and is never possible on your own record — employees only clock in and out. New built-in **HR** role (attendance edit/delete/export/manage, HR details, WFH switch, everyone’s documents); Team Lead/Manager now only *sees* their team’s attendance. Range is a dropdown (Today · Yesterday · Last 7 days · This month · Last month · 30 · 90 days · Custom). Durations read “7h 30m” everywhere and “7:30” in the CSV. Page headers stack on phones with full-width action buttons.
+- **v132.3 — no duplicates.** Attendance rules live in ONE place: Administration → Attendance (the Settings sub-tab under My Day → Attendance is gone; a small “Rules” button links across). The “tell the manager about WFH” switch existed twice (attendance rules + notification settings) — only Settings → In-App / Email → Attendance decides now. Your own attendance is shown on the Attendance page only (the profile’s Attendance tab appears for other people’s profiles).
+- **v132.2 — attendance calendar + range, Messages folded, and a sweep across the app.** Attendance: **My attendance is a calendar** (one grid per month, colour per day, hours + in/out times on each cell, tap a day for its sessions and to add/edit) with a List view one tap away; a **date range** (Today · 7 days · This month · Last month · 30 · 90 days, or any from/to) drives My, Team and **Export CSV** alike; Team shows range totals per person plus status on a chosen day. **Administration → Attendance** opens the attendance rules. Workspace: the **Messages section is folded by default** (chevron remembers your choice; it opens while you're in Messages). Bugs fixed on the way: Send feedback crashed before saving (undefined variable); Alerts "mark as read" never reached the server, so everything came back unread after a reload; the question CSV template's photo/comment/approval flags were silently dropped (columns now mapped by header); question/option text with quotes broke the editor; approve/reject and ticket resolve/delete re-check permissions in the handler (buttons alone are not a guard); the custom-schedule calendar could never show January; removing a custom date left its chip on screen; My Checklists could carry an in-progress edit across to another date; managers now see tickets they raised, not only ones assigned to them; double-tap on resolve / create department / create location no longer creates duplicates; Overview dashboard days were computed in UTC (wrong bucket before 04:00 Dubai) and its tickets panel ignored the viewer's scope; departments/locations with no access showed a blank page; org-document handlers, workspace settings and "Clear data" now check permissions; **renaming a department carries the new name to its documents, folders, people and checklists** (they used to be orphaned); acknowledging feedback syncs immediately; native alert() replaced everywhere with the on-brand dialog. Polish: Clear-filters + counts on Users, Questions, All results and Audit (with search), "no matching…" empty states when a filter is active, disabled people are marked in Access Control (and its department filter lists real departments), Profile buttons on Users, Access Control, Team and Department pages, "Open full profile" from the user editor, a proper Team empty state, Feedback badge counts only live items, deleted-ticket toast, and the old duplicate Profile tab in Settings removed.
+- **v132.1 — safety + sound fixes.** The attendance system now has a **master switch** (Attendance → Settings → "Attendance system", OFF by default): while off, nobody sees the clock card or WFH button and the server job sends nothing (the job itself is guarded on the same switch). Reminders were switched off and the alerts they created were removed. **Phantom sounds:** older app builds (the iOS bundle compiled before v3.26) still insert their own 💬 rows next to the ones the database creates — two rows, two rings; the database now drops a second Workspace row for the same person + chat within 5 s, whatever client sent it. A background tab stays quiet when the same person has Bridge focused on another device (the rule push already used). Alerts that rang while the tab was in the background now appear as cards when you come back, and Settings → My notifications has a **"Why did it ring?"** log of the last alerts this device decided on.
+- Mobile: built for phones first — bottom sheets, 2-up tiles, sticky footers, full-screen DM chat — and works unchanged inside the Capacitor app (GPS via the browser Geolocation API; the native app only needs the location permission in Info.plist / the Android manifest).
+
+---
+
 # Bridge v131 — one notification pipeline (sounds, DND, quiet hours, presence) · mobile polish
 
 `public/js/20-notification-center.js` (new), `public/js/06-crm.js`, `public/js/18-settings-notifications.js`, `public/js/01-supabase-sync.js`, `public/js/04-nav-shell.js`, `public/js/12-my-checklists.js`, `public/js/14-all-checklists.js`, `public/js/15-questions-escalation.js`, `public/js/16-hierarchy-tickets.js`, `public/sw.js`, `src/styles/main.css`, `index.html` + cache-buster `?v=131`.

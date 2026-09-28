@@ -4,6 +4,16 @@
    Load order matters — see index.html.
    ============================================================ */
 /* ===== DEPARTMENTS ===== */
+/* v132.2 — the same per-scope document permission the tab renders with, for the handlers to re-check
+   (buttons are hidden, but a handler must never trust that). type 'dept' | 'loc'. */
+function _docScopePerm(type,scopeKey){
+  if(isAdmin())return{view:true,upload:true,download:true,edit:true};
+  const da=(me()&&me().docAccess)||{departments:{},locations:{}};
+  const map=type==='dept'?da.departments:da.locations;
+  const p=(map&&map[scopeKey])||{};
+  const role=(k)=>can('documentsOrg',k);   // role-level grants also count
+  return{view:!!p.view||role('view'),upload:!!p.upload||role('upload')||role('create'),download:!!p.download||role('download'),edit:!!p.edit||role('edit')||role('delete')};
+}
 function _scopeDocsTab(type, scopeKey){
   const u=me();const isAdm=isAdmin();
   const da=(u?.docAccess)||{departments:{},locations:{}};
@@ -252,7 +262,7 @@ function deptsPage(){
       +(stab==='users'
         ?('<div class="space-y-2">'
           +(dUsers.length
-            ?dUsers.map(u=>'<div style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;border:1px solid #EDE7DC;padding:12px 14px">'+avatar(u,'w-10 h-10','text-xs')+'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#A59788">'+esc(u.position||u.role)+'</div></div>'+chip(u.status)+'</div>').join('')
+            ?dUsers.map(u=>'<div '+((typeof _uCanProf==='function'&&_uCanProf(u))?'onclick="App.openProfile(\''+u.id+'\')" class="team-card-hover" ':'')+'style="display:flex;align-items:center;gap:12px;background:#fff;border-radius:14px;border:1px solid #EDE7DC;padding:12px 14px'+((typeof _uCanProf==='function'&&_uCanProf(u))?';cursor:pointer':'')+'">'+avatar(u,'w-10 h-10','text-xs')+'<div style="flex:1"><div style="font-size:14px;font-weight:600">'+esc(fullName(u))+'</div><div style="font-size:12px;color:#A59788">'+esc(u.position||u.role)+'</div></div>'+chip(u.status)+'</div>').join('')
             :empty('users','No users','No users assigned to this department.')
           )+'</div>')
         :'')
@@ -295,16 +305,28 @@ function deptsPage(){
         +'<span style="font-size:11px;font-weight:600;color:#54433C">Open →</span>'
         +'</div></div>';
     }).join('')
-    +(topDepts().length?'':empty('dept','No departments','Create your first department.'))
+    +(visibleDepts.length?'':(topDepts().length?empty('dept','No departments you can open','Access to a department’s documents is granted in Access Control → Personal settings → Document access.'):empty('dept','No departments','Create your first department.')))
     +'</div></div>';
 }
-App.editDept=(id=null,parentId=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;_deptParent=d?(d.parentId||null):(parentId||null);if(!can(_deptParent?'subDepartments':'departments',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const _lbl=_deptParent?'sub-department':'department';openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} ${_lbl}</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #EDE7DC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveDept=(id)=>{const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');return;}const _isSub=!!(id?((DB.departments.find(x=>x.id===id)||{}).parentId):_deptParent);if(!can(_isSub?'subDepartments':'departments',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n,parentId:_deptParent||null};if(id)obj.name=n;else DB.departments.push(obj);log(fullName(me()),id?'Edited dept':'Created dept',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error){console.error('saveDept:',error.message);toast('Couldn’t save to server — a department with this name may already exist here. ('+String(error.message||'').slice(0,50)+')','err');}}).catch(e=>{toast('Couldn’t save department to server','err');});};
+App.editDept=(id=null,parentId=null)=>{const d=id?DB.departments.find(x=>x.id===id):null;_deptParent=d?(d.parentId||null):(parentId||null);if(!can(_deptParent?'subDepartments':'departments',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const _lbl=_deptParent?'sub-department':'department';openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${d?'Edit':'New'} ${_lbl}</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div>${fld('Name','d-n',d?.name||'')}<div class="flex gap-2 mt-4"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #EDE7DC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="if(this.disabled)return;this.disabled=true;App.saveDept('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${d?'Save':'Create'}</button></div></div>`,'max-w-sm');};
+App.saveDept=(id)=>{const _re=()=>{document.querySelectorAll('#modal button[disabled]').forEach(b=>b.disabled=false);};const n=$('#d-n')?.value.trim();if(!n){toast('Name required','err');_re();return;}const _isSub=!!(id?((DB.departments.find(x=>x.id===id)||{}).parentId):_deptParent);if(!can(_isSub?'subDepartments':'departments',id?'edit':'create')){toast('You don’t have permission to do that','err');_re();return;}const obj=id?DB.departments.find(x=>x.id===id):{id:uid('d'),name:n,parentId:_deptParent||null};const _old=id?obj.name:null;if(id)obj.name=n;else DB.departments.push(obj);
+  /* v132.2 — documents, folders, people and checklists reference departments BY NAME; a rename used to orphan all of them. Carry the name forward everywhere. */
+  if(id&&_old&&_old!==n){
+    (DB.documents||[]).forEach(x=>{if(x.type==='dept'&&x.scope===_old)x.scope=n;});(DB.folders||[]).forEach(x=>{if(x.type==='dept'&&x.scope===_old)x.scope=n;});
+    if(!_isSub){DB.users.forEach(u=>{if(u.department===_old)u.department=n;});DB.checklists.forEach(c=>{if(c.department===_old)c.department=n;});}else{DB.checklists.forEach(c=>{if(c.subDepartment===_old)c.subDepartment=n;});}
+    Promise.allSettled([
+      sb.from('documents').update({scope:n}).eq('type','dept').eq('scope',_old),
+      sb.from('doc_folders').update({scope:n}).eq('type','dept').eq('scope',_old),
+      _isSub?sb.from('checklists').update({sub_department:n}).eq('sub_department',_old):sb.from('checklists').update({department:n}).eq('department',_old),
+      _isSub?Promise.resolve():sb.from('profiles').update({department:n}).eq('department',_old)
+    ]).then(rs=>{if(rs.some(r=>r.status==='rejected'||(r.value&&r.value.error)))toast('Renamed, but some linked records could not be updated — refresh and check','warn');});
+  }
+  log(fullName(me()),id?'Edited dept':'Created dept',n+(_old&&_old!==n?' (was '+_old+')':''));toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('departments').upsert({id:obj.id,name:obj.name,parent_id:obj.parentId||null},{onConflict:'id'}).then(({error})=>{if(error){console.error('saveDept:',error.message);toast('Couldn’t save to server — a department with this name may already exist here. ('+String(error.message||'').slice(0,50)+')','err');}}).catch(e=>{toast('Couldn’t save department to server','err');});};
 App.delDept=async(id)=>{const d=DB.departments.find(x=>x.id===id);if(!d)return;const isSub=!!d.parentId;if(!can(isSub?'subDepartments':'departments','delete')){toast('You don’t have permission to delete '+(isSub?'sub-departments':'departments'),'err');return;}const kids=DB.departments.filter(x=>x.parentId===id);
 // ── Guard: a department (or its sub-departments) that is still tagged to questions,
 //    checklists, or users must not be deleted. Note: questions reference departments by ID,
 //    while checklists and users reference them by NAME. ──
-const _allIds=[id,...kids.map(k=>k.id)];const _allNames=[d.name,...kids.map(k=>k.name)];const _qUsed=(DB.questions||[]).filter(q=>_allIds.includes(q.departmentId)||_allIds.includes(q.subDepartmentId)).length;const _cUsed=(DB.checklists||[]).filter(c=>_allNames.includes(c.department)||_allNames.includes(c.subDepartment)).length;const _uUsed=(DB.users||[]).filter(u=>_allNames.includes(u.department)).length;if(_qUsed||_cUsed||_uUsed){const _p=[];if(_qUsed)_p.push(_qUsed+' question'+(_qUsed>1?'s':''));if(_cUsed)_p.push(_cUsed+' checklist'+(_cUsed>1?'s':''));if(_uUsed)_p.push(_uUsed+' user'+(_uUsed>1?'s':''));alert("Can't delete \""+d.name+"\" — it's still used by "+_p.join(', ')+".\n\nReassign or untag those first (change their department), then delete this "+(isSub?'sub-department':'department')+".");return;}
+const _allIds=[id,...kids.map(k=>k.id)];const _allNames=[d.name,...kids.map(k=>k.name)];const _qUsed=(DB.questions||[]).filter(q=>_allIds.includes(q.departmentId)||_allIds.includes(q.subDepartmentId)).length;const _cUsed=(DB.checklists||[]).filter(c=>_allNames.includes(c.department)||_allNames.includes(c.subDepartment)).length;const _uUsed=(DB.users||[]).filter(u=>_allNames.includes(u.department)).length;if(_qUsed||_cUsed||_uUsed){const _p=[];if(_qUsed)_p.push(_qUsed+' question'+(_qUsed>1?'s':''));if(_cUsed)_p.push(_cUsed+' checklist'+(_cUsed>1?'s':''));if(_uUsed)_p.push(_uUsed+' user'+(_uUsed>1?'s':''));await infoP({title:"Can't delete "+d.name,body:"It's still used by <b>"+esc(_p.join(', '))+'</b>. Reassign or untag those first (change their department), then delete this '+(isSub?'sub-department':'department')+'.'});return;}
 if(!(await confirmP({
   title:isSub?'Delete sub-department':'Delete department',
   body:'<b>'+esc(d.name)+'</b> will be permanently deleted.',
@@ -323,7 +345,7 @@ function locsPage(){
     const l=DB.locations.find(x=>x.id===sel);
     if(!l){S.filters.locSel=null;return locsPage();}
     const lCls=DB.checklists.filter(c=>(c.locationIds||[]).includes(l.id));
-    const TABS=[['docs','📁 Documents'],['checklists','✓ Checklists'],['info','ℹ Info']];
+    const TABS=[['geofence','📍 Geofence'],['docs','📁 Documents'],['checklists','✓ Checklists'],['info','ℹ Info']];
     return'<div class="fade">'
       +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:16px">'
       +'<button onclick="App._closeLoc()" style="width:34px;height:34px;border-radius:10px;border:1.5px solid #EDE7DC;background:#fff;cursor:pointer;display:grid;place-items:center;color:#786A5F">'+ic('back','w-4 h-4')+'</button>'
@@ -336,6 +358,7 @@ function locsPage(){
       +'<div style="display:flex;gap:4px;margin-bottom:16px;background:#F7F3EE;border-radius:12px;padding:4px">'
       +TABS.map(([k,ll])=>'<button onclick="App._setLocTab(this.dataset.k)" data-k="'+k+'" style="flex:1;padding:8px;border-radius:9px;font-size:13px;font-weight:700;border:none;cursor:pointer;background:'+(stab===k?'#fff':'transparent')+';color:'+(stab===k?'#13171B':'#786A5F')+';box-shadow:'+(stab===k?'0 1px 4px rgba(0,0,0,.08)':'none')+'">'+ll+'</button>').join('')
       +'</div>'
+      +(stab==='geofence'?((typeof _geoLocTab==='function')?_geoLocTab(l):''):'')
       +(stab==='docs'?_scopeDocsTab('loc',l.id):'')
       +(stab==='checklists'
         ?('<div class="space-y-2">'
@@ -346,7 +369,7 @@ function locsPage(){
         :'')
       +(stab==='info'
         ?'<div class="bg-white rounded-2xl border border-ink-100 p-5 space-y-3">'
-          +[['Name',l.name],['Address',l.address||'—'],['Department',l.department||'All departments'],['Status',l.status||'Active']].map(([k,v])=>'<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#A59788;margin-bottom:2px">'+k+'</div><div style="font-size:14px;font-weight:600">'+esc(v)+'</div></div>').join('')
+          +[['Name',l.name],['Address',l.address||'—'],['Department',l.department||'All departments'],['Status',l.status||'Active'],['Geofence',l.geofenceEnabled&&l.lat!=null?('On · '+(l.radiusM||150)+' m radius'):'Off'],['Time zone',l.timezone||'Asia/Dubai']].map(([k,v])=>'<div><div style="font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:#A59788;margin-bottom:2px">'+k+'</div><div style="font-size:14px;font-weight:600">'+esc(v)+'</div></div>').join('')
           +'</div>'
         :'')
       +'</div>';
@@ -357,7 +380,7 @@ function locsPage(){
     const da=(me()?.docAccess)||{};
     return Object.keys(da.locations||{}).includes(l.id);
   });
-  return'<div class="fade">'+hdr('Locations','Physical sites & areas',can('locations','create')?btnP('Add location','App.editLoc()','plus'):'')
+  return'<div class="fade">'+hdr('Locations','Physical sites & areas · set a geofence on each office so people can clock in there',can('locations','create')?btnP('Add location','App.editLoc()','plus'):'')
     +'<div class="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">'
     +visibleLocs.map(l=>{
       const docs=(DB.documents||[]).filter(x=>x.type==='loc'&&x.scope===l.id).length;
@@ -368,15 +391,16 @@ function locsPage(){
         +chip(l.status||'Active')+'</div>'
         +'<div class="fd" style="font-size:15px;font-weight:800;margin-bottom:4px">'+esc(l.name)+'</div>'
         +'<div style="font-size:12px;color:#A59788;margin-bottom:8px">'+esc(l.address||l.department||'')+'</div>'
+        +'<div style="display:inline-flex;align-items:center;gap:5px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:20px;margin-bottom:8px;background:'+(l.geofenceEnabled&&l.lat!=null?'#E9F1E8':'#F7F3EE')+';color:'+(l.geofenceEnabled&&l.lat!=null?'#346A47':'#A59788')+'">'+ic('pin','w-3 h-3')+(l.geofenceEnabled&&l.lat!=null?'Geofence on · '+(l.radiusM||150)+' m':'No geofence')+'</div>'
         +(docs||folders?'<div style="font-size:11px;font-weight:600;color:#96695B;margin-bottom:8px">'+folders+' folders · '+docs+' files</div>':'')
         +'<div style="font-size:11px;font-weight:600;color:#786A5F;text-align:right">Open →</div>'
         +'</div>';
     }).join('')
-    +(DB.locations.length?'':empty('pin','No locations','Add locations to assign them to checklists.'))
+    +(visibleLocs.length?'':(DB.locations.length?empty('pin','No locations you can open','Access to a location’s documents is granted in Access Control → Personal settings → Document access.'):empty('pin','No locations','Add locations to assign them to checklists.')))
     +'</div></div>';
 }
-App.editLoc=(id=null)=>{if(!can('locations',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...topDepts().map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #EDE7DC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
-App.saveLoc=(id)=>{if(!can('locations',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveLoc:',error.message);}).catch(()=>{});};
+App.editLoc=(id=null)=>{if(!can('locations',id?'edit':'create')){toast('You don’t have permission to do that','err');return;}const l=id?locById(id):null;openModal(`<div class="p-6"><div class="flex justify-between mb-4"><h2 class="fd text-xl font-bold">${l?'Edit':'New'} location</h2><button onclick="App.closeModal()" class="text-ink-400">${ic('x')}</button></div><div class="space-y-3">${fld('Location name','ln-n',l?.name||'')}${fld('Address','ln-a',l?.address||'')}${selF('Department (optional)','ln-d',[['','All departments'],...topDepts().map(d=>[d.name,d.name])],l?.department||'')}${selF('Status','ln-s',['Active','Inactive'],l?.status||'Active')}</div><div class="flex gap-2 mt-5"><button onclick="App.closeModal()" style="flex:1;padding:12px;border-radius:12px;border:1.5px solid #EDE7DC;background:#fff;font-weight:600;font-size:14px;cursor:pointer">Cancel</button><button onclick="if(this.disabled)return;this.disabled=true;App.saveLoc('${id||''}')" style="flex:1;padding:12px;border-radius:12px;background:#13171B;color:#fff;font-weight:600;font-size:14px;border:none;cursor:pointer">${l?'Save':'Create'}</button></div></div>`,'max-w-sm');};
+App.saveLoc=(id)=>{const _re=()=>{document.querySelectorAll('#modal button[disabled]').forEach(b=>b.disabled=false);};if(!can('locations',id?'edit':'create')){toast('You don’t have permission to do that','err');_re();return;}const n=$('#ln-n')?.value.trim();if(!n){toast('Name required','err');_re();return;}const data={name:n,address:$('#ln-a')?.value.trim()||'',department:$('#ln-d')?.value||'',status:$('#ln-s')?.value||'Active'};if(!id&&typeof _geoDefaultTz==='function')data.timezone=_geoDefaultTz();const obj=id?locById(id):{id:uid('loc'),...data};if(id)Object.assign(obj,data);else DB.locations.push(obj);log(fullName(me()),id?'Edited location':'Created location',n);toast(id?'Updated ✓':'Created ✓');saveDB();closeModal();render();sb.from('locations').upsert({id:obj.id,...data},{onConflict:'id'}).then(({error})=>{if(error)console.error('saveLoc:',error.message);}).catch(()=>{});};
 App.delLoc=async(id)=>{if(!can('locations','delete')){toast('You don’t have permission to delete locations','err');return;}const l=locById(id);if(!l)return;if(!(await confirmP({
   title:'Delete location',
   body:'<b>'+esc(l.name)+'</b> will be permanently deleted.',
