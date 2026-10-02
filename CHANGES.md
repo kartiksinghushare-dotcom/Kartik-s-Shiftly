@@ -1,3 +1,116 @@
+# Bridge v171 — OKR v4.0 "One scoreboard" (Road to 1,000 proposal) + two Workspace fixes (cache-buster `?v=171`)
+
+**Changed** `index.html` · `19-okr-roles-acl.js` · **new** `19b-okr-v4.js` · `18-settings-notifications.js` · `06-crm.js` · `src/styles/main.css` · **new** `supabase/migrations/2026-10-02_v400_okr_v4.sql` · `supabase/functions/okr-reminders/index.ts`.
+
+## Deploy order — this matters
+1. **Apply the migration first** (`supabase/migrations/2026-10-02_v400_okr_v4.sql`) in the Supabase SQL editor. It is additive only: new nullable/defaulted columns on `okrs` and `okr_checkins`, two new tables (`okr_reviews`, `okr_alerts`), indexes, RLS. Nothing existing is dropped, renamed or re-typed; it is safe to run twice.
+2. Then deploy the code (push → Vercel). Until the migration has run the app keeps working exactly as before: the new fields are only written once a loaded `okrs` row carries the `kind` column (`_okrV4Ready()`), and the Scoreboard/Reviews tabs show a "Database update pending" strip.
+3. Deploy the updated edge function: `supabase functions deploy okr-reminders`. Same daily schedule; the new alert section skips itself until the migration has landed. The previous version (v2) is still in the function's version history in the dashboard.
+4. Nothing to do in Access Control. The role seed stays at **v18 on purpose**: the sandbox and the production frontend share one database, and a different seed version in one build would make the two builds re-seed the built-in roles against each other on every page load. **Run reviews** and **Confirm targets** are already covered by `Manage` (Super Admin / Administrator / Manager), and can be switched on per custom role. Bump the seed only when both frontends ship the same build.
+
+### Round nine — permissions hardened; production database finished (2 Oct 2026, 17:20 Dubai)
+**Permissions, enforced on save and at every entry point (not just hidden in the UI)**
+- **Top-level objectives (L0)** need **OKR → Manage** — leadership frames L0 / L1 (proposal §1). The “New objective” button only shows with Manage; `_okrEdit` and `_okrSave` refuse without it. Sub-objectives and key results need **Create** as before; KPIs unchanged.
+- **North Star** on/off needs Manage. **Confirming a proposed target** and **clearing “needs a decision”** need **Confirm targets** (or Manage) — refused on save even if the toggle were flipped by hand.
+- Every save re-checks Create (new) / Edit-or-own (existing); every link re-checks Edit on the holder plus Edit-or-own on the KPI (or Manage). Check-ins, milestone ticks and item ticks need Check-in or Edit, exactly as before.
+- **Visibility**: a self-scoped user keeps sight of an “owner to be decided” item they created (mirrors the `okrs_select_owner_tbd` policy). Team / department / everyone scopes unchanged. The KPIs tab, the OKR scoreboard, Link KPI candidates and every list go through `okrVisible()` / `okrCanSee()`.
+- Role seed stays at v18 (both frontends share the database). “Confirm targets” is covered by Manage for Super Admin / Administrator / Manager; grant it per custom role in Access Control when needed.
+
+**Production database — done**
+- Migration `v400_okr_v4_one_scoreboard` applied (15:35). Seed applied (15:50): 63 rows, 8 roots, 0 orphans; B2C “Sessions / conversion …” later converted to a key result.
+- Edge function **`okr-reminders` v3 deployed** (daily 05:00 UTC via the existing `okr-daily-reminders` cron, unchanged). Section A reminders unchanged; section B variance / stale alerts now live.
+- **First-run burst prevented**: 211 legacy KPIs had been silent longer than cadence × 2 before alerts existed. Their current silence is recorded in `okr_alerts` as already-told (`details.grandfathered = true`, nothing sent), so the first run does not email the whole company. The next silence after an update alerts normally. Delete those rows to let them fire.
+- **Safety snapshots** taken before anything else: `okrs_backup_2026_10_02` (396 rows), `okr_checkins_backup_2026_10_02` (415), `crm_reads_backup_2026_10_02` (2,079). RLS on, no policies — reachable only from SQL. Drop them when comfortable.
+- Security advisor run after the changes: nothing new attributable to v4 (the listed items pre-date this work; the three backup tables show as “RLS, no policy”, which is intended).
+
+**Go-live for the production frontend**: push this build (v171). No database step remains. After the push both frontends run the same code against the same data.
+
+### Round eight — KPIs link at every level
+- **Any objective (L0, L1, L2 …) and any number key result can hold linked KPIs.** Whatever holds them reads them: an objective measured “by its key results and linked KPIs” averages both (each counts equally); a key result with no target averages its KPIs. Linking something with no target of its own switches it to that mode automatically.
+- Still refused: a KPI under a milestone or count key result, under an annual / roll-up objective, or an objective under a KPI. **Link KPI** appears on every objective and number-KR panel; the objective panel's list is now “Key results & linked KPIs”.
+- Strip tile “Linked KPIs” counts KPIs under objectives or key results. QA 77/77.
+
+### Round seven — three clear forms, KPIs link under key results, tabs renamed
+- **Tabs**: the OKR page is **OKR** (the scoreboard: objectives + key results) and **KPIs** (the working tree, exactly as before — KPIs only). Objectives and key results never appear on the KPIs tab; a KPI linked under a key result still lists there, at the top level, with a “linked under …” chip.
+- **KPIs link under key results** (number / floor+target key results), not under objectives: Objective → Key results → linked KPIs. A key result with no target of its own reads the average of its linked KPIs; the objective reads the average of its key results. **Link KPI** lives on the key result's panel only (the editor section is gone). On the scoreboard a linked KPI renders as an indented line under its key result. Move/Link refuse: objective under KPI, KPI directly under objective, anything but a KPI under a key result, KPI under a milestone / count key result.
+- **Three editors, no “What is this?” switch** — the kind follows where you clicked: OKR tab → New objective; KPIs tab → New KPI; panel → Add sub-objective / Add sub-KPI / Add key result. **KPI editor** is the pre-v4 editor unchanged (number, direction, annual split + quarters, roll-up, schedule). **Objective editor**: own number or “By its key results” (the default for a new objective), approved ramp, plan & governance — no annual split, no roll-up: **OKRs never split into quarters**. **Key-result editor**: its kind, own number or “By its linked KPIs”, ramp, governance.
+- Seed: “Sessions / conversion rate / cart value / offline revenue” under B2C Growth is now a key result (measured by linked KPIs) — updated in the database and the seed file.
+- Card copy on the KPIs tab says sub-KPI / KPI where it used to say objective. QA harness 77/77, no page errors.
+
+### Round six — Scoreboard is OKRs only; two create buttons
+- The "KPIs not linked to an objective" section is gone from the Scoreboard. KPIs appear there only as lines under the objective they are linked to; the strip tile is now **Linked KPIs** and "Off track" counts objectives + linked KPIs. Unlinked KPIs live on the Objectives tab, exactly as before.
+- **Scoreboard → "New objective"** creates an OKR (`kind = objective`). **Objectives tab → "New KPI"** creates a KPI. Before the migration both read "New L0 objective" and create a KPI.
+- Empty scoreboard explains the two steps (create an objective, link KPIs from its panel) and links to the Objectives tab.
+
+### Database — migration APPLIED (2 Oct 2026, 15:35 Dubai)
+- `v400_okr_v4_one_scoreboard` applied to the shared Supabase project. Verified afterwards: 333 rows (316 live) all `kind='kpi'`, `state='active'`; column default `'kpi'`; the four original `okrs` policies untouched plus `okrs_select_owner_tbd`; `okr_alerts` present. Production frontend (old build) unaffected — it ignores the new columns and keeps inserting KPIs by default.
+- Not yet done, on purpose: the Road-to-1,000 seed (waits for production to run v166+), and `supabase functions deploy okr-reminders` (switches on variance / stale alerts for everyone — say when).
+
+### Workspace — DM ticks stayed single grey after a reload (real cause found)
+- `crm_reads` has grown past 2,000 rows and the read-state loader fetched it in one request, which PostgREST caps at 1,000 rows. Whoever's row fell outside the first page had no "seen" time on the sender's side, so their messages showed one grey tick after a reload even though they had read them — until a live read event happened to arrive. The loader now pages through the whole table.
+- Timestamps are now compared as time, not text (`…Z` vs `…+00:00` formats could mis-order within the same second), and a live read event can never overwrite a newer "seen" with an older one.
+- Rule stays: a direct message is one grey tick until the other person opens the chat, then two blue — permanently, online or offline.
+
+### Seed — the Road to 1,000 tree (`supabase/seed/2026-10-02_road_to_1000_okrs.sql`)
+- 63 rows straight from the proposal v1.2: North Star (330 → 1,000, Appendix A ramp, Q4 checkpoint KR, "Engines on schedule" count), 8 engines (each an L1 measured by its KRs, with a "+N orders/day" KR that counts toward the North Star — promised total +670), Bolt's L2 certification, Financial resilience (deck milestone, filings count, cash-runway floor+target, tranches, ESOP tiers dated off the ramp), Organisational evolution (3 → 1 sources, scoreboard milestone, process-load ceiling, orders-per-employee + VDR as drafts), Culture (eNPS 40 → 50, Road Club), Revenue (32M → 40M, brand survey + lift, B2C 27M → 34M with an L2 for the existing KPIs to link under, B2B 1.5M → 2M), NPS 51 → 54, Profit 4% → 8% with gross margin 40% → 43%, KSA SAR 6M.
+- Owners matched by name to Bridge users. No Bridge user for "Sami", "Dee", "Ilayda", "Leadership / People", "?" → saved as **Owner to be decided** with a needs-decision note (12 rows). "Nihad?" → Nihad, flagged to confirm. Every TBD / "???" / proposed number in the document is carried as a needs-decision or proposed-target flag (19 rows), so the "Need a decision" tile lists exactly what the proposal's section 5 asks for.
+- Runs only after the migration (it checks for `okrs.kind` and stops otherwise). Idempotent (`on conflict do nothing`), touches nothing existing. Dry-run on local Postgres: 63 inserted, re-run inserts 0; rendered in the harness with zero errors.
+
+### Round five — Reviews tab removed
+- The Reviews tab (weekly / monthly review pages + sign-off) is **gone**: route `okr` has two tabs, Scoreboard and Objectives. Anything that pointed at it falls back to the Scoreboard. The blocked / at-risk / not-updated / needs-a-decision reads live on the Scoreboard strip.
+- Removed with it: the `okr_reviews` table from the migration (never created — nothing to drop), the **Run reviews** permission action (`review`) and its label, the manager preset's `review` grant, and every `.rv-*` style. A stored custom role that still carries `review` is simply ignored.
+- "Blocked" alerts now go to the owners up the tree plus everyone with **OKR → Manage** (was: Manage or Run reviews). Settings copy updated to match.
+- Note: earlier sections of this entry that mention reviews describe what was built and then removed; the QA harness is down to 76 flows accordingly (76/76, no page errors).
+
+### Round four — OKRs vs KPIs (v4.1 model)
+- **Everything Bridge tracked before is a KPI** (`okrs.kind = 'kpi'`). The migration marks every existing row as a KPI and the column default is `kpi`, so anything the older production frontend keeps inserting is a KPI too. Objectives (`'objective'`) and key results (`'kr'`) are only ever written by this build. A KPI works exactly as before — own number, check-ins, sub-KPIs, roll-ups, annual splits, Move, bulk edit, export.
+- **Link KPIs to an objective** — from the objective's panel (**Link KPI** → searchable picker) or in its editor (**Linked KPIs** section, applied on Save). Linking moves the KPI under the objective in the tree (same mechanics as Move: level map, activity trail, `parent_id` written); it keeps its owners, updates and sub-KPIs. **Unlink** (× on the line) puts it back at the top level with its effective department. Permission: edit on the objective, plus edit on the KPI or OKR → Manage.
+- **Calculation**: an objective's "measured by its key results and linked KPIs" progress is the equal-weight average of its active KRs **and** linked KPIs. An objective saved with no target of its own switches to that mode automatically the moment its first KPI is linked; with a target it keeps its number and the KPIs show alongside. An objective with nothing linked is updated by its owner like before.
+- **Scoreboard**: linked KPIs render as lines inside the objective's "KPIs · key results / target" column (not as nested rows); unlinked KPIs sit in a collapsed **KPIs not linked to an objective** section at the bottom (with their own sub-KPI nesting); strip gains a **KPIs** tile. Pre-migration the scoreboard shows only that section — every row is a KPI until the database has the `kind` column.
+- **Rules**: a KPI's children default to KPIs; an objective can never sit under a KPI (editor, Move and Link all refuse); nothing sits under a key result; a KPI with objectives under it can't be re-labelled; the kind switch (Objective / KPI / Key result) appears for every node once the migration has run. Quarter copies inherit their parent's kind.
+- Fixes: doubled ≤/≥ sign on the own-number line; link-picker rows wrap on mobile; mobile section headers no longer wrap the count onto its own line.
+- QA harness: 84 scripted flows (11 new for KPIs), zero page errors, desktop + mobile. Migration dry-run on local Postgres: fresh install, re-run, and upgrade from the earlier `objective` default all verified.
+
+### Round three (same day)
+- **Reviews tab folds like the scoreboard** — every section (Blocked / At risk / Not updated / Updated; What moved / What's stuck / Needs a decision) is collapsed by default with its count in the header; click the header or the chevron to open it. State is remembered with the tab's filters (`S.filters.okrRvExp`).
+- **One Expand all / Collapse all button** on both the Scoreboard and the Reviews tab (it flips depending on whether anything is open) instead of two.
+- **Weekly review is now as-of the week being looked at**: the number and the status of each row are replayed for the end of that week (`_okrValueAt` / new `okrStatusAt`), so stepping back a week shows what that review actually looked at rather than today's numbers. Rows also show "reported <date>" for the week's check-in. Monthly rows use the same as-of status.
+- **Two-frontend safety**: role seed version held at 18 (above).
+
+## QA pass (same day) — found by a scripted end-to-end suite (73 flows) + an independent code review, all fixed
+- **Stored XSS**: a key result's `unit` text was concatenated unescaped into KR lines / reviews — now every fragment goes through `esc()`.
+- **Pre-migration safety**: creating key results, drafts, ramps, flags or any v4 field is now *refused with a clear message* until the migration has run (previously it would have saved as a plain objective and silently lost the v4 data). "Add key result" buttons hide until then.
+- **Move dialog** now follows the v4 rules (nothing under a KR; a KR never top-level or under an annual/roll-up). **Bulk edit** never touches KRs; "Select all" excludes them; searching a KR shows its objective's card.
+- **Drafts**: never due, never counted in roll-ups; an annual saved as draft spawns draft quarters; the annual→quarter sync propagates state. `Draft` added to the status filter.
+- **Owner-TBD rows stay visible to their creator** after reload (new select policy `okrs_select_owner_tbd` in the migration — creator counts as owner while TBD).
+- **Reviews**: deterministic row id per period (`okrv_weekly_2026-W40`) so two reviewers can't collide; reviews refetch on tab open; no fake rows in `okr_logs`.
+- **Server job**: pages through PostgREST's 1,000-row cap (would have produced a flood of false "stale" alerts within weeks); "behind the plan" sign fixed for lower-is-better numbers; only `metric_type='krs'` objectives skip the variance test; non-duplicate insert errors are reported, not swallowed; done milestones / completed counts are never "stale".
+- Smaller: count/milestone KRs reset `direction`; `krs` objectives drop any ramp; editor-only switches never reach storage; `okrFlagOf` memoised per render; print CSS scoped to the OKR tabs; `okr_alerts.kind` check constraint; KR-only owners get a scoreboard section of their own.
+- Migration dry-run on a local Postgres: applies clean, re-runs idempotently, legacy rows get correct defaults, every constraint rejects what it should.
+- Second review round: combined due-today form also refuses flags pre-migration; server-job paging stops only on an empty page and orders by a unique tiebreak; flag cache invalidated on every check-in write/delete; a KR match never surfaces a quarter copy in the annual view; objectives that already reached their target are never "stale".
+
+## What changed — OKR
+- **Objective vs Key Result.** A node is now an *objective* (has a level, a why, can hold more levels) or a *key result* (`kind='kr'`): the number, date or count that proves it, rendered as a compact line **inside** the objective's card, never as a nested card. "Add key result" sits in every objective's panel; a new KR inherits owners, department, period and schedule from its objective.
+- **Four kinds of key result**: *Number to reach* (today's start → target), *Milestone — done by a date* (tick Done from the panel; overdue reads Off track), *Count of named items* (each item with its own date, ticked separately — "4 / 6 areas", never a blended %), *Floor + target* (a line that must never be crossed plus a level to build to; breaching the floor reads Off track whatever the % says).
+- **"By its key results"** is a new option under *How is this measured?* — the objective then has no number of its own and reads the **average of its active KRs**. An objective with its own number (the North Star's daily orders) keeps that number even with KRs underneath.
+- **Approved ramp (Appendix A).** Any number KR/objective can carry month-by-month checkpoints. When set, *On track* is judged against that curve (plan value interpolated per day) instead of a straight line, the graph draws it, the panel shows *plan today · actual · vs plan · next checkpoint*. Tolerance is per objective or the Settings default (15 pts). "Copy parent's shape" scales a parent's ramp onto a KR's own start → target. Paste accepts `Dec 26 | 540` or `2026-12-31, 540`.
+- **Owner's flag on every update**: On track / At risk / Blocked + one-line status, next to the computed status (filled chip = computed, outlined chip with a person = the owner's call). Objectives measured by KRs, milestones and counts take a flag-only update (no number). **Blocked** immediately notifies the owners up the tree and everyone who runs reviews (new event `okr_blocked`).
+- **North Star** flag on any root (UAE and KSA can each have one) → hero at the top of the Scoreboard. **Counts toward** links an engine's target to it: the hero shows *promised · delivered · measured* across all contributors, and the unattributed gap.
+- **Governance**: *Target confirmed* (off = PROPOSED tag + basis note, confirm from the panel), *Leading / lagging* on KRs, *Owner to be decided* (save without an owner), *Needs a decision* (+ note), *Draft* (not live: no counts, statuses, reminders or alerts), *Baseline as of*.
+- **Scoreboard tab** (default): sections are **nested and collapsible** — every L0 starts collapsed with a chevron and a sub-objective count; L1s open to their L2s; Expand all / Collapse all in the control bar; the open set is remembered with the tab's filters.  North Star hero with ramp chart and engines table, then one section per L0 laid out like the proposal — Lvl · Objective (with its why) · Key results / target · Owner · Status. Strip on top: objectives, key results, blocked, at risk, off track, proposed targets, need a decision — each opens the exact list. Print-clean. Phones: stacked cards.
+- **Reviews tab** (Run reviews permission): **Weekly** — to update / updated / blocked / at risk / not updated, grouped by L0, with the owner's one-liners; **Monthly** — what moved (Δ since the previous month, biggest first), what's stuck, needs a decision (proposed targets, owners to name, drafts, flagged items). Each review can be signed off with notes (`okr_reviews`).
+- **Alerts** (Settings → Email/In-app → OKRs, + *OKR alert thresholds* card): `okr_variance` (actual below the ramp by more than the tolerance for N updates in a row → owners + the objective above), `okr_stale` (quiet for cadence × multiplier → owner, the objective above a day later), `okr_blocked`. Server job dedups via `okr_alerts` fingerprints.
+- Objectives tab (the old tree) keeps everything: roll-ups, annual↔quarters, revisions, bulk edit, export, deleted bin. Key results are excluded from roll-ups, levels and the summary counts (which now count objectives only, drafts excluded).
+
+## Workspace fixes
+- **Back from a ticket lands where you were.** The table's own scroll (and the page's, on phones) is snapshotted when a ticket is opened and restored on *Back*.
+- **Direct-message ticks are two-state**: one grey tick until the other person has actually opened the chat, then two blue. The in-between "delivered" double-grey state is kept for group boards only — in one-to-one chats it read as "seen" while the other person was effectively offline.
+
+## Backup
+`_backups/pre-okr-v4_2026-10-02.tar.gz` (project without node_modules) was taken before any change.
+
+---
+
 # Bridge v162 — date ranges everywhere, mobile balances, alignment + three fixes (cache-buster `?v=162`)
 
 **Changed** `index.html` · `21-attendance.js` · `27-leaves.js` · `28-leaves-admin.js` · `src/styles/main.css`.
