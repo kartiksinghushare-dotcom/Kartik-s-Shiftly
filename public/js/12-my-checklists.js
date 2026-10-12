@@ -544,6 +544,14 @@ App._saveDraft=async(clId,date)=>{
   const rec={id:draftId,checklistId:clId,userId:S.uid,date:date,questionResponses:JSON.parse(JSON.stringify(qr)),tasks:JSON.parse(JSON.stringify(_tasks)),updatedAt:nowISO};
   const di=(DB.drafts=DB.drafts||[]).findIndex(d=>d.id===draftId);
   if(di>-1)DB.drafts[di]=rec;else DB.drafts.push(rec);
+  // v176.1: submission_drafts is UNIQUE on (checklist, user, date). A shared (group) draft is saved under the
+  // saver's user_id, so the saver's own older PERSONAL draft for the same checklist/day would collide (409).
+  // That personal draft is superseded by the shared one — remove it first (server + local).
+  if(draftId.includes('__group__')){
+    const personalId='draft_'+clId+'__'+S.uid+'__'+date;
+    DB.drafts=DB.drafts.filter(d=>d.id!==personalId);
+    try{await sb.from('submission_drafts').delete().eq('checklist_id',clId).eq('date',date).eq('user_id',S.uid).neq('id',draftId);}catch(e){console.warn('[draft] personal cleanup:',e&&e.message);}
+  }
   let ok=false;
   for(let attempt=0;attempt<3&&!ok;attempt++){
     if(attempt>0)await new Promise(r=>setTimeout(r,500*attempt));
