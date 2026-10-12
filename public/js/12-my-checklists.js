@@ -13,6 +13,7 @@ let COLL={};  // Hierarchy collapse state
 
 
 function myClsPage(){
+  try{_draftLiveStart();}catch(e){}   // v174: shared group drafts arrive live
   const today=todayISO();
   const ref=new Date(today+'T00:00:00');
   const dow=ref.getDay();
@@ -107,9 +108,9 @@ function _clFooter(c,date,sub,isPast,isFuture,u,hasEditReq,editApproved){
   if(!sub){
     if(isPast&&!u?.rules?.past)return '<span style="font-size:12px;color:#7C5A26;font-weight:600">No permission for past dates</span><span></span>';
     if(isFuture&&!u?.rules?.future)return '<span style="font-size:12px;color:#A59788">Scheduled for this date</span><button class="submit-pill no" disabled style="opacity:.4;cursor:not-allowed">Not yet</button>';
-    const _hasDraft=(DB.drafts||[]).some(d=>d.checklistId===cid&&d.userId===S.uid&&d.date===date);
+    const _dr=_draftFor(cid,date);const _hasDraft=!!_dr;
     const _draftBtn='<button onclick="App._saveDraft(\''+cid+'\',\''+date+'\')" class="draft-pill" data-cl="'+cid+'" style="padding:8px 18px;border-radius:9px;font-size:13px;font-weight:700;border:1.5px solid #E6DED3;background:#fff;color:#3A312A;cursor:pointer">'+(_hasDraft?'Update draft':'Save as Draft')+'</button>';
-    const _leftBlk=_hasDraft?'<span style="display:inline-flex;align-items:center;gap:8px">'+_draftBtn+'<span style="font-size:11px;color:#54433C;font-weight:700">\u2713 Draft saved</span></span>':_draftBtn;
+    const _leftBlk=_hasDraft?'<span style="display:inline-flex;align-items:center;gap:8px">'+_draftBtn+'<span style="font-size:11px;color:#54433C;font-weight:700">\u2713 '+_draftLabel(_dr)+'</span></span>':_draftBtn;
     return _leftBlk+'<button onclick="App._submitRun(\''+cid+'\',\''+date+'\')" class="submit-pill go" data-cl="'+cid+'">\u2713 Submit</button>';
   }
   // Editing mode
@@ -144,7 +145,7 @@ function _clCard(c,date){
   if(!RUN[c.id]||RUN[c.id].date!==date){
     // Restore questionResponses from an existing submission if available; otherwise from a saved draft.
     const _existSub=subForCl(c,S.uid,date);
-    const _draft=(!_existSub)?(DB.drafts||[]).find(d=>d.checklistId===c.id&&d.userId===S.uid&&d.date===date):null;
+    const _draft=(!_existSub)?_draftFor(c,date):null;   // v174: group checklists share one draft
     const _seed=_existSub?.questionResponses||_draft?.questionResponses||[];
     RUN[c.id]={checklistId:c.id,userId:S.uid,date,tasks:(_draft&&_draft.tasks)||[],questionResponses:JSON.parse(JSON.stringify(_seed))};
   }
@@ -176,7 +177,7 @@ function _clCard(c,date){
         </div>
       </div>
       <div style="display:flex;align-items:center;gap:8px;flex-shrink:0">
-        ${(!isSubmitted&&(DB.drafts||[]).some(d=>d.checklistId===c.id&&d.userId===S.uid&&d.date===date))?'<span title="You have a saved draft" style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;background:#F2E9D4;color:#7F6533">📝 Draft</span>':''}
+        ${(!isSubmitted&&_draftFor(c,date))?'<span title="'+esc(_draftLabel(_draftFor(c,date)))+'" style="font-size:10px;font-weight:800;padding:2px 7px;border-radius:10px;background:#F2E9D4;color:#7F6533">📝 Draft</span>':''}
         <span style="font-size:11px;font-weight:700;padding:4px 11px;border-radius:20px;${stCls[st]?'':'background:#F1ECE3;color:#A59788'}" class="${stCls[st]||''}">${st}</span>
         <span style="color:#C9BCAE;transform:rotate(${exp?90:0}deg);transition:transform .2s">${ic('chevR','w-4 h-4')}</span>
       </div>
@@ -479,9 +480,45 @@ App._submitRun=async(clId,date)=>{
   ]).catch(()=>{});
 };
 function _clearDraft(clId,date){
-  const draftId='draft_'+clId+'__'+S.uid+'__'+date;
-  DB.drafts=(DB.drafts||[]).filter(d=>d.id!==draftId);
-  sb.from('submission_drafts').delete().eq('id',draftId).then(()=>{}).catch(e=>console.warn('[draft] clear:',e&&e.message));
+  // v174: clear the personal draft AND the shared group draft (a submission closes the checklist for everyone)
+  const ids=['draft_'+clId+'__'+S.uid+'__'+date,'draft_'+clId+'__group__'+date];
+  DB.drafts=(DB.drafts||[]).filter(d=>!ids.includes(d.id));
+  sb.from('submission_drafts').delete().in('id',ids).then(()=>{}).catch(e=>console.warn('[draft] clear:',e&&e.message));
+}
+/* ── v174 — SHARED DRAFTS for “Any one” (group) checklists ──────────────────────────────────────
+   A group checklist can be completed by any assignee, so its draft is shared: one row per
+   checklist + date (id draft_<cl>__group__<date>), saved by whoever pressed “Save draft” last.
+   Personal checklists keep their per-user draft. Other assignees get the shared draft on load
+   and live (realtime) — if they already have the checklist open, a toast offers to load it so
+   nobody's in-progress typing is overwritten silently. */
+function _draftIdFor(cl,date){const c=typeof cl==='string'?clById(cl):cl;const id=c?c.id:cl;return (c&&c.anyOne)?('draft_'+id+'__group__'+date):('draft_'+id+'__'+S.uid+'__'+date);}
+function _draftFor(cl,date){const c=typeof cl==='string'?clById(cl):cl;if(!c)return null;const id=_draftIdFor(c,date);return (DB.drafts||[]).find(d=>d.id===id)||null;}
+function _draftLabel(d){if(!d)return'';const mine=d.userId===S.uid;const by=mine?'you':(uById(d.userId)?fullName(uById(d.userId)):'a teammate');let when='';try{if(d.updatedAt)when=' · '+new Date(d.updatedAt).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'});}catch(e){}return (String(d.id).includes('__group__')?'Shared draft saved by '+by:'Draft saved')+when;}
+App._draftLoad=(clId,date)=>{const d=_draftFor(clId,date);if(!d)return;RUN[clId]={checklistId:clId,userId:S.uid,date,tasks:JSON.parse(JSON.stringify(d.tasks||[])),questionResponses:JSON.parse(JSON.stringify(d.questionResponses||[]))};toast('Loaded the shared draft');rr();};
+let _draftRT=null;
+function _draftLiveStart(){
+  if(_draftRT||!S.uid)return;
+  try{
+    _draftRT=sb.channel('drafts-'+Math.random().toString(36).slice(2,7))
+      .on('postgres_changes',{event:'*',schema:'public',table:'submission_drafts'},p=>{try{
+        const row=p.new&&p.new.id?p.new:null;const oldId=p.old&&p.old.id;
+        if(p.eventType==='DELETE'){if(oldId){DB.drafts=(DB.drafts||[]).filter(d=>d.id!==oldId);if(S.route==='mychecklists')rr();}return;}
+        if(!row)return;
+        const shared=String(row.id).includes('__group__');
+        if(!shared&&row.user_id!==S.uid)return;                       // someone else's personal draft — not ours
+        const rec=_mDraft(row);const i=(DB.drafts=DB.drafts||[]).findIndex(d=>d.id===rec.id);
+        if(i>-1)DB.drafts[i]=rec;else DB.drafts.push(rec);
+        if(row.user_id===S.uid)return;                                // our own save echoing back
+        const r=RUN[rec.checklistId];
+        if(r&&r.date===rec.date){
+          const untouched=!(r.questionResponses||[]).length&&!(r.tasks||[]).length;
+          if(untouched){r.questionResponses=JSON.parse(JSON.stringify(rec.questionResponses||[]));r.tasks=JSON.parse(JSON.stringify(rec.tasks||[]));}
+          else if(typeof toastAction==='function')toastAction((uById(rec.userId)?fullName(uById(rec.userId)):'A teammate')+' saved a newer shared draft','warn',{label:'Load it',fn:"App._draftLoad('"+rec.checklistId+"','"+rec.date+"')",ms:10000});
+        }
+        if(S.route==='mychecklists')rr();
+      }catch(e){}})
+      .subscribe();
+  }catch(e){_draftRT=null;}
 }
 // Save the current in-progress answers (all questions together) as a draft — no validation,
 // stored server-side so it survives refresh and syncs across devices. Cleared on submit.
@@ -500,7 +537,7 @@ App._saveDraft=async(clId,date)=>{
   const _photoLost=(_uploaded||[]).some(r=>(Array.isArray(r.photos)&&r.photos.includes('[photo]'))||r.photo==='[photo]');
   const qr=_photoLost?_orig:_uploaded; // on failure keep base64 (safe + still syncs); else durable URLs
   run.questionResponses=JSON.parse(JSON.stringify(qr)); // keep in memory so re-saving won't re-upload the successful ones
-  const draftId='draft_'+clId+'__'+S.uid+'__'+date;
+  const draftId=_draftIdFor(clId,date);   // v174: shared id for group checklists
   const nowISO=new Date().toISOString();
   const _tasks=JSON.parse(JSON.stringify(run.tasks||[]));
   const row={id:draftId,checklist_id:clId,user_id:S.uid,date:date,question_responses:qr,tasks:_tasks,updated_at:nowISO};

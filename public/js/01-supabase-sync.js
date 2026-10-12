@@ -445,8 +445,9 @@ async function loadFromSB(){
       if(error){console.error('[TK] error:',error.message);return;}
       _applyTickets(data);saveDB();rr();
     }).catch(e=>console.error('[TK] fetch failed:',e.message));
-  // ── Drafts: this user's own in-progress checklist drafts (personal, syncs across devices) ──
-  sb.from('submission_drafts').select('*').eq('user_id',S.uid)
+  // ── Drafts: this user's own in-progress checklist drafts + the SHARED drafts of “Any one” (group)
+  //    checklists (v174: id draft_<cl>__group__<date>, saved by whichever assignee pressed Save last) ──
+  sb.from('submission_drafts').select('*').or('user_id.eq.'+S.uid+',id.like.*__group__*')
     .then(({data,error})=>{
       if(error){console.warn('[draft] load error:',error.message);return;}
       DB.drafts=(data||[]).map(_mDraft);

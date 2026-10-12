@@ -914,6 +914,17 @@ function _notifTimeline(list,unreadIds,typeOf,CLR,BG,ICO){
     }).join('')
     +'</div></div>';
 }
+/* v174 — one click clears EVERY unread alert for this person (not just the 80 on screen), on every device. */
+App._notifReadAll=async()=>{
+  const uid=S.uid;if(!uid)return;
+  const ids=(DB.notifications||[]).filter(n=>n.userId===uid&&!n.read).map(n=>n.id);
+  (DB.notifications||[]).forEach(n=>{if(n.userId===uid)n.read=true;});
+  _invalidateNotifCache();saveDB();
+  try{if(typeof _paintNavBadges==='function')_paintNavBadges();}catch(e){}
+  rr();
+  try{const{error}=await sb.from('notifications').update({read:true}).eq('user_id',uid).eq('read',false);if(error)throw error;toast('All alerts marked as read');}
+  catch(e){toast('Marked here, but the server didn’t confirm: '+(e.message||e),'warn');}
+};
 function notificationsPage(){
   const uid=S.uid;
   const notifs=DB.notifications.filter(n=>n.userId===uid).sort((a,b)=>(b.time||'').localeCompare(a.time||'')).slice(0,80);
@@ -991,7 +1002,8 @@ function notificationsPage(){
     People:pplNotifs.length,
   };
 
-  return '<div class="fade">'+hdr('Alerts','Everything that needs your attention lands here')
+  const _unreadAll=(DB.notifications||[]).filter(n=>n.userId===uid&&!n.read).length;
+  return '<div class="fade">'+hdr('Alerts','Everything that needs your attention lands here',_unreadAll?'<button onclick="App._notifReadAll()" class="ui-btn ui-btn-ghost ui-btn-md" title="Mark every alert as read">'+ic('check','w-4 h-4')+'Mark all as read'+(_unreadAll?' <span class="ui-count">'+_unreadAll+'</span>':'')+'</button>':'')
     // Tabs
     +'<div class="hscroll bb-ntabs" style="gap:6px;margin-bottom:16px;flex-wrap:wrap">'
     +TABS.map(t=>{

@@ -19,6 +19,7 @@ const DT_CDN={
 const DT_CHUNK=6*1024*1024;           // Supabase resumable uploads require exactly 6 MB chunks
 const DT_DIRECT_MAX=6*1024*1024;      // ≤ 6 MB → one plain PUT; above → resumable
 const DT_PAGE=100;
+const DT_INGEST_PARALLEL=2;      // batches in flight per file — 2 keeps a small compute instance responsive; raise to 4 on Medium+
 
 const DT={folders:[],files:[],cols:{},loaded:false,loading:false,error:null,rt:null,jobs:{},view:'files',
   tbl:{folderId:null,rows:null,count:0,page:0,order:'_id',desc:false,search:'',loading:false,err:null}};
@@ -183,7 +184,8 @@ function _dtFileList(f){
         +(busy?'<div class="dt-bar" id="dtb-'+d.id+'"><div style="width:'+(job.phase==='upload'?job.pct:job.phase==='import'?Math.min(99,job.pct||0):100)+'%"></div></div>':'')
         +'</div>'
         +'<div class="dt-row-actions">'+_dtStatusPill(d)
-        +(!busy&&d.kind==='table'&&(d.status==='error'||d.status==='importing'||d.status==='uploading')&&canUp?'<button onclick="App._dtReimport(\''+d.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Parse the stored file again">'+ic('refresh','w-3.5 h-3.5')+'Re-import</button>':'')
+        +(!busy&&d.kind==='table'&&d.storagePath&&(d.status==='error'||d.status==='importing'||d.status==='uploading')&&canUp?'<button onclick="App._dtReimport(\''+d.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Parse the stored file again">'+ic('refresh','w-3.5 h-3.5')+'Re-import</button>':'')
+        +(!busy&&!d.storagePath&&d.status==='error'&&canUp?'<span class="dt-row-meta" style="white-space:normal">Upload didn’t finish — delete and upload again</span>':'')
         +(busy?'<button onclick="App._dtCancel(\''+d.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm">Cancel</button>':'')
         +(!busy&&canDl&&d.storagePath?'<button onclick="App._dtDownload(\''+d.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Download original">'+ic('download','w-3.5 h-3.5')+'</button>':'')
         +(!busy&&canDel?'<button onclick="App._dtDelFile(\''+d.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm dt-danger" title="Delete file'+(d.kind==='table'?' and its rows':'')+'">'+ic('trash','w-3.5 h-3.5')+'</button>':'')
@@ -441,7 +443,7 @@ App._dtUploadStart=async()=>{
 
 /* ───────────────────────── jobs: queue → upload → import → finish ───────────────────────── */
 function _dtJob(o){const j=Object.assign({id:null,folderId:null,name:'',path:'',size:0,kind:'file',file:null,type:'',phase:'queued',pct:0,rowsDone:0,sheets:[],active:true,cancelled:false,_tus:null,_w:null,startedAt:Date.now()},o);DT.jobs[j.id]=j;_dtGuard();return j;}
-let _dtRunning=0;const _dtQ=[];const DT_PARALLEL=2;
+let _dtRunning=0;const _dtQ=[];const DT_PARALLEL=1;   // one file at a time: the database, not the browser, is the bottleneck
 function _dtQueue(file,folder){
   const id=uid('dtx');const safe=file.name.replace(/[^a-zA-Z0-9._ -]/g,'_').slice(-120);
   const path=folder.id+'/'+id+'/'+safe;
@@ -490,6 +492,7 @@ async function _dtFinishJob(job){
 async function _dtFailJob(job,e){
   if(!job.active)return;   // already settled (double cancel / late error)
   const msg=String(e&&e.message||e||'Failed');
+  const failedPhase=job.phase;
   job.active=false;job.phase='error';job.error=msg;job.endedAt=Date.now();
   setTimeout(_dtPaintJobs,8600);   // the panel only repaints on events — make sure the failed entry actually leaves
   try{if(job._w)job._w.terminate();}catch(x){}
@@ -502,8 +505,10 @@ async function _dtFailJob(job,e){
     toast('Upload cancelled','warn');
   }else{
     if(job.kind==='table'){try{await sb.rpc('data_file_clear_rows',{p_file_id:job.id});}catch(x){}}
-    try{await sb.from('data_files').update({status:'error',error:msg.slice(0,500),rows:0,updated_at:new Date().toISOString()}).eq('id',job.id);}catch(x){}
-    const f=DT.files.find(x=>x.id===job.id);if(f){f.status='error';f.error=msg;f.rows=0;}
+    const noObject=(failedPhase==='upload'||failedPhase==='queued');   // nothing reached storage → no Re-import / Download
+    const patch={status:'error',error:msg.slice(0,500),rows:0,updated_at:new Date().toISOString()};if(noObject)patch.storage_path=null;
+    try{await sb.from('data_files').update(patch).eq('id',job.id);}catch(x){}
+    const f=DT.files.find(x=>x.id===job.id);if(f){f.status='error';f.error=msg;f.rows=0;if(noObject)f.storagePath=null;}
     console.error('[data] job failed:',job.name,msg);
     toast('“'+job.name+'” failed: '+msg,'err');
   }
@@ -540,7 +545,9 @@ async function _dtUploadBlob(job){
       // comma, and Storage then rejects the token as "Invalid Compact JWS". Re-read per request so a
       // session refresh during a long upload is picked up.
       onBeforeRequest:async(req)=>{let t=token;try{const s=await sb.auth.getSession();t=(s&&s.data&&s.data.session&&s.data.session.access_token)||t;}catch(e){}req.setHeader('authorization','Bearer '+t);},
-      onError:(err)=>{rej(new Error(job.cancelled?'Cancelled':('Upload failed: '+(err&&(err.message||err.originalResponse&&err.originalResponse.getBody&&err.originalResponse.getBody())||err))));},
+      onError:(err)=>{if(job.cancelled)return rej(new Error('Cancelled'));let m='';try{const body=err&&err.originalResponse&&err.originalResponse.getBody&&err.originalResponse.getBody();if(body){try{const j=JSON.parse(body);m=j.message||j.error||'';}catch(x){m=String(body).slice(0,160);}}}catch(x){}
+        if(!m){const raw=String(err&&err.message||err||'');const mm=raw.match(/"message":"([^"]+)"/);m=mm?mm[1]:raw.replace(/, originated from request[\s\S]*$/,'').slice(0,200);}
+        rej(new Error('Upload failed: '+(m||'unknown error')));},
       onProgress:(sent,total)=>{job.pct=total?Math.round(sent/total*100):0;_dtPaint(job);},
       onSuccess:()=>res()
     });
@@ -571,7 +578,7 @@ function _dtWorkerURL(){if(_dtWorkerURLCache)return _dtWorkerURLCache;const src=
 function _dtImport(job){
   return new Promise((resolve,reject)=>{
     let w;try{w=new Worker(_dtWorkerURL());}catch(e){return reject(new Error('This browser cannot run the background parser: '+e.message));}
-    job._w=w;const pool=_dtPool(4);let failed=false;let finished=false;
+    job._w=w;const pool=_dtPool(DT_INGEST_PARALLEL);let failed=false;let finished=false;
     const fail=(err)=>{if(failed)return;failed=true;try{w.terminate();}catch(e){}job._abort=null;reject(err);};
     job._abort=()=>fail(new Error('Cancelled'));
     w.onmessage=(e)=>{const m=e.data||{};if(job.cancelled)return fail(new Error('Cancelled'));
@@ -588,14 +595,14 @@ function _dtImport(job){
       else if(m.t==='error'){fail(new Error(m.msg||'Could not read the file'));}
     };
     w.onerror=(e)=>fail(new Error('Parser error: '+(e&&e.message||'unknown')));
-    w.postMessage({t:'init',libs:[DT_CDN.papa,DT_CDN.xlsx],maxOut:6});
+    w.postMessage({t:'init',libs:[DT_CDN.papa,DT_CDN.xlsx],maxOut:DT_INGEST_PARALLEL+2});
     const ext=_dtExt(job.name);
     w.postMessage({t:'start',file:job.file,kind:(ext==='csv'||ext==='tsv')?'csv':'xlsx',name:job.name});
   });
 }
 /* Runs INSIDE the worker — must not touch anything outside this function. */
 function _dtWorkerBody(){
-  var CFG={maxOut:6};var credits=0;var waiters=[];var schemaWait=null;var TARGET_BYTES=850000;var SAMPLE=1000;
+  var CFG={maxOut:6};var credits=0;var waiters=[];var schemaWait=null;var TARGET_BYTES=1500000;var SAMPLE=1000;
   function post(x){self.postMessage(x);}
   function waitCredit(){if(credits<CFG.maxOut)return Promise.resolve();return new Promise(function(r){waiters.push(r);});}
   self.onmessage=function(e){var m=e.data||{};
@@ -643,7 +650,7 @@ function _dtWorkerBody(){
     for(var c=0;c<this.cols.length;c++){var v=arr[c];if(v===null||v===undefined)continue;var s=norm(v,this.types[c],this.dmy[c]);if(s===null||s==='')continue;o[this.cols[c]]=s;any=true;bytes+=this.cols[c].length+String(s).length+6;}
     if(!any)return Promise.resolve();
     this.buf.push(o);this.bufBytes+=bytes;
-    if(this.bufBytes>=TARGET_BYTES||this.buf.length>=4000)return this.flush();
+    if(this.bufBytes>=TARGET_BYTES||this.buf.length>=6000)return this.flush();
     return Promise.resolve();};
   Writer.prototype.flush=function(){
     if(!this.buf.length)return Promise.resolve();var rows=this.buf;this.buf=[];this.bufBytes=0;var self_=this;
@@ -661,6 +668,7 @@ function _dtWorkerBody(){
   function strDateToISO(s,dmy,withTime){var p=dateParts(s);if(!p)return null;var y,mo,da;
     if(p.iso){y=p.y;mo=p.a;da=p.b;}else{y=p.y<100?(p.y<70?2000+p.y:1900+p.y):p.y;if(dmy){da=p.a;mo=p.b;}else{mo=p.a;da=p.b;}}
     if(mo<1||mo>12||da<1||da>31)return null;
+    var chk=new Date(y,mo-1,da);if(chk.getFullYear()!==y||chk.getMonth()!==mo-1||chk.getDate()!==da)return null;
     var out=y+'-'+pad(mo)+'-'+pad(da);
     if(withTime){var h=p.time?+p.h:0;if(p.ap){var ap=p.ap.toLowerCase();if(ap==='pm'&&h<12)h+=12;if(ap==='am'&&h===12)h=0;}out+='T'+pad(h)+':'+(p.time?p.mi:'00')+':'+(p.time&&p.se?p.se:'00')+(p.tz?p.tz:'');}
     return out;}
@@ -669,9 +677,10 @@ function _dtWorkerBody(){
     if(typeof v==='number'){if(!isFinite(v))return null;return String(v);}
     if(typeof v==='boolean')return v?'true':'false';
     var s=String(v).trim();if(s==='')return null;
-    if(type==='date')return strDateToISO(s,dmy,false)||s;
-    if(type==='timestamptz')return strDateToISO(s,dmy,true)||s;
-    if(type==='numeric')return s.replace(/[,\s]/g,'');
+    if(type==='date')return strDateToISO(s,dmy,false);        // null when it isn't a real date
+    if(type==='timestamptz')return strDateToISO(s,dmy,true);
+    if(type==='numeric'){var n=s.replace(/[,\s]/g,'');return /^[-+]?([0-9]+\.?[0-9]*|\.[0-9]+)([eE][-+]?[0-9]+)?$/.test(n)?n:null;}
+    if(type==='boolean'){var b=s.toLowerCase();return /^(true|yes|y|1|t)$/.test(b)?'true':/^(false|no|n|0|f)$/.test(b)?'false':null;}
     return s;}
   function run(m){
     if(m.kind==='csv')return parseCSV(m.file);
