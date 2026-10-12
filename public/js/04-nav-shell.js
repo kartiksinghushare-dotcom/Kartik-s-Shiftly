@@ -50,6 +50,7 @@ const HUB_DEF={
     ['leavesettings','Leaves',()=>can('leave','manage')],
     ['departments','Departments',()=>can('departments','view')],
     ['locations','Locations',()=>can('locations','view')],
+    ['data','Data',()=>(typeof _dtCan==='function')&&_dtCan('view')],   // v172 — folders → tables
     ['audit','Audit',()=>can('audit','view')]]},
 };
 function _hubOf(route){for(const k in HUB_DEF)if(HUB_DEF[k].tabs.some(t=>t[0]===route))return k;return null;}

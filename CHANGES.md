@@ -1,3 +1,25 @@
+# Bridge v172 — DATA: folders → tables (cache-buster `?v=172`)
+
+**New** `public/js/29-data.js` · **new** `supabase/migrations/2026-10-12_v172_data.sql` · **changed** `index.html` · `04-nav-shell.js` · `06-crm.js` · `99-boot.js` · `19-okr-roles-acl.js` · `package.json` (3.29.0).
+
+## What it is
+Administration → **Data**. A new section beside Departments / Locations. You create folders (and sub-folders); **every folder is one Postgres table** in the `data` schema (`data.sales_orders`, sub-folder `data.sales_orders__2025`). Excel / CSV files uploaded into a folder are parsed in the browser and **appended to that folder's table**; PDFs, images and other files are kept in Storage only. Each row remembers its file, sheet and row number, so deleting a file removes exactly its rows; re-uploading a file with the same name replaces the old one. Column headers become columns (first header row per sheet); new headers in later files are **added automatically**, and a column whose values stop fitting its type is widened to text — nothing is rejected. Types inferred per column: number · date · date & time · yes/no · text (leading-zero codes stay text; `1,250.50` is a number; `12/03/2025` is read day-first).
+
+## Upload path — built for big files
+- ≤ 6 MB: one direct PUT. Larger: **resumable TUS upload** (tus-js-client, 6 MB chunks, automatic retry with back-off, token refreshed per request so hour-long uploads don't expire).
+- Parsing runs in a **Web Worker** (PapaParse streams CSV in 4 MB chunks; SheetJS for xlsx/xls, all sheets, hidden sheets skipped). Rows are sent in ~850 KB batches through the `data_ingest_rows` RPC, 4 batches in flight, back-pressure so memory stays flat; 2 files processed at a time.
+- Live progress in the file row and a floating **Uploads** panel that follows you across pages; cancel at any point; a `beforeunload` guard while something is running. Failures leave the file marked **Failed** with the reason and a **Re-import** button that re-parses the stored file — no re-upload needed.
+- **Table** tab: browse the folder's table (sticky header, sort by column, full-text search across all columns, 100 rows/page), **Download CSV** of the whole table (5 000-row pages, streamed into one file), and **Details** with the exact table/column names plus a copy-ready SQL query for Claude / SQL editor.
+
+## Deploy order
+1. **Apply the migration** `supabase/migrations/2026-10-12_v172_data.sql` (SQL editor or MCP). Additive only: schema `data`, tables `data_folders` / `data_files` / `data_columns` (RLS: authenticated), bucket `data-files` (private, no per-bucket cap), and the `data_*` RPCs (security definer, authenticated only). Nothing existing is dropped, renamed or re-typed. Until it runs the Data page shows a "Data isn't ready" card and nothing else changes.
+2. **Supabase → Storage → Settings → Upload file size limit** — raise from the 50 MB default to what you want to allow (Pro plan allows up to 50 GB). This is a dashboard setting, not SQL.
+3. Push → Vercel. Hard-refresh; every script tag must end in `?v=172`.
+4. Access Control: new area **Data** (view · create · upload · download · delete). Super Admin / Administrator receive it automatically on first load (one-time grant, seed stays at v18); grant it to other roles as needed.
+
+## For analysis with Claude
+Tables live in schema `data`; the registry in `public.data_folders` maps folder → `table_name`. Every data table has `_id`, `_file_id`, `_sheet`, `_row_no`, `_imported_at` plus one column per header (`public.data_columns` holds the original header text and type).
+
 # Bridge v171 — OKR v4.0 "One scoreboard" (Road to 1,000 proposal) + two Workspace fixes (cache-buster `?v=171`)
 
 **Changed** `index.html` · `19-okr-roles-acl.js` · **new** `19b-okr-v4.js` · `18-settings-notifications.js` · `06-crm.js` · `src/styles/main.css` · **new** `supabase/migrations/2026-10-02_v400_okr_v4.sql` · `supabase/functions/okr-reminders/index.ts`.

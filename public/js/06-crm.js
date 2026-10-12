@@ -2011,6 +2011,7 @@ function _pageInner(){
   if(r==='users'){if(can('employees','view'))return usersPage();return _reroute('home');}
   if(r==='departments'){if(can('departments','view'))return deptsPage();return _reroute('home');}
   if(r==='locations'){if(can('locations','view'))return locsPage();return _reroute('home');}
+  if(r==='data'){if(_dtCan('view'))return dataPage();return _reroute('home');}   // v172
   if(r==='checklists'){if(can('checklists','create'))return clsPage();return _reroute('home');}
   if(r==='approvals'){if(can('approvals','view'))return approvalsPage();return _reroute('notifications');}
   if(r==='notifications')return notificationsPage();

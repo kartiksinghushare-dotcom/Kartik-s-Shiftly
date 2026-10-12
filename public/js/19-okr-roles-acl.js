@@ -41,6 +41,7 @@ const HOW={
   notifications:{t:'Every alert lands here (and is queued for email once a provider is connected). Tap one to jump to the right tab.',l:[]},
   locations:{t:'Offices with GPS geofence — controls where clock-in works and holds location documents.',l:[['attendance','Attendance'],['users','Users']]},
   departments:{t:'Departments and sub-departments; also holds each department\'s document folders.',l:[['users','Users'],['okr','OKRs']]},
+  data:{t:'Data folders — each folder is one table. Excel/CSV uploads become rows you can browse, search, download and analyse; other files are kept as files.',l:[['departments','Departments'],['locations','Locations']]},
   settings:{t:'App-wide settings and templates.',l:[]},
   audit:{t:'Every action anyone takes, filterable by person, department and tab. If you wonder “who changed this?” — the answer is here.',l:[['accesscontrol','Access Control']]},
   profile:{t:'Your own details, documents and preferences.',l:[]},
@@ -136,6 +137,7 @@ const PERM_AREAS=[
   {key:'documentsPersonal',label:'Personal documents (of others)',desc:'Documents on OTHER people\'s profiles — passport, visa, contract… “Sees” limits whose. Own documents are governed by “My profile”',actions:['view','create','edit','delete','upload','download'],scoped:true,group:'Content'},
   {key:'analytics',label:'Analytics',desc:'Operational analytics dashboard (checklists, compliance, tickets)',actions:['view','export'],scoped:false,group:'Insights'},
   {key:'okr',label:'OKR',desc:'Hierarchical objectives (L0 → L1 → L2) with key results. “Sees” decides WHOSE objectives they can view — owners always see their own (they have to update them); sub-objectives of anything visible are included. “Confirm targets” marks a proposed number as agreed and settles “needs a decision” items; “Manage” covers it.',actions:['view','create','edit','checkin','confirmTarget','manage','delete'],scoped:true,group:'Insights'},
+  {key:'data',label:'Data',desc:'Data folders — Excel/CSV uploads that become queryable tables, plus the files kept alongside them. “Create” also covers renaming folders.',actions:['view','create','upload','download','delete'],scoped:false,group:'Content'},
   {key:'locations',label:'Locations',desc:'Offices and GPS boundary',actions:['view','create','edit','manage','delete','manageGeofence'],scoped:false,group:'System'},
   {key:'approvals',label:'Approvals inbox',desc:'The unified approvals page (what they can act on is still per-area)',actions:['view','decide'],scoped:false,group:'System'},
   {key:'audit',label:'Audit / Activity log',desc:'History of actions',actions:['view','export'],scoped:false,group:'System'},
@@ -264,6 +266,9 @@ function _seedRoleProfiles(){
     const cur=DB.roleProfiles[p.id];
     if(!cur||(cur.builtin&&cur._v!==V)){p._v=V;DB.roleProfiles[p.id]=p;_upgraded=true;} // upgrade built-ins once; never touch custom roles
   });
+  /* v172: Data module — the stored built-in admin roles pre-date this area; grant it without a re-seed
+     (a re-seed would need a new V, which the other production build doesn't ship yet). */
+  ['superadmin','admin'].forEach(k=>{const p=DB.roleProfiles[k];if(p&&p.perms&&!p.perms.data){p.perms.data=A('none','view','create','upload','download','delete');_upgraded=true;}});
   // v159: push the re-seeded built-ins to the server so Postgres (bridge_att_perm / bridge_leave_perm) reads the same roles the app does
   if(_upgraded)setTimeout(()=>{try{if(typeof _syncRoleProfiles==='function'&&S.uid)_syncRoleProfiles();}catch(e){}},4000);
   /* v132 one-time floor for CUSTOM roles: nobody should lose the ability to clock in, message a
@@ -4177,7 +4182,7 @@ App._acPreview=(uid2)=>{
   const u=uById(uid2);if(!u)return;
   const role=_roleOf(u);
   const pages=[];
-  const NAVP=[['My Day','home',()=>true],['Overview dashboard','dashboard',()=>canUser(u,'analytics','view')],['Attendance','attendance',()=>canUser(u,'attendance','view')],['My Checklists','mychecklists',()=>true],['OKR','okr',()=>canUser(u,'okr','view')],['Workspace','crm',()=>canUser(u,'crm','view')],['Direct messages','dm',()=>canUser(u,'messages','view')],['Inbox','notifications',()=>true],['Approvals','approvals',()=>canUser(u,'approvals','view')],['Checklist builder','checklists',()=>canUser(u,'checklists','create')],['All results','allcl',()=>canUser(u,'allChecklists','view')],['Team','teamview',()=>canUser(u,'teamview','view')],['Questions','questions',()=>canUser(u,'questions','view')],['Tickets','tickets',()=>canUser(u,'tickets','view')],['Users','users',()=>canUser(u,'employees','view')],['Hierarchy','hierarchy',()=>canUser(u,'hierarchy','view')],['Settings','settings',()=>canUser(u,'settings','view')],['Access Control','accesscontrol',()=>canUser(u,'accessControl','view')],['Departments','departments',()=>canUser(u,'departments','view')],['Locations','locations',()=>canUser(u,'locations','view')],['Audit','audit',()=>canUser(u,'audit','view')]];
+  const NAVP=[['My Day','home',()=>true],['Overview dashboard','dashboard',()=>canUser(u,'analytics','view')],['Attendance','attendance',()=>canUser(u,'attendance','view')],['My Checklists','mychecklists',()=>true],['OKR','okr',()=>canUser(u,'okr','view')],['Workspace','crm',()=>canUser(u,'crm','view')],['Direct messages','dm',()=>canUser(u,'messages','view')],['Inbox','notifications',()=>true],['Approvals','approvals',()=>canUser(u,'approvals','view')],['Checklist builder','checklists',()=>canUser(u,'checklists','create')],['All results','allcl',()=>canUser(u,'allChecklists','view')],['Team','teamview',()=>canUser(u,'teamview','view')],['Questions','questions',()=>canUser(u,'questions','view')],['Tickets','tickets',()=>canUser(u,'tickets','view')],['Users','users',()=>canUser(u,'employees','view')],['Hierarchy','hierarchy',()=>canUser(u,'hierarchy','view')],['Settings','settings',()=>canUser(u,'settings','view')],['Access Control','accesscontrol',()=>canUser(u,'accessControl','view')],['Departments','departments',()=>canUser(u,'departments','view')],['Locations','locations',()=>canUser(u,'locations','view')],['Data','data',()=>canUser(u,'data','view')],['Audit','audit',()=>canUser(u,'audit','view')]];
   NAVP.forEach(([l,r,f])=>{let ok=false;try{ok=!!f();}catch(e){}pages.push(`<span style="display:inline-flex;align-items:center;gap:5px;padding:4px 10px;border-radius:20px;font-size:11.5px;font-weight:700;background:${ok?'#EEE4D5':'var(--c-surface-2)'};color:${ok?'#463830':'var(--c-text-3)'};${ok?'':'text-decoration:line-through;opacity:.7'}">${ok?ic('check','w-3 h-3'):ic('x','w-3 h-3')}${esc(l)}</span>`);});
   const groups={};PERM_AREAS.forEach(a=>{(groups[a.group||'System']=groups[a.group||'System']||[]).push(a);});
   const rows=_permGroupKeys(groups).map(g=>`<div style="margin-bottom:10px"><div style="font-size:10px;font-weight:800;color:var(--c-text-3);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">${esc(g)}</div>${groups[g].map(a=>{
