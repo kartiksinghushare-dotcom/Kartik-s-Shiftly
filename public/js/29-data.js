@@ -491,6 +491,7 @@ async function _dtFailJob(job,e){
   if(!job.active)return;   // already settled (double cancel / late error)
   const msg=String(e&&e.message||e||'Failed');
   job.active=false;job.phase='error';job.error=msg;job.endedAt=Date.now();
+  setTimeout(_dtPaintJobs,8600);   // the panel only repaints on events — make sure the failed entry actually leaves
   try{if(job._w)job._w.terminate();}catch(x){}
   try{if(job._tus)job._tus.abort();}catch(x){}
   if(job.cancelled||/^Cancelled$/.test(msg)){
@@ -531,11 +532,14 @@ async function _dtUploadBlob(job){
     const up=new tus.Upload(f,{
       endpoint:SB_URL+'/storage/v1/upload/resumable',
       retryDelays:[0,1000,3000,5000,10000,20000,30000],
-      headers:{authorization:'Bearer '+token,'x-upsert':'true',apikey:SB_ANON},
+      headers:{'x-upsert':'true',apikey:SB_ANON},
       uploadDataDuringCreation:true,removeFingerprintOnSuccess:true,
       metadata:{bucketName:DT_BUCKET,objectName:job.path,contentType:ct,cacheControl:'3600'},
       chunkSize:DT_CHUNK,
-      onBeforeRequest:async(req)=>{try{const s=await sb.auth.getSession();const t=s&&s.data&&s.data.session&&s.data.session.access_token;if(t)req.setHeader('authorization','Bearer '+t);}catch(e){}},
+      // The bearer token is set ONLY here (never also in `headers`): XHR joins a repeated header with a
+      // comma, and Storage then rejects the token as "Invalid Compact JWS". Re-read per request so a
+      // session refresh during a long upload is picked up.
+      onBeforeRequest:async(req)=>{let t=token;try{const s=await sb.auth.getSession();t=(s&&s.data&&s.data.session&&s.data.session.access_token)||t;}catch(e){}req.setHeader('authorization','Bearer '+t);},
       onError:(err)=>{rej(new Error(job.cancelled?'Cancelled':('Upload failed: '+(err&&(err.message||err.originalResponse&&err.originalResponse.getBody&&err.originalResponse.getBody())||err))));},
       onProgress:(sent,total)=>{job.pct=total?Math.round(sent/total*100):0;_dtPaint(job);},
       onSuccess:()=>res()
@@ -725,17 +729,18 @@ function _dtPaint(job){
 let _dtJobsT=0;
 function _dtPaintJobs(){
   const now=Date.now();if(now-_dtJobsT<120){if(!_dtJobsPending){_dtJobsPending=true;setTimeout(()=>{_dtJobsPending=false;_dtPaintJobs();},130);}return;}_dtJobsT=now;
-  const jobs=Object.values(DT.jobs).filter(j=>j.active||(j.phase==='error'&&!j.cancelled&&now-(j.endedAt||now)<8000));
+  const jobs=Object.values(DT.jobs).filter(j=>j.active||(j.phase==='error'&&!j.cancelled&&!j.dismissed&&now-(j.endedAt||0)<8000));
   let el=document.getElementById('dt-jobs');
   if(!jobs.length){if(el)el.remove();return;}
   if(!el){el=document.createElement('div');el.id='dt-jobs';el.className='dt-jobs';document.body.appendChild(el);}
   const active=jobs.filter(j=>j.active).length;
-  el.innerHTML='<div class="dt-jobs-h"><span>'+(active?active+' upload'+(active===1?'':'s')+' in progress':'Uploads')+'</span><button onclick="App._dtGoFolder()" class="ui-btn ui-btn-ghost ui-btn-sm">Open Data</button></div>'
+  el.innerHTML='<div class="dt-jobs-h"><span>'+(active?active+' upload'+(active===1?'':'s')+' in progress':'Uploads')+'</span><div style="display:flex;gap:4px"><button onclick="App._dtGoFolder()" class="ui-btn ui-btn-ghost ui-btn-sm">Open Data</button><button onclick="App._dtJobsDismiss()" class="ui-btn ui-btn-ghost ui-btn-sm" title="Hide finished">'+ic('x','w-3.5 h-3.5')+'</button></div></div>'
     +jobs.map(j=>{const pct=j.phase==='upload'?j.pct:j.phase==='import'?Math.min(99,j.pct||0):j.phase==='finish'?100:j.phase==='download'?10:0;
-      const txt=j.phase==='upload'?'Uploading · '+_dtSize(Math.round(j.size*(j.pct||0)/100))+' of '+_dtSize(j.size):j.phase==='import'?'Importing rows · '+_dtN(j.rowsDone):j.phase==='download'?'Reading stored file…':j.phase==='finish'?'Finishing…':j.phase==='error'?'Failed':'Waiting…';
-      return'<div class="dt-job"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">'+_dtIcon(j.name)+'</span><div style="flex:1;min-width:0"><div class="dt-row-name" style="font-size:12.5px">'+esc(j.name)+'</div><div class="dt-row-meta">'+esc(txt)+'</div></div>'+(j.active?'<button onclick="App._dtCancel(\''+j.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Cancel">'+ic('x','w-3.5 h-3.5')+'</button>':'')+'</div><div class="dt-bar" style="margin-top:6px"><div style="width:'+pct+'%'+(j.phase==='import'?';background:var(--c-success)':'')+'"></div></div></div>';}).join('');
+      const txt=j.phase==='upload'?'Uploading · '+_dtSize(Math.round(j.size*(j.pct||0)/100))+' of '+_dtSize(j.size):j.phase==='import'?'Importing rows · '+_dtN(j.rowsDone):j.phase==='download'?'Reading stored file…':j.phase==='finish'?'Finishing…':j.phase==='error'?('Failed — '+(j.error||'')):'Waiting…';
+      return'<div class="dt-job"><div style="display:flex;align-items:center;gap:8px"><span style="font-size:16px">'+_dtIcon(j.name)+'</span><div style="flex:1;min-width:0"><div class="dt-row-name" style="font-size:12.5px">'+esc(j.name)+'</div><div class="dt-row-meta">'+esc(txt)+'</div></div>'+(j.active?'<button onclick="App._dtCancel(\''+j.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Cancel">'+ic('x','w-3.5 h-3.5')+'</button>':'<button onclick="App._dtJobsDismiss(\''+j.id+'\')" class="ui-btn ui-btn-ghost ui-btn-sm" title="Dismiss">'+ic('x','w-3.5 h-3.5')+'</button>')+'</div><div class="dt-bar" style="margin-top:6px"><div style="width:'+pct+'%'+(j.phase==='import'?';background:var(--c-success)':'')+'"></div></div></div>';}).join('');
 }
 let _dtJobsPending=false;
+App._dtJobsDismiss=(id)=>{Object.values(DT.jobs).forEach(j=>{if(!j.active&&(!id||j.id===id))j.dismissed=true;});_dtJobsT=0;_dtPaintJobs();};
 App._dtGoFolder=()=>{const j=Object.values(DT.jobs).find(x=>x.active)||Object.values(DT.jobs)[0];
   // App.go swaps S.filters per route (filter memory), so pick the folder AFTER navigating.
   if(S.route!=='data'){if(typeof App.go==='function')App.go('data');else{S.route='data';S.filters={};}}

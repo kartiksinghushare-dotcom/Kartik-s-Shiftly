@@ -1,4 +1,6 @@
-# Bridge v172 — DATA: folders → tables (cache-buster `?v=172`)
+# Bridge v172 — DATA: folders → tables (cache-buster `?v=173`)
+
+**v172.1 hotfix** — resumable (>6 MB) uploads failed with *Invalid Compact JWS*: the bearer token was sent twice (static `headers` + per-request hook) and XHR joins duplicates with a comma. Token is now set only in `onBeforeRequest`. The floating Uploads panel now auto-clears failed entries after 8 s, shows the failure reason, and has dismiss buttons.
 
 **New** `public/js/29-data.js` · **new** `supabase/migrations/2026-10-12_v172_data.sql` · **changed** `index.html` · `04-nav-shell.js` · `06-crm.js` · `99-boot.js` · `19-okr-roles-acl.js` · `package.json` (3.29.0).
 
