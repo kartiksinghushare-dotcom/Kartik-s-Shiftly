@@ -1,3 +1,11 @@
+# Bridge v182 — OKR: every L0 as a hero · Period filter · milestones & sub-objectives marked on the graph (cache-buster `?v=182`)
+
+- **Every top-level objective** now renders as the hero card (title, tiles, graph). Only the flagged North Star keeps the NORTH STAR badge and the engines table. Governance badges (Owner TBD, Needs decision, Proposed…) are no longer on the hero — they stay in the popup and on the sub-objective rows.
+- Under each hero: a **"N sub-objectives ▸ show/hide"** bar; expanded, the sub-objectives appear as the collapsed two-line rows, each level with its own arrow.
+- **Period filter** (one control next to "As of"): All time · This month · This quarter · This year · Year · Month · Date · Range. Filters the list (period overlap; undated items stay) **and** windows every hero graph. Persists with the other scoreboard filters (`S.filters.okrSbPer`).
+- **Graph markers** on hero graphs: every milestone in the subtree (amber diamond, green when done) and every sub-objective at its period end (plum square), placed on the planned line at their date with a thin vertical guide; tooltip lists the names. The axis stretches to the furthest marker (e.g. Dec 2027) unless the period filter narrows it. A compact clickable key under the graph lists the first 12 marks.
+- Files: `19b-okr-v4.js`, `19-okr-roles-acl.js` (`_drawOKRCharts`), `src/styles/main.css`, `index.html` (`?v=182`). `_to_delete/claude_patch_v182.py` is the patch script that applied this — safe to delete.
+
 # Bridge v181 — OKR scoreboard rows: collapsed two-line row with milestone segments (option 2) (cache-buster `?v=181`)
 
 - Replaces the v179/v180 milestone strip. Each objective is one compact row that opens the popup; only the sub-objective arrow expands.

@@ -657,7 +657,54 @@ function okrOwnMetricLine(o){
 /* Nesting state for the scoreboard: which objectives are open. Collapsed by default; remembered with the
    tab's other filters (survives reload). */
 /* Nested rows under a node: an objective's sub-objectives (its KPIs are lines, not rows); a KPI's sub-KPIs. */
-function _sbKids(o,showDrafts){return okrChildren(o.id).filter(k=>k.kind!=='kr'&&!k.quarterLabel&&(okrIsKPI(o)||k.kind!=='kpi')&&okrCanSee(k)&&(showDrafts||k.state!=='draft'));}
+/* ── v4.6 · Period filter (one control): all time · this month · this quarter · this year · a year · a month ·
+   a single date · a custom range. Drives BOTH the list (an item shows when its period overlaps the range —
+   items with no dates stay) and every hero graph's window. Persisted with the other scoreboard filters. */
+function _sbPer(){const v=S.filters.okrSbPer;return(v&&typeof v==='object')?v:{mode:'all'};}
+function _sbPeriodRange(){
+  const v=_sbPer(),t=todayISO(),y=Number(t.slice(0,4)),m=Number(t.slice(5,7));
+  const last=(yy,mm)=>_okrMkISO(yy,mm,_okrMonthLen(yy,mm));
+  switch(v.mode){
+    case 'month':return{from:_okrMkISO(y,m,1),to:last(y,m),label:'This month'};
+    case 'quarter':{const q=Math.floor((m-1)/3);const m0=q*3+1;return{from:_okrMkISO(y,m0,1),to:last(y,m0+2),label:'This quarter'};}
+    case 'year':return{from:y+'-01-01',to:y+'-12-31',label:'This year'};
+    case 'y':{const yy=Number(v.y)||y;return{from:yy+'-01-01',to:yy+'-12-31',label:String(yy)};}
+    case 'm':{if(!v.m||!/^\d{4}-\d{2}$/.test(v.m))return null;const yy=Number(v.m.slice(0,4)),mm=Number(v.m.slice(5,7));return{from:v.m+'-01',to:last(yy,mm),label:new Date(v.m+'-01T00:00:00').toLocaleDateString('en-GB',{month:'short',year:'numeric'})};}
+    case 'd':{if(!v.d)return null;return{from:v.d,to:v.d,label:fmtD(v.d)};}
+    case 'range':{if(!v.from&&!v.to)return null;const f=v.from||'0000-01-01',e=v.to||'9999-12-31';return{from:f,to:e,label:(v.from?fmtS(v.from):'…')+' – '+(v.to?fmtS(v.to):'…')};}
+    default:return null;
+  }
+}
+/* does this item belong to the range? (period overlap; no dates → always shown) */
+function _sbInRange(o,R){
+  if(!R)return true;
+  const eff=_okrEffPeriod(o);const ps=eff.ps||eff.pe,pe=eff.pe||eff.ps;
+  if(!ps||!pe)return true;
+  return ps<=R.to&&pe>=R.from;
+}
+App._okrSbPer=(patch)=>{S.filters.okrSbPer=Object.assign({},_sbPer(),patch||{});if(patch&&patch.mode&&patch.mode!=='range'&&patch.mode!=='y'&&patch.mode!=='m'&&patch.mode!=='d')S.filters.okrSbPerOpen=false;rr();};
+App._okrSbPerTog=()=>{S.filters.okrSbPerOpen=!S.filters.okrSbPerOpen;rr();};
+function _sbPeriodCtl(){
+  const v=_sbPer(),R=_sbPeriodRange(),open=!!S.filters.okrSbPerOpen,on=!!R;
+  const yNow=new Date().getFullYear();
+  const years=[...new Set((DB.okrs||[]).flatMap(o=>[o.periodStart,o.periodEnd]).filter(Boolean).map(d=>Number(String(d).slice(0,4))).concat([yNow-1,yNow,yNow+1]))].filter(n=>n>2000&&n<2100).sort();
+  const quick=(k,l)=>`<button type="button" onclick="App._okrSbPer({mode:'${k}'})" class="sb-per-q${v.mode===k?' on':''}">${l}</button>`;
+  const row=(l,ctl)=>`<div class="sb-per-row"><span>${l}</span>${ctl}</div>`;
+  const inp='class="ui-input" style="min-height:32px;padding:4px 8px;font-size:12px"';
+  return`<div style="position:relative">
+    <button type="button" onclick="App._okrSbPerTog()" class="sb-per-btn${on?' on':''}">${ic('calendar','w-3.5 h-3.5')}${esc(R?R.label:'All time')}${ic('chevD','w-3 h-3')}</button>
+    ${open?`<div class="sb-per-pop" onclick="event.stopPropagation()">
+      <div class="sb-per-quick">${quick('all','All time')}${quick('month','This month')}${quick('quarter','This quarter')}${quick('year','This year')}</div>
+      ${row('Year',`<select ${inp} onchange="App._okrSbPer({mode:'y',y:this.value})"><option value="" ${v.mode!=='y'?'selected':''}>—</option>${years.map(yy=>`<option value="${yy}" ${v.mode==='y'&&Number(v.y)===yy?'selected':''}>${yy}</option>`).join('')}</select>`)}
+      ${row('Month',`<input type="month" ${inp} value="${v.mode==='m'?esc(v.m||''):''}" onchange="App._okrSbPer({mode:'m',m:this.value})"/>`)}
+      ${row('Date',`<input type="date" ${inp} value="${v.mode==='d'?esc(v.d||''):''}" onchange="App._okrSbPer({mode:'d',d:this.value})"/>`)}
+      ${row('Range',`<span style="display:flex;gap:6px;align-items:center;min-width:0"><input type="date" ${inp} value="${v.mode==='range'?esc(v.from||''):''}" onchange="App._okrSbPer({mode:'range',from:this.value})"/><span style="color:var(--c-text-3)">–</span><input type="date" ${inp} value="${v.mode==='range'?esc(v.to||''):''}" onchange="App._okrSbPer({mode:'range',to:this.value})"/></span>`)}
+      <div style="display:flex;gap:6px;margin-top:10px">${on?`<button type="button" onclick="App._okrSbPer({mode:'all',from:'',to:''})" class="ui-btn ui-btn-ghost ui-btn-sm" style="flex:1">Clear</button>`:''}<button type="button" onclick="S.filters.okrSbPerOpen=false;rr()" class="ui-btn ui-btn-primary ui-btn-sm" style="flex:1">Done</button></div>
+      <div style="font-size:10.5px;color:var(--c-text-3);margin-top:8px;line-height:1.5">Shows every objective whose period overlaps the range and zooms the graphs to it. Items without dates always stay.</div>
+    </div>`:''}
+  </div>`;
+}
+function _sbKids(o,showDrafts){const R=_sbPeriodRange();return okrChildren(o.id).filter(k=>k.kind!=='kr'&&!k.quarterLabel&&(okrIsKPI(o)||k.kind!=='kpi')&&okrCanSee(k)&&(showDrafts||k.state!=='draft')&&_sbInRange(k,R));}
 function _sbExp(id){const m=S.filters.okrSbExp;return !!(m&&typeof m==='object'&&m[id]);}
 App._okrSbTog=(id)=>{const m=(S.filters.okrSbExp&&typeof S.filters.okrSbExp==='object')?S.filters.okrSbExp:{};if(m[id])delete m[id];else m[id]=true;S.filters.okrSbExp=m;rr();};
 App._okrSbExpandAll=(on)=>{const m={};if(on){const sd=!!S.filters.okrSbDrafts;(DB.okrs||[]).forEach(o=>{if(o.kind!=='kr'&&!o.quarterLabel&&_sbKids(o,sd).length)m[o.id]=true;});}S.filters.okrSbExp=m;rr();};
@@ -765,7 +812,7 @@ function _sbHero(ns){
   const krs=okrMeasuresOf(ns.id).filter(k=>okrCanSee(k)&&k.state!=='draft');
   return`<section class="sb-hero" onclick="App._okrProgressModal('${ns.id}')">
     <div class="sb-hero-main">
-      <div class="sb-hero-tags">${okrBadgesHTML(ns)}${okrStatusChip(st)}${f?okrFlagChip(f.flag,false,f):''}${okrUpdateCtl(ns,false)}<span class="sb-hero-owner">${_sbOwnerCell(ns)}</span></div>
+      <div class="sb-hero-tags">${ns.isNorthStar?_okrBadge(ic('star','w-3 h-3')+'NORTH STAR','#13171B','#F3E7C9','#13171B','The one number the company runs on'):_okrLvlChip(0)}${ns.state==='draft'?_okrBadge('DRAFT','#F3F0EA','#6B5F55','#E2DBD1','Proposed — not live, not counted'):''}${okrStatusChip(st)}${f?okrFlagChip(f.flag,false,f):''}${okrUpdateCtl(ns,false)}<span class="sb-hero-owner">${_sbOwnerCell(ns)}</span></div>
       <h2 class="sb-hero-title">${esc(ns.title||'North Star')}</h2>
       ${(ns.description||'').trim()?`<p class="sb-hero-why">${esc(ns.description)}</p>`:''}
       ${krs.length?`<div class="okr-krs sb-hero-krs">${krs.map(k=>okrKRLineHTML(k,{withKPIs:true})).join('')}</div>`:''}
@@ -776,7 +823,8 @@ function _sbHero(ns){
       ${tile('Target',t===null?'—':fmt(t),(unit?unit+(ns.periodEnd?' · ':''):'')+(ns.periodEnd?'by '+esc(fmtS(ns.periodEnd)):''))}
       ${nx?tile('Next checkpoint',fmt(nx.value),(unit?unit+' · ':'')+'by '+esc(fmtS(nx.date))):tile('Progress',pct===null?'—':pct+'%','of the way')}
     </div>
-    <div class="sb-hero-chart" onclick="event.stopPropagation()"><canvas data-okr-chart="${ns.id}"></canvas></div>
+    <div class="sb-hero-chart" onclick="event.stopPropagation()"><canvas data-okr-chart="${ns.id}" data-okr-marks="1"></canvas></div>
+    ${_sbHeroMarksLegend(ns)}
     ${c.count?`<div class="sb-engines" onclick="event.stopPropagation()">
       <div class="sb-eng-head"><span>${c.count} engine${c.count===1?'':'s'} count toward this</span><span class="sb-eng-sum">promised <b>${c.promised>=0?'+':''}${fmt(c.promised)}</b> · delivered <b>${c.delivered>=0?'+':''}${fmt(c.delivered)}</b>${measuredDelta===null?'':' · measured <b>'+(measuredDelta>=0?'+':'')+fmt(measuredDelta)+'</b>'+(Math.abs(measuredDelta-c.delivered)>0.0001?' <span title="Measured change minus what the engines report — growth nobody has claimed, or double counting">(unattributed '+(measuredDelta-c.delivered>=0?'+':'')+fmt(Math.round((measuredDelta-c.delivered)*100)/100)+')</span>':'')}${unit?' '+unit:''}</span></div>
       <div class="sb-eng-rows">
@@ -786,12 +834,42 @@ function _sbHero(ns){
     </div>`:''}
   </section>`;
 }
+/* The dates marked on the hero graph: every milestone in the subtree (amber, green once done) and every
+   sub-objective at its period end (plum). Listed under the graph as a compact key, newest first. */
+function _sbHeroMarks(o){
+  const sd=!!S.filters.okrSbDrafts;
+  const ms=_sbMilestonesOf(o,sd).map(x=>({kind:'ms',id:x.id,date:x.date,title:x.title,done:x.done}));
+  const subs=okrChildren(o.id).filter(k=>okrIsObjective(k)&&!k.quarterLabel&&!k.closed&&(sd||k.state!=='draft')&&okrCanSee(k)&&k.periodEnd).map(k=>({kind:'sub',id:k.id,date:String(k.periodEnd).slice(0,10),title:k.title||'',done:okrStatusOf(k)==='Achieved',pct:okrNoPct(k)?null:okrProgress(k)}));
+  return ms.concat(subs).sort((a,b)=>a.date.localeCompare(b.date));
+}
+function _sbHeroMarksLegend(o){
+  const all=_sbHeroMarks(o);if(!all.length)return'';
+  const R=_sbPeriodRange();const marks=R?all.filter(x=>x.date>=R.from&&x.date<=R.to):all;
+  if(!marks.length)return'';
+  const t=todayISO();
+  return`<div class="sb-marks" onclick="event.stopPropagation()">
+    ${marks.slice(0,12).map(x=>`<button type="button" class="sb-mark sb-mark-${x.kind}${x.done?' done':x.date<t?' late':''}" onclick="App._okrProgressModal('${x.id}')" title="${esc((x.kind==='ms'?'Milestone · ':'Sub-objective · ')+x.title)}"><i></i><span class="sb-mark-d">${esc(fmtS(x.date))}</span><span class="sb-mark-t">${esc(x.title)}</span>${x.kind==='sub'&&x.pct!==null?`<span class="sb-mark-p">${x.pct}%</span>`:''}</button>`).join('')}
+    ${marks.length>12?`<span class="sb-dim" style="align-self:center">+${marks.length-12} more on the graph</span>`:''}
+  </div>`;
+}
+/* One L0 = hero + its sub-objective tree (collapsed by default; every level expands with its own arrow). */
+function _sbHeroSection(r,showDrafts){
+  const kids=_sbKids(r,showDrafts),exp=_sbExp(r.id);
+  const rows=[];if(exp)_sbWalk(r,1,rows,showDrafts);
+  const bar=kids.length?`<button type="button" class="sb-kidsbar${exp?' on':''}" onclick="event.stopPropagation();App._okrSbTog('${r.id}')" aria-expanded="${exp?'true':'false'}">${ic('chevR','w-3.5 h-3.5')}<span>${kids.length} sub-objective${kids.length===1?'':'s'}</span><span class="sb-dim">${exp?'hide':'show'}</span></button>`:'';
+  return`<section class="sb-sec sb-sec-hero${r.state==='draft'?' sb-draft':''}">
+    ${_sbHero(r)}
+    ${bar}
+    ${exp&&rows.length?`<div class="sb-table"><div class="sb-thead2"><span></span><span>Objective</span><span>Owner</span><span>Status</span></div>${rows.join('')}</div>`:''}
+  </section>`;
+}
 function okrScoreboardHTML(){
   const vis=okrVisible();
   const showDrafts=!!S.filters.okrSbDrafts;
-  const rootsAll=okrVisibleRoots().filter(o=>!o.quarterLabel&&o.kind!=='kr'&&(showDrafts||o.state!=='draft'));
-  const roots=rootsAll.filter(okrIsObjective);
-  const nss=roots.filter(o=>o.isNorthStar),others=roots.filter(o=>!o.isNorthStar);
+  const PR=_sbPeriodRange();
+  const rootsAll=okrVisibleRoots().filter(o=>!o.quarterLabel&&o.kind!=='kr'&&(showDrafts||o.state!=='draft')&&_sbInRange(o,PR));
+  /* v4.6 — every top-level objective gets the hero treatment; the flagged North Star keeps its badge and engines */
+  const roots=rootsAll.filter(okrIsObjective).sort((a,b)=>(b.isNorthStar?1:0)-(a.isNorthStar?1:0));
   const live=vis.filter(o=>o.state!=='draft'&&!o.closed&&!o.quarterLabel);
   const objs=live.filter(okrIsObjective),krs=live.filter(o=>o.kind==='kr');
   const kpis=live.filter(o=>okrIsKPI(o)&&o.parentId&&(okrById(o.parentId)||{}).kind!=='kpi'&&okrById(o.parentId));   // KPIs linked under an objective or a key result
@@ -807,31 +885,24 @@ function okrScoreboardHTML(){
     </div>`;
   const anyExp=!!(S.filters.okrSbExp&&typeof S.filters.okrSbExp==='object'&&Object.keys(S.filters.okrSbExp).length);
   const ctl=`<div class="sb-ctl">
-      <span class="sb-asof">${ic('calendar','w-3.5 h-3.5')}As of ${esc(fmtD(todayISO()))}</span>
+      <span class="sb-asof">As of ${esc(fmtD(todayISO()))}</span>
+      ${_sbPeriodCtl()}
       <span class="sb-expctl"><button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="App._okrSbExpandAll(${anyExp?'false':'true'})">${ic(anyExp?'chevR':'chevD','w-3.5 h-3.5')}${anyExp?'Collapse all':'Expand all'}</button></span>
       <label class="sb-chk"><input type="checkbox" ${showDrafts?'checked':''} onchange="S.filters.okrSbDrafts=this.checked;rr()"/> Show drafts</label>
       <button class="ui-btn ui-btn-ghost ui-btn-sm" onclick="window.print()" title="Print or save as PDF">${ic('print','w-3.5 h-3.5')}Print</button>
     </div>`;
   const loneKRs=okrVisibleRoots().filter(o=>o.kind==='kr'&&(showDrafts||o.state!=='draft'));
   if(!roots.length&&loneKRs.length)return`<div class="sb">${strip}${ctl}<section class="sb-sec"><div class="sb-thead"><span></span><span>Your key results</span><span>Value</span><span>Owner</span><span>Status</span></div>${loneKRs.map(k=>{const p=k.parentId?okrById(k.parentId):null;return`<div class="sb-row" onclick="App._okrProgressModal('${k.id}')"><div class="sb-c sb-lvl">${okrKRKindChip(k)}</div><div class="sb-c sb-obj"><div class="sb-title">${esc(k.title||'')}</div>${p?`<div class="sb-why">under ${esc(p.title||'')}</div>`:''}</div><div class="sb-c sb-krs"><div class="okr-krs">${okrKRLineHTML(k)}</div></div><div class="sb-c sb-own">${_sbOwnerCell(k)}</div><div class="sb-c sb-st"><div class="sb-stline">${okrStatusChip(okrStatusOf(k),true)}${(f=>f?okrFlagChip(f.flag,true,f):'')(okrFlagOf(k))}</div></div></div>`;}).join('')}</section></div>`;
+  if(!roots.length&&PR)return`<div class="sb">${strip}${ctl}<div class="sb-empty">${ic('calendar','w-5 h-5')}<div><b>Nothing in ${esc(PR.label)}.</b> No objective's period overlaps this range — clear the period filter to see everything.</div></div></div>`;
   if(!roots.length){
     const pending0=_okrV4Ready()?'':`<div class="sb-pending">${ic('alert','w-3.5 h-3.5')} Database update pending — objectives, key results, ramps, flags and the new fields will not save until migration <b>2026-10-02_v400_okr_v4.sql</b> has been applied.</div>`;
     const nKpi=vis.filter(o=>okrIsKPI(o)&&!o.quarterLabel&&!o.closed).length;
     return`<div class="sb">${pending0}${strip}${ctl}<div class="sb-empty">${ic('star','w-5 h-5')}<div><b>No objectives yet.</b> ${_okrV4Ready()?(_okrCanManage()?'Use <b>New objective</b> above to create the first one, mark the North Star in its editor (Plan & governance), then add key results and link KPIs under it or them.':'Objectives will appear here once leadership (OKR → Manage) creates them.'):'Objectives can be created once the database update has run.'}${nKpi?` The ${nKpi} KPI${nKpi===1?'':'s'} Bridge already tracks live on the <a href="#" onclick="event.preventDefault();App._okrTab('objectives')" style="font-weight:700;text-decoration:underline">Objectives tab</a>.`:''}</div></div></div>`;
   }
-  const sections=others.map(r=>{
-    const kids=_sbKids(r,showDrafts),exp=_sbExp(r.id);
-    const rows=[];if(exp)_sbWalk(r,1,rows,showDrafts);
-    return`<section class="sb-sec${r.state==='draft'?' sb-draft':''}">
-      <div class="sb-table">
-        <div class="sb-thead2"><span></span><span>Objective</span><span>Owner</span><span>Status</span></div>
-        ${_sbRow(r,0,true,kids.length,exp)}
-        ${rows.join('')}
-      </div>
-    </section>`;}).join('');
+  const sections=roots.map(r=>_sbHeroSection(r,showDrafts)).join('');
   setTimeout(()=>{try{_drawOKRCharts();}catch(e){}},60);
   const pending=_okrV4Ready()?'':`<div class="sb-pending">${ic('alert','w-3.5 h-3.5')} Database update pending — key results, ramps, flags and the new fields will not save until migration <b>2026-10-02_v400_okr_v4.sql</b> has been applied.</div>`;
-  return`<div class="sb">${pending}${strip}${ctl}${nss.map(_sbHero).join('')}${sections}</div>`;
+  return`<div class="sb">${pending}${strip}${ctl}${sections}</div>`;
 }
 /* The strip's numbers open the exact list they count. */
 App._okrSbList=(key)=>{

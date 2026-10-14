@@ -3713,6 +3713,14 @@ function _drawOKRCharts(){
       // in the objective's own units, with the axis spanning its period (or its subtree's).
       const _tnow=todayISO();
       const _eff=_okrEffPeriod(o);
+      /* v4.6 — hero graphs (data-okr-marks) mark milestones + sub-objectives on their dates: the axis stretches to the
+         furthest marker; the scoreboard's period filter then windows the whole thing. */
+      const _marksOn=cv.getAttribute('data-okr-marks')==='1'&&typeof _sbHeroMarks==='function';
+      const _marks=_marksOn?_sbHeroMarks(o):[];
+      if(_marksOn&&_marks.length){const mx=_marks[_marks.length-1].date,mn=_marks[0].date;if(!_eff.pe||mx>_eff.pe)_eff.pe=mx;if(!_eff.ps||mn<_eff.ps)_eff.ps=mn;}
+      const _win=(_marksOn&&typeof _sbPeriodRange==='function')?_sbPeriodRange():null;
+      if(_win&&_eff.ps&&_eff.pe&&_win.from<=_eff.pe&&_win.to>=_eff.ps){if(_win.from>_eff.ps)_eff.ps=_win.from;if(_win.to<_eff.pe)_eff.pe=_win.to;}
+      const _marksIn=_marks.filter(x=>(!_eff.ps||x.date>=_eff.ps)&&(!_eff.pe||x.date<=_eff.pe));
       const _addBounds=(ds2)=>{const s=new Set(ds2);if(_eff.ps)s.add(_eff.ps);if(_eff.pe)s.add(_eff.pe);if(!s.has(_tnow)&&(!_eff.pe||_tnow<=_eff.pe))s.add(_tnow);let arr=[...s].sort();
         if(arr.length<2){const d0=new Date((arr[0]||_tnow)+'T00:00:00');d0.setDate(d0.getDate()+60);arr.push(d0.toISOString().slice(0,10));arr.sort();}
         return arr;};
@@ -3738,6 +3746,7 @@ function _drawOKRCharts(){
         const s=new Set(_span);
         cs.forEach(c=>{if(c.date>=_eff.ps&&c.date<=_eff.pe)s.add(c.date);}); // land actual points on their exact date
         if(_tnow>=_eff.ps&&_tnow<=_eff.pe)s.add(_tnow);
+        _marksIn.forEach(x=>s.add(x.date));
         dates=[...s].sort();
       } else {
         dates=_addBounds(cs.map(c=>c.date));
@@ -3778,6 +3787,18 @@ function _drawOKRCharts(){
          green where the line held, red where it broke. Everywhere else they stay brand orange. */
       const _ptCol=_th?actual.map((v,i)=>{const k=okrThreshOKAt(o,v,dates[i]);return k===null?'#54433C':(k?'#58996E':'#C25441');}):'#54433C';
       ds.push({label:'Actual',data:actual,spanGaps:true,order:-1,borderColor:'#54433C',backgroundColor:'rgba(84,67,60,.12)',fill:true,tension:.3,pointRadius:_th?4:3,pointBackgroundColor:_ptCol,pointBorderColor:_ptCol,borderWidth:2});
+      /* v4.6 — marker datasets: a point per milestone (amber · green when done) and per sub-objective (plum) sitting on
+         the planned line at its date, plus a thin vertical guide drawn by the plugin below. */
+      const _mkTip={};
+      if(_marksIn.length){
+        const yAt=d=>{const i=dates.indexOf(d);const v=ideal?ideal[i]:null;if(v!==null&&v!==undefined)return v;const a=actual.slice(0,i+1).filter(x=>x!==null);return a.length?a[a.length-1]:Number(o.startValue||0);};
+        const mk=(kind,label,color,style)=>{const pts=_marksIn.filter(x=>x.kind===kind);if(!pts.length)return;
+          const data=dates.map(()=>null),bg=dates.map(()=>color),rad=dates.map(()=>0);
+          pts.forEach(x=>{const i=dates.indexOf(x.date);if(i<0)return;data[i]=yAt(x.date);rad[i]=kind==='ms'?6:7;if(x.done)bg[i]='#58996E';(_mkTip[x.date]=_mkTip[x.date]||[]).push((kind==='ms'?'◆ ':'▣ ')+(x.done?'✓ ':'')+x.title+(x.pct!==null&&x.pct!==undefined?' · '+x.pct+'%':''));});
+          ds.push({label:label,data:data,showLine:false,pointStyle:style,pointRadius:rad,pointHoverRadius:rad.map(r=>r?r+2:0),pointBackgroundColor:bg,pointBorderColor:'#FFFFFF',pointBorderWidth:1.5,borderColor:color,backgroundColor:color,order:-2,_okrMark:true});};
+        mk('ms','Milestones','#D9A62B','rectRot');
+        mk('sub','Sub-objectives','#7A5A9A','rect');
+      }
       const yOpts={beginAtZero:true,ticks:{color:T.tick,font:{size:10}},grid:{color:T.grid}};
       if(o.metricType!=='yesno'){
         const _act=actual.filter(v=>v!==null&&v!==undefined&&isFinite(v));
@@ -3819,7 +3840,9 @@ function _drawOKRCharts(){
         }
       }
       if(o.metricType==='yesno')yOpts.ticks.callback=function(v){return v===1?'Yes':v===0?'No':'';};
-      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8}}},scales:{x:{ticks:{color:T.tick,font:{size:9},autoSkip:false,maxRotation:_daily?90:60,minRotation:0,padding:4,callback:function(v,i){const _iso=dates[i];if(!_iso)return '';if(_daily){const _dd=new Date(_iso+'T00:00:00');return (i===0||_dd.getDate()===1)?fmtS(_iso):String(_dd.getDate());}return fmtS(_iso);}},grid:{color:T.grid,drawOnChartArea:false}},y:yOpts}}}));
+      const _mkPlugin={id:'okrMarks',afterDatasetsDraw(chart){if(!_marksIn.length)return;const x=chart.scales.x,area=chart.chartArea,ctx=chart.ctx;if(!x||!area)return;ctx.save();ctx.setLineDash([3,4]);ctx.lineWidth=1;
+        const seen=new Set();_marksIn.forEach(m=>{if(seen.has(m.date))return;seen.add(m.date);const i=dates.indexOf(m.date);if(i<0)return;const px=x.getPixelForValue(i);const anySub=_marksIn.some(z=>z.date===m.date&&z.kind==='sub');ctx.strokeStyle=anySub?'rgba(122,90,154,.55)':'rgba(217,166,43,.6)';ctx.beginPath();ctx.moveTo(px,area.top);ctx.lineTo(px,area.bottom);ctx.stroke();});ctx.restore();}};
+      _aCharts.push(new Chart(cv.getContext('2d'),{type:'line',data:{labels:labels,datasets:ds},plugins:[_mkPlugin],options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:true,labels:{color:T.tick,font:{size:10.5},boxWidth:14,padding:8,usePointStyle:false}},tooltip:{callbacks:{label:function(c){const d=c.dataset;if(d&&d._okrMark){return(_mkTip[dates[c.dataIndex]]||[]).filter(t2=>(d.label==='Milestones')===(t2.charAt(0)==='◆'));}return(d.label||'')+': '+(c.parsed&&c.parsed.y!==null&&c.parsed.y!==undefined?_okrFmtVal(o,c.parsed.y):'—');}}}},scales:{x:{ticks:{color:T.tick,font:{size:9},autoSkip:false,maxRotation:_daily?90:60,minRotation:0,padding:4,callback:function(v,i){const _iso=dates[i];if(!_iso)return '';if(_daily){const _dd=new Date(_iso+'T00:00:00');return (i===0||_dd.getDate()===1)?fmtS(_iso):String(_dd.getDate());}return fmtS(_iso);}},grid:{color:T.grid,drawOnChartArea:false}},y:yOpts}}}));
     }catch(e){fail("Couldn't draw chart.");}
   });
 }
