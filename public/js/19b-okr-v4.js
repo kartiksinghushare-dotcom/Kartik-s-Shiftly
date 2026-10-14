@@ -694,12 +694,14 @@ function _sbStripHTML(o,ms){
   if(!months.length||months[0]>ps)months.unshift(ps);
   const step=months.length>7?Math.ceil(months.length/7):1;
   const labs=months.map((mo,i)=>{if(i%step)return'';if(pct(mo)>93)return'';const dt=new Date(mo+'T00:00:00');return`<span style="left:${pct(mo)}%">${dt.toLocaleDateString('en-GB',{month:'short'})}${(i===0||dt.getMonth()===0)?' '+dt.getFullYear():''}</span>`;}).join('');
-  const groups={};ms.forEach(x=>{(groups[x.date]=groups[x.date]||[]).push(x);});
+  /* cluster: milestones closer than ~3% of the strip share one numbered dot, so neighbours never overlap */
+  const clusters=[];ms.forEach(x=>{const px=pct(x.date);const c=clusters[clusters.length-1];if(c&&px-c.p0<3){c.items.push(x);c.p=(c.p0+px)/2;}else clusters.push({p0:px,p:px,items:[x]});});
   const soonEnd=_okrDateAddD(t,14);
-  const dots=Object.keys(groups).sort().map(dte=>{const g=groups[dte];const allDone=g.every(x=>x.done),anyLate=g.some(x=>!x.done&&dte<t),soon=!allDone&&!anyLate&&dte>=t&&dte<=soonEnd;
+  const dots=clusters.map(c=>{const g=c.items;const allDone=g.every(x=>x.done),anyLate=g.some(x=>!x.done&&x.date<t),soon=!allDone&&!anyLate&&g.some(x=>!x.done&&x.date>=t&&x.date<=soonEnd);
     const cls=allDone?'ok':anyLate?'bad':soon?'soon':'';
-    const tip=fmtD(dte)+' — '+g.map(x=>(x.done?'✓ ':'')+x.title).join(' · ');
-    return`<button type="button" class="sb-ms ${cls}${g.length>1?' sb-ms-stack':''}" style="left:${pct(dte)}%" title="${esc(tip)}" aria-label="${esc(tip)}" onclick="event.stopPropagation();App._okrProgressModal('${g[0].id}')">${g.length>1?g.length:''}</button>`;}).join('');
+    const tip=g.map(x=>fmtS(x.date)+' · '+(x.done?'✓ ':'')+x.title).join('\n');
+    const first=g.find(x=>!x.done)||g[0];
+    return`<button type="button" class="sb-ms ${cls}" style="left:${c.p}%" title="${esc(tip)}" aria-label="${esc(tip)}" onclick="event.stopPropagation();App._okrProgressModal('${first.id}')">${g.length>1?g.length:''}</button>`;}).join('');
   const todayIn=t>=ps&&t<=pe;
   return`<div class="sb-strip" onclick="event.stopPropagation()"><div class="sb-strip-months">${labs}</div><div class="sb-strip-line">${todayIn?`<span class="sb-strip-today" style="left:${pct(t)}%"></span>`:''}${dots}</div></div>`;
 }
