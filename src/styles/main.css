@@ -1709,25 +1709,20 @@ header.topbar,.topbar{-webkit-backdrop-filter:blur(18px) saturate(150%)}
 .sb-dim{color:var(--c-text-3);font-weight:600}
 .sb-val{font-weight:700;color:var(--c-text);font-variant-numeric:tabular-nums}
 .sb2-own,.sb2-st{min-width:0;padding-top:2px}
-.sb2-bottom{margin:10px 0 0 40px;min-width:0}
-.sb-strip{position:relative;padding:0 8px;cursor:default}
-.sb-strip-months{position:relative;height:14px;font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--c-text-3);overflow:hidden}
-.sb-strip-months span{position:absolute;top:0;border-left:1px dashed var(--c-border-2);padding-left:5px;white-space:nowrap;line-height:14px}
-.sb-strip-line{position:relative;height:22px}
-.sb-strip-line::before{content:"";position:absolute;left:0;right:0;top:10px;height:2px;background:var(--c-border);border-radius:2px}
-.sb-strip-today{position:absolute;top:-16px;bottom:0;width:2px;background:#C25441;opacity:.75;pointer-events:none}
-.sb-strip-today::after{content:"today";position:absolute;top:-1px;left:4px;font-size:9px;font-weight:700;color:#C25441;letter-spacing:0;text-transform:none}
-.sb-ms{position:absolute;top:3px;width:16px;height:16px;border-radius:50%;border:2px solid var(--c-border-2);background:var(--c-surface);transform:translateX(-50%);padding:0;margin:0;cursor:pointer;font:inherit;font-size:8px;font-weight:800;line-height:1;color:var(--c-text-2);display:grid;place-items:center;transition:transform .12s}
-.sb-ms.ok{background:#58996E;border-color:#58996E;color:#fff}
-.sb-ms.bad{background:#C25441;border-color:#C25441;color:#fff}
-.sb-ms.soon{border-color:#D9A62B;background:#FBF1DC;color:#7A5A12}
-.sb-ms:hover,.sb-ms:focus-visible{transform:translateX(-50%) scale(1.25);z-index:2;outline:none;box-shadow:0 0 0 2px var(--c-surface)}
-.sb-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--c-text-2);margin-top:6px;font-variant-numeric:tabular-nums}
-.sb-legend b{color:var(--c-text)}
-.sb-leg-warn b{color:#7A5A12}.sb-leg-bad b{color:#A63528}
+.sb2-meta .sb-sep{color:var(--c-border-2);font-weight:700}
+.sb-seg{display:inline-flex;gap:2px;flex-shrink:0;align-items:center}
+.sb-seg i{display:block;width:9px;height:5px;border-radius:2px;background:var(--c-surface-2);border:1px solid var(--c-border-2)}
+.sb-seg i.ok{background:#58996E;border-color:#58996E}
+.sb-seg i.bad{background:#C25441;border-color:#C25441}
+.sb-seg i.warn{background:#FBF1DC;border-color:#D9A62B}
+.sb-cnt{font-weight:700;color:var(--c-text-2);font-variant-numeric:tabular-nums}
+.sb-next{color:var(--c-text-3);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:min(52vw,420px)}
+.sb-next b{color:var(--c-text-2);font-weight:600}
+.sb-next-warn,.sb-next-warn b{color:#7A5A12}
+.sb-next-bad,.sb-next-bad b{color:#A63528;font-weight:700}
+.sb2-meta{row-gap:3px}
 .sb-row2.sb-d1{background:var(--c-surface)}.sb-row2.sb-d2{background:var(--c-bg)}.sb-row2.sb-d3,.sb-row2.sb-d4{background:var(--c-surface-2)}
 .sb-row2.sb-d1 .sb-lvl{padding-left:14px}.sb-row2.sb-d2 .sb-lvl{padding-left:28px}.sb-row2.sb-d3 .sb-lvl{padding-left:42px}.sb-row2.sb-d4 .sb-lvl{padding-left:56px}
-.sb-row2.sb-d1 .sb2-bottom{margin-left:54px}.sb-row2.sb-d2 .sb2-bottom{margin-left:68px}.sb-row2.sb-d3 .sb2-bottom{margin-left:82px}.sb-row2.sb-d4 .sb2-bottom{margin-left:96px}
 .sb-row2 .sb-lvl{position:relative}
 .sb-row2.sb-d1 .sb-lvl::before,.sb-row2.sb-d2 .sb-lvl::before,.sb-row2.sb-d3 .sb-lvl::before,.sb-row2.sb-d4 .sb-lvl::before{content:"";position:absolute;left:6px;top:-11px;bottom:-11px;width:2px;background:var(--c-border);border-radius:2px}
 .sb-row2.sb-d2 .sb-lvl::before{left:20px}.sb-row2.sb-d3 .sb-lvl::before{left:34px}.sb-row2.sb-d4 .sb-lvl::before{left:48px}
@@ -1736,9 +1731,7 @@ header.topbar,.topbar{-webkit-backdrop-filter:blur(18px) saturate(150%)}
   .sb2-top{grid-template-columns:28px minmax(0,1fr)}
   .sb2-own,.sb2-st{grid-column:2}
   .sb2-st .sb-stline{display:inline-flex;gap:4px;flex-wrap:wrap}
-  .sb2-bottom,.sb-row2.sb-d1 .sb2-bottom,.sb-row2.sb-d2 .sb2-bottom,.sb-row2.sb-d3 .sb2-bottom,.sb-row2.sb-d4 .sb2-bottom{margin-left:0}
 }
-@media print{.sb-ms{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
 /* v4.3 — Update control / "from N KPIs" label (scoreboard rows, KR lines, hero) */
 .sb-updrow{margin-top:6px}
 .sb-upd{display:inline-flex;align-items:center;gap:4px;padding:3px 9px;border-radius:8px;border:1px solid var(--c-border-2);background:var(--c-surface);color:var(--c-text);font:inherit;font-size:11px;font-weight:800;cursor:pointer;white-space:nowrap;transition:border-color .12s,background .12s}

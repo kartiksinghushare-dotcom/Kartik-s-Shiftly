@@ -1,3 +1,10 @@
+# Bridge v181 — OKR scoreboard rows: collapsed two-line row with milestone segments (option 2) (cache-buster `?v=181`)
+
+- Replaces the v179/v180 milestone strip. Each objective is one compact row that opens the popup; only the sub-objective arrow expands.
+- Line 1: title. Line 2: one small segment per milestone in the subtree (green done · red overdue · amber due ≤14 days · empty upcoming, max 24), "done / total", then **Next: <milestone> · date** (or **Overdue: …** in red), the number in one phrase, sub-objective count, and any governance badges.
+- Right side unchanged: owner · status chip · % bar · Update button / "from N KPIs".
+- Files: `19b-okr-v4.js` (`_sbRow`, `_sbSegsHTML`), `src/styles/main.css` (strip rules removed, `.sb-seg` / `.sb-next` added), `index.html` (`?v=181`).
+
 # Bridge v179 — OKR scoreboard rows: one line + milestone strip (option C) (cache-buster `?v=179`)
 
 - `_sbRow` in `19b-okr-v4.js` rebuilt: expand arrow · title (2 lines max; full title + description on hover and in the popup) · one quiet meta line (level, badges, sub-objective & key-result counts, the number in one phrase) · owner · status + Update.

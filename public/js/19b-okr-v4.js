@@ -680,30 +680,15 @@ function _sbMilestonesOf(o,showDrafts){
   return out.sort((a,b)=>a.date.localeCompare(b.date));
 }
 function _sbCountKRs(o,showDrafts){let n=0;const walk=(x,g)=>{if(g>10)return;okrChildren(x.id).forEach(k=>{if(!k||k.quarterLabel||k.closed||(!showDrafts&&k.state==='draft')||!okrCanSee(k))return;if(k.kind==='kr')n++;else if(k.kind!=='kpi')walk(k,g+1);});};walk(o,0);return n;}
-function _sbStripHTML(o,ms){
-  const t=todayISO();
-  let ps=o.periodStart?String(o.periodStart).slice(0,10):null,pe=o.periodEnd?String(o.periodEnd).slice(0,10):null;
-  if(!ps||!pe){if(!ms.length)return'';ps=ps||ms[0].date;pe=pe||ms[ms.length-1].date;if(ps===pe)pe=_okrDateAddM(ps,1);}
-  if(ms.length){if(ms[0].date<ps)ps=ms[0].date;if(ms[ms.length-1].date>pe)pe=ms[ms.length-1].date;}
-  const T0=new Date(ps+'T00:00:00').getTime(),T1=new Date(pe+'T00:00:00').getTime();
-  if(!(T1>T0))return'';
-  const pct=d=>Math.max(0,Math.min(100,((new Date(d+'T00:00:00').getTime()-T0)/(T1-T0))*100));
-  /* month ticks — first of each month inside the period; thinned when the period is long */
-  const months=[];let d=new Date(ps+'T00:00:00');d=new Date(d.getFullYear(),d.getMonth(),1);if(_okrISO(d)<ps)d=new Date(d.getFullYear(),d.getMonth()+1,1);
-  while(_okrISO(d)<=pe&&months.length<40){months.push(_okrISO(d));d=new Date(d.getFullYear(),d.getMonth()+1,1);}
-  if(!months.length||months[0]>ps)months.unshift(ps);
-  const step=months.length>7?Math.ceil(months.length/7):1;
-  const labs=months.map((mo,i)=>{if(i%step)return'';if(pct(mo)>93)return'';const dt=new Date(mo+'T00:00:00');return`<span style="left:${pct(mo)}%">${dt.toLocaleDateString('en-GB',{month:'short'})}${(i===0||dt.getMonth()===0)?' '+dt.getFullYear():''}</span>`;}).join('');
-  /* cluster: milestones closer than ~3% of the strip share one numbered dot, so neighbours never overlap */
-  const clusters=[];ms.forEach(x=>{const px=pct(x.date);const c=clusters[clusters.length-1];if(c&&px-c.p0<3){c.items.push(x);c.p=(c.p0+px)/2;}else clusters.push({p0:px,p:px,items:[x]});});
-  const soonEnd=_okrDateAddD(t,14);
-  const dots=clusters.map(c=>{const g=c.items;const allDone=g.every(x=>x.done),anyLate=g.some(x=>!x.done&&x.date<t),soon=!allDone&&!anyLate&&g.some(x=>!x.done&&x.date>=t&&x.date<=soonEnd);
-    const cls=allDone?'ok':anyLate?'bad':soon?'soon':'';
-    const tip=g.map(x=>fmtS(x.date)+' · '+(x.done?'✓ ':'')+x.title).join('\n');
-    const first=g.find(x=>!x.done)||g[0];
-    return`<button type="button" class="sb-ms ${cls}" style="left:${c.p}%" title="${esc(tip)}" aria-label="${esc(tip)}" onclick="event.stopPropagation();App._okrProgressModal('${first.id}')">${g.length>1?g.length:''}</button>`;}).join('');
-  const todayIn=t>=ps&&t<=pe;
-  return`<div class="sb-strip" onclick="event.stopPropagation()"><div class="sb-strip-months">${labs}</div><div class="sb-strip-line">${todayIn?`<span class="sb-strip-today" style="left:${pct(t)}%"></span>`:''}${dots}</div></div>`;
+/* ── v4.5 · option 2 — collapsed row: title, then one line of milestone segments + "Next: … · date" ──
+   One row per objective, nothing expands inline except the sub-objective arrow; the row opens the popup.
+   Segments: one per milestone (and dated count-item) in the subtree, in date order — green done · red overdue ·
+   amber due within 14 days · empty upcoming. Capped at 24 segments, "+n" after that. */
+const _SB_SEG_MAX=24;
+function _sbSegsHTML(ms,t,soonEnd){
+  if(!ms.length)return'';
+  const segs=ms.slice(0,_SB_SEG_MAX).map(x=>{const cls=x.done?'ok':x.date<t?'bad':x.date<=soonEnd?'warn':'';return`<i class="${cls}" title="${esc(fmtS(x.date)+' · '+(x.done?'✓ ':'')+x.title)}"></i>`;}).join('');
+  return`<span class="sb-seg">${segs}</span>${ms.length>_SB_SEG_MAX?`<span class="sb-dim">+${ms.length-_SB_SEG_MAX}</span>`:''}`;
 }
 function _sbRow(o,depth,isHead,kidsN,exp){
   const st=okrStatusOf(o),f=okrFlagOf(o),pct=okrNoPct(o)?null:okrProgress(o);
@@ -717,21 +702,27 @@ function _sbRow(o,depth,isHead,kidsN,exp){
   else if(o.metricType==='yesno')val=(okrLatestCheckin(o.id)||{}).value>=1?'Done':'Not done';
   else if(o.targetValue===null||o.targetValue===undefined)val='<span class="sb-dim">no target yet</span>';
   else val=okrKRValueText(o)+((o.unit&&o.metricType!=='percent'&&o.metricType!=='currency')?' <span class="sb-dim">'+esc(o.unit)+'</span>':'');
+  /* milestones in the subtree */
   const ms=isK?[]:_sbMilestonesOf(o,showDrafts);
-  const nKR=isK?0:_sbCountKRs(o,showDrafts);
   const t=todayISO(),soonEnd=_okrDateAddD(t,14);
-  const done=ms.filter(x=>x.done).length,late=ms.filter(x=>!x.done&&x.date<t).length,soon=ms.filter(x=>!x.done&&x.date>=t&&x.date<=soonEnd).length;
-  const meta=[isK?okrKPIChip():_okrLvlChip(okrLevel(o)),okrBadgesHTML(o),
+  const done=ms.filter(x=>x.done).length;
+  const late=ms.find(x=>!x.done&&x.date<t),next=ms.find(x=>!x.done&&x.date>=t);
+  const nextTxt=late?`<span class="sb-next sb-next-bad">Overdue: <b>${esc(late.title)}</b> · ${esc(fmtS(late.date))}</span>`
+    :next?`<span class="sb-next${next.date<=soonEnd?' sb-next-warn':''}">Next: <b>${esc(next.title)}</b> · ${esc(fmtS(next.date))}</span>`
+    :(ms.length?`<span class="sb-next sb-dim">All milestones done</span>`:'');
+  const meta=[
+    ms.length?_sbSegsHTML(ms,t,soonEnd):'',
+    ms.length?`<span class="sb-cnt">${done} / ${ms.length}</span>`:'',
+    nextTxt,
+    `<span class="sb-val">${val}</span>`,
     kidsN?`<span class="sb-dim">${kidsN} ${kidLabel}${kidsN===1?'':'s'}</span>`:'',
-    nKR?`<span class="sb-dim">${nKR} key result${nKR===1?'':'s'}</span>`:'',
-    `<span class="sb-val">${val}</span>`].filter(Boolean).join('');
-  const strip=ms.length?_sbStripHTML(o,ms):'';
-  const legend=ms.length?`<div class="sb-legend"><span><b>${done}</b> / ${ms.length} milestone${ms.length===1?'':'s'} done</span>${soon?`<span class="sb-leg-warn"><b>${soon}</b> due in 14 days</span>`:''}<span class="${late?'sb-leg-bad':''}"><b>${late}</b> overdue</span></div>`:'';
+    okrBadgesHTML(o)
+  ].filter(Boolean).join('<span class="sb-sep">·</span>');
   return`<div class="sb-row2 sb-d${Math.min(depth,4)}${isHead?' sb-row-head':''}${o.state==='draft'?' sb-draft':''}" onclick="App._okrProgressModal('${o.id}')" title="${esc(o.title||'')}${(o.description||'').trim()?' — '+esc(String(o.description).slice(0,200)):''}">
     <div class="sb2-top">
       <div class="sb-lvl">${chev}</div>
       <div class="sb2-main">
-        <div class="sb2-title">${esc(o.title||'Untitled')}${o.isAnnual?' '+_okrAnnualChip():''}</div>
+        <div class="sb2-title">${isK?okrKPIChip()+' ':''}${esc(o.title||'Untitled')}${o.isAnnual?' '+_okrAnnualChip():''}</div>
         <div class="sb2-meta">${meta}</div>
       </div>
       <div class="sb2-own">${_sbOwnerCell(o)}</div>
@@ -741,7 +732,6 @@ function _sbRow(o,depth,isHead,kidsN,exp){
         ${(u=>u?`<div class="sb-updrow">${u}</div>`:'')(okrUpdateCtl(o,false))}
       </div>
     </div>
-    ${(strip||legend)?`<div class="sb2-bottom">${strip}${legend}</div>`:''}
   </div>`;
 }
 function _sbWalk(o,depth,out,showDrafts){
@@ -834,7 +824,7 @@ function okrScoreboardHTML(){
     const rows=[];if(exp)_sbWalk(r,1,rows,showDrafts);
     return`<section class="sb-sec${r.state==='draft'?' sb-draft':''}">
       <div class="sb-table">
-        <div class="sb-thead2"><span></span><span>Objective · milestones</span><span>Owner</span><span>Status</span></div>
+        <div class="sb-thead2"><span></span><span>Objective</span><span>Owner</span><span>Status</span></div>
         ${_sbRow(r,0,true,kids.length,exp)}
         ${rows.join('')}
       </div>
