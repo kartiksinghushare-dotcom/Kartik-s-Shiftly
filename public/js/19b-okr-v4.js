@@ -824,7 +824,6 @@ function _sbHero(ns){
       ${nx?tile('Next checkpoint',fmt(nx.value),(unit?unit+' · ':'')+'by '+esc(fmtS(nx.date))):tile('Progress',pct===null?'—':pct+'%','of the way')}
     </div>
     <div class="sb-hero-chart" onclick="event.stopPropagation()"><canvas data-okr-chart="${ns.id}" data-okr-marks="1"></canvas></div>
-    ${_sbHeroMarksLegend(ns)}
     ${c.count?`<div class="sb-engines" onclick="event.stopPropagation()">
       <div class="sb-eng-head"><span>${c.count} engine${c.count===1?'':'s'} count toward this</span><span class="sb-eng-sum">promised <b>${c.promised>=0?'+':''}${fmt(c.promised)}</b> · delivered <b>${c.delivered>=0?'+':''}${fmt(c.delivered)}</b>${measuredDelta===null?'':' · measured <b>'+(measuredDelta>=0?'+':'')+fmt(measuredDelta)+'</b>'+(Math.abs(measuredDelta-c.delivered)>0.0001?' <span title="Measured change minus what the engines report — growth nobody has claimed, or double counting">(unattributed '+(measuredDelta-c.delivered>=0?'+':'')+fmt(Math.round((measuredDelta-c.delivered)*100)/100)+')</span>':'')}${unit?' '+unit:''}</span></div>
       <div class="sb-eng-rows">
