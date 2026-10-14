@@ -1,3 +1,25 @@
+# Bridge v179 — OKR scoreboard rows: one line + milestone strip (option C) (cache-buster `?v=179`)
+
+- `_sbRow` in `19b-okr-v4.js` rebuilt: expand arrow · title (2 lines max; full title + description on hover and in the popup) · one quiet meta line (level, badges, sub-objective & key-result counts, the number in one phrase) · owner · status + Update.
+- Under every objective: a slim period strip (its period start → end, stretched to cover any milestone outside it) with every milestone and dated count-item in its subtree as a dot on its due date — green done, red overdue, amber due within 14 days, numbered when several share a date — plus a red "today" marker and counters (done / due in 14 days / overdue). Clicking a dot opens that key result.
+- Table header is now `Objective · milestones | Owner | Status`. Old `.sb-row` / `.sb-thead` CSS is untouched (still used by the lone-key-results view); new rows use `.sb-row2` / `.sb-thead2`.
+- Files: `19b-okr-v4.js`, `src/styles/main.css`, `index.html` (`?v=179`). No data or permission changes.
+
+# Bridge v178 — OKR: template download + bulk upload · linked KPIs drive the number (cache-buster `?v=178`)
+
+## What changed
+- **Template / Upload** buttons on the OKR and KPIs tabs (OKR → Create). New file `public/js/19c-okr-import.js`.
+  - Template: one .xlsx with sheets **OKRs**, **KPIs**, **How to fill**. Blank (two example rows) or pre-filled with everything you can see.
+  - Column A is the item **ID, hidden**: keep it → the row *updates* that item (renames are safe); blank → *creates*. Falls back to exact-title match.
+  - Upload: drop the file → preview every row as *Will create / Will update / No change / Error* (with the reason) → nothing is written until **Import**.
+  - Saves through the same path as the editor (`_okrPush` + `okrLog` + `saveDB`), so RLS, permissions and the activity trail apply. Never deletes, closes or moves existing items; a blank cell on an existing item keeps its value.
+- **Linked KPIs win** (`okrReadsFromKRs` in 19b): an objective, or a number / floor+target key result, with ≥1 live linked KPI reads the average of its measures. Unlink the last KPI and it is back to its own number — the target is never touched.
+- **Update button** (`okrUpdateCtl`): shown on scoreboard rows, KR/KPI lines and the North Star hero for anything that is typed in by hand (owners / check-in permission). Items that read from linked KPIs show a quiet “from N KPIs” label instead. Turns green “Updated” once today's check-in exists.
+
+## Files
+`index.html` (script tag + `?v=178`), `public/js/19-okr-roles-acl.js` (two toolbar lines), `public/js/19b-okr-v4.js`, `public/js/19c-okr-import.js` (new), `src/styles/main.css`.
+No database migration. No behaviour change for existing data until a KPI is actually linked under an objective.
+
 # Bridge v172 — DATA: folders → tables (cache-buster `?v=177`)
 
 **v176.1 hotfix** — shared drafts on “Any one” checklists failed with *Couldn't save draft* (409): `submission_drafts` is UNIQUE on (checklist, user, date) and the saver's older personal draft for the same day collided with the shared row. The personal draft is now removed (server + local) before the shared draft is saved.
